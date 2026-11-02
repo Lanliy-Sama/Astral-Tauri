@@ -76,6 +76,23 @@ jobs:
             build-essential \
             file
 
+      - name: 📦 安装 protoc（Linux，easytier-proto 构建需要）
+        if: matrix.platform == 'ubuntu-22.04'
+        run: sudo apt-get install -y protobuf-compiler
+
+      - name: 📦 安装 protoc（Windows，easytier-proto 构建需要）
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install protoc -y --no-progress
+          protoc --version
+
+      - name: 📦 安装 protoc（macOS，easytier-proto 构建需要）
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew install protobuf
+          protoc --version
+
       - name: 📦 安装 Npcap SDK（Windows 链接 Packet.lib / wpcap.lib）
         if: matrix.platform == 'windows-latest'
         shell: pwsh

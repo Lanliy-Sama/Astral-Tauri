@@ -39,6 +39,11 @@ jobs:
           workspaces: src-tauri -> target
           key: ios
 
+      - name: 📦 安装 protoc（easytier-proto 构建需要）
+        run: |
+          brew install protobuf
+          protoc --version
+
       - name: 📥 安装 npm 依赖
         run: npm ci
 

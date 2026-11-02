@@ -57,6 +57,9 @@ jobs:
           workspaces: src-tauri -> target
           key: android
 
+      - name: 📦 安装 protoc（easytier-proto 构建需要）
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler && protoc --version
+
       - name: 📥 安装 npm 依赖
         run: npm ci
 
