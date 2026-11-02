@@ -9,14 +9,20 @@ pub mod commands;
 pub struct CloseMinimizeState(pub std::sync::Mutex<bool>);
 
 /// 托盘隐藏命令（前端确认对话框通过后调用）
+/// 移动端没有托盘，仅保留命令入口以维持前端调用一致。
 #[tauri::command]
 fn destroy_tray(app: tauri::AppHandle) {
-    if let Some(tray) = app.tray_by_id("main-tray") {
-        let _ = tray.set_visible(false);
+    #[cfg(desktop)]
+    {
+        if let Some(tray) = app.tray_by_id("main-tray") {
+            let _ = tray.set_visible(false);
+        }
+        if let Some(win) = app.get_webview_window("main") {
+            let _ = win.hide();
+        }
     }
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.hide();
-    }
+    #[cfg(mobile)]
+    let _ = &app;
 }
 
 /// 系统托盘（对应原版 tray_manager 菜单：显示主界面 / 隐藏托盘 / 退出）
@@ -80,9 +86,8 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 #[tauri::command]
 fn set_close_minimize(app: tauri::AppHandle, value: bool) {
     let state = app.state::<CloseMinimizeState>();
-    if let Ok(mut g) = state.0.lock() {
-        *g = value;
-    }
+    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = value;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

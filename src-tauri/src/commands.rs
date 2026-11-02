@@ -209,7 +209,7 @@ pub fn get_magic_wall_status() -> Result<Value, String> {
 /// TCP ping（对应 Dart PingUtil）：超时/失败/>800ms 返回 null。
 #[tauri::command]
 pub async fn tcp_ping(url: String, timeout_ms: u64) -> Option<u32> {
-    tokio::task::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let (host, port) = parse_host_port(&url);
         let addr = format!("{}:{}", host, port);
         let Ok(addr) = addr.parse() else {
