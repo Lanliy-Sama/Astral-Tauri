@@ -34,14 +34,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: 🤖 安装 Android SDK 与 NDK
-        uses: android-actions/setup-android@v3
-
-      - name: 📦 安装 NDK
+      - name: 🤖 安装 Android NDK
         run: |
-          sdkmanager --install "ndk;27.0.12077973"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          set -e
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n1)"
+          NDK_VER=27.0.12077973
+          if [ ! -d "$ANDROID_HOME/ndk/$NDK_VER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" --install "ndk;$NDK_VER"
+          fi
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
 
       - name: 🦀 安装 Rust 与 Android 交叉编译目标
         uses: dtolnay/rust-toolchain@stable

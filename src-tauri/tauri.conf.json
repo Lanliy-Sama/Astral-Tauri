@@ -32,8 +32,10 @@
       "iconPath": "icons/icon.png",
       "iconAsTemplate": false,
       "tooltip": "Astral"
-    },
-    "deepLink": {
+    }
+  },
+  "plugins": {
+    "deep-link": {
       "desktop": {
         "schemes": [
           "astral"
