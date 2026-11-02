@@ -1,0 +1,32 @@
+[package]
+name = "astral"
+version = "2.9.60"
+description = "Astral - 基于 EasyTier 的跨平台 P2P 网络应用（Tauri + Svelte 5 版）"
+authors = ["Astral"]
+edition = "2021"
+
+[lib]
+name = "astral_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-os = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 网络核心：直接复用原 Flutter 版的 rust/ crate（已移除 flutter_rust_bridge 绑定）
+astral-core = { path = "crates/astral-core" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
