@@ -47,7 +47,8 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
           # kcp-sys 等 C 依赖通过 bindgen 生成绑定时需要 NDK sysroot 头文件
           SYSROOT="$ANDROID_HOME/ndk/$NDK_VER/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
-          echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64-linux-android=--sysroot=$SYSROOT --target=aarch64-linux-android21" >> $GITHUB_ENV
+          # bindgen 只读取下划线形式的目标三元组变量名
+          echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--sysroot=$SYSROOT --target=aarch64-linux-android24" >> $GITHUB_ENV
 
       - name: 🦀 安装 Rust 与 Android 交叉编译目标
         uses: dtolnay/rust-toolchain@stable
