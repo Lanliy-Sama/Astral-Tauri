@@ -45,6 +45,9 @@ jobs:
           fi
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
+          # kcp-sys 等 C 依赖通过 bindgen 生成绑定时需要 NDK sysroot 头文件
+          SYSROOT="$ANDROID_HOME/ndk/$NDK_VER/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64-linux-android=--sysroot=$SYSROOT --target=aarch64-linux-android21" >> $GITHUB_ENV
 
       - name: 🦀 安装 Rust 与 Android 交叉编译目标
         uses: dtolnay/rust-toolchain@stable
@@ -57,8 +60,13 @@ jobs:
           workspaces: src-tauri -> target
           key: android
 
-      - name: 📦 安装 protoc（easytier-proto 构建需要）
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler && protoc --version
+      - name: 📦 安装 protoc（easytier-proto 构建需要，需新版支持 proto3 optional）
+        run: |
+          PB_VERSION=27.3
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VERSION}/protoc-${PB_VERSION}-linux-x86_64.zip"
+          sudo unzip -o -q /tmp/protoc.zip -d /usr/local
+          protoc --version
 
       - name: 📥 安装 npm 依赖
         run: npm ci

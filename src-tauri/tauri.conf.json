@@ -43,7 +43,9 @@
       },
       "mobile": [
         {
-          "scheme": "astral"
+          "scheme": [
+            "astral"
+          ]
         }
       ]
     }
