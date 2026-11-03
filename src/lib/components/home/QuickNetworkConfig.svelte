@@ -8,10 +8,10 @@
   import Switch from '../common/Switch.svelte';
   import { sm } from '../../services/service-manager.svelte.js';
   import { t } from '../../i18n/index.svelte.js';
-  import { isWindows, platformSync } from '../../utils/platform.js';
+  import { isWindows } from '../../utils/platform.js';
 
-  /* 广播转发 / 防火墙仅 Windows 显示；浏览器预览模式下也显示（截图验证） */
-  const showWindowsOnly = isWindows() || platformSync() === 'browser';
+  /* 广播转发 / 防火墙仅 Windows 显示 */
+  const showWindowsOnly = isWindows();
 
   /* 开关本地镜像：跟随 sm 状态（防火墙失败时 sm 回滚 → 视觉同步回滚） */
   let disableP2p = $state(sm.networkConfigState.disableP2p);

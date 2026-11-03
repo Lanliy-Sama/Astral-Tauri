@@ -9,6 +9,9 @@ use std::net::TcpStream;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
+#[cfg(target_os = "android")]
+use tauri_plugin_vpn_service::{models::StartVpnRequest, VpnserviceExt};
+
 /* ==================== EasyTier 核心 ==================== */
 
 #[tauri::command]
@@ -370,6 +373,51 @@ fn open_url_fallback(url: &str) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+}
+
+/* ==================== Android VPN ==================== */
+
+/// 检查/申请系统 VPN 授权；返回 `{ granted }`。
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn vpn_prepare(app: AppHandle) -> Result<Value, String> {
+    let status = app.vpnservice().prepare_vpn()?;
+    serde_json::to_value(status).map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub fn vpn_prepare(_app: AppHandle) -> Result<Value, String> {
+    Err("VPN 服务仅支持 Android".to_string())
+}
+
+/// 启动 VpnService 并返回 TUN fd；返回 `{ fd }` 或 `{ errorMsg }`。
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn vpn_start(app: AppHandle, options: Value) -> Result<Value, String> {
+    let req: StartVpnRequest = serde_json::from_value(options).map_err(|e| e.to_string())?;
+    let status = app.vpnservice().start_vpn(req)?;
+    serde_json::to_value(status).map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub fn vpn_start(_app: AppHandle, _options: Value) -> Result<Value, String> {
+    Err("VPN 服务仅支持 Android".to_string())
+}
+
+/// 关闭 VpnService 并回收 TUN。
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn vpn_stop(app: AppHandle) -> Result<(), String> {
+    app.vpnservice().stop_vpn()?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub fn vpn_stop(_app: AppHandle) -> Result<(), String> {
+    Ok(())
 }
 
 /* ==================== UDP 日志桥 ==================== */

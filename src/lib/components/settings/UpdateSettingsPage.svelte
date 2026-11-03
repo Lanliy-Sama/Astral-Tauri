@@ -75,7 +75,7 @@
   /* ============ 下载（<a> 触发，UpdateDownloader 等价） ============ */
   function platformFileName() {
     if (isAndroid()) return 'astral-arm64-v8a.apk';
-    if (isWindows() || !isTauri()) return 'astral-windows-x64-setup.exe';
+    if (isWindows()) return 'astral-windows-x64-setup.exe';
     return '';
   }
 

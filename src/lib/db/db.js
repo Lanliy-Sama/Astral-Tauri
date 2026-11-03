@@ -1,15 +1,13 @@
 /**
  * 数据持久层 —— 替代 Flutter 端的 Isar 数据库。
  *
- * 模式一（Tauri 运行时）：tauri-plugin-sql + SQLite，库文件 astral.db。
- * 模式二（浏览器预览）：localStorage JSON 集合，接口与 SQL 模式完全一致。
- *
+ * 使用 tauri-plugin-sql + SQLite，库文件 astral.db。
  * 表结构统一为 (id INTEGER PRIMARY KEY, data TEXT(JSON))：
  * 与原 Isar 集合字段一一对应（Room/ServerMod/AllSettings/NetConfig/
  * ThemeSettings/MagicWall*），避免字段映射失真。
+ *
+ * 已移除浏览器 localStorage 回退：没有后端时直接报错，不再伪造持久化。
  */
-import { isTauri } from '../utils/platform.js';
-
 const TABLES = [
   'rooms',
   'servers',
@@ -21,42 +19,34 @@ const TABLES = [
   'mw_events',
 ];
 
-let sqlDb = null; // Tauri SQL 连接
-let mode = 'browser';
+let sqlDb = null;
 
 export async function initDb() {
-  if (isTauri()) {
-    try {
-      const { Database } = await import('@tauri-apps/plugin-sql');
-      sqlDb = await Database.load('sqlite:astral.db');
-      for (const t of TABLES) {
-        await sqlDb.execute(
-          `CREATE TABLE IF NOT EXISTS ${t} (id INTEGER PRIMARY KEY, data TEXT NOT NULL)`
-        );
-      }
-      mode = 'sqlite';
-      return;
-    } catch (e) {
-      console.warn('SQLite 初始化失败，回退 localStorage 模式:', e);
-    }
+  if (sqlDb) return;
+  const { Database } = await import('@tauri-apps/plugin-sql');
+  sqlDb = await Database.load('sqlite:astral.db');
+  for (const t of TABLES) {
+    await sqlDb.execute(
+      `CREATE TABLE IF NOT EXISTS ${t} (id INTEGER PRIMARY KEY, data TEXT NOT NULL)`
+    );
   }
-  mode = 'browser';
-  // localStorage 模式无需建表
 }
 
 export function dbMode() {
-  return mode;
+  return sqlDb ? 'sqlite' : 'uninitialized';
+}
+
+function requireDb() {
+  if (!sqlDb) throw new Error('数据库尚未初始化');
+  return sqlDb;
 }
 
 /* ---------------- 统一表操作 API ---------------- */
 
 /** 读取全表 */
 export async function listAll(table) {
-  if (mode === 'sqlite') {
-    const rows = await sqlDb.select(`SELECT id, data FROM ${table}`);
-    return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
-  }
-  return JSON.parse(localStorage.getItem(`astral-db-${table}`) || '[]');
+  const rows = await requireDb().select(`SELECT id, data FROM ${table}`);
+  return rows.map((r) => ({ ...JSON.parse(r.data), id: r.id }));
 }
 
 /** 按 id 读取 */
@@ -70,32 +60,18 @@ export async function getById(table, id) {
  * @returns {Promise<object>} 带id的行
  */
 export async function putRow(table, row) {
+  const db = requireDb();
   const record = { ...row };
-  if (mode === 'sqlite') {
-    if (record.id == null) {
-      const result = await sqlDb.execute(
-        `INSERT INTO ${table} (data) VALUES ($1)`,
-        [JSON.stringify({ ...record, id: 0 })]
-      );
-      record.id = Number(result.lastInsertId);
-    }
-    await sqlDb.execute(
-      `INSERT OR REPLACE INTO ${table} (id, data) VALUES ($1, $2)`,
-      [record.id, JSON.stringify(record)]
-    );
-    return record;
-  }
-  const rows = JSON.parse(localStorage.getItem(`astral-db-${table}`) || '[]');
   if (record.id == null) {
-    const maxId = rows.reduce((m, r) => Math.max(m, r.id || 0), 0);
-    record.id = maxId + 1;
-    rows.push(record);
-  } else {
-    const idx = rows.findIndex((r) => r.id === record.id);
-    if (idx >= 0) rows[idx] = record;
-    else rows.push(record);
+    const result = await db.execute(`INSERT INTO ${table} (data) VALUES ($1)`, [
+      JSON.stringify({ ...record, id: 0 }),
+    ]);
+    record.id = Number(result.lastInsertId);
   }
-  localStorage.setItem(`astral-db-${table}`, JSON.stringify(rows));
+  await db.execute(`INSERT OR REPLACE INTO ${table} (id, data) VALUES ($1, $2)`, [
+    record.id,
+    JSON.stringify(record),
+  ]);
   return record;
 }
 
@@ -110,24 +86,12 @@ export async function putMany(table, rows) {
 
 /** 删除一行 */
 export async function deleteRow(table, id) {
-  if (mode === 'sqlite') {
-    await sqlDb.execute(`DELETE FROM ${table} WHERE id = $1`, [id]);
-    return;
-  }
-  const rows = JSON.parse(localStorage.getItem(`astral-db-${table}`) || '[]');
-  localStorage.setItem(
-    `astral-db-${table}`,
-    JSON.stringify(rows.filter((r) => r.id !== id))
-  );
+  await requireDb().execute(`DELETE FROM ${table} WHERE id = $1`, [id]);
 }
 
 /** 清空表 */
 export async function clearTable(table) {
-  if (mode === 'sqlite') {
-    await sqlDb.execute(`DELETE FROM ${table}`);
-    return;
-  }
-  localStorage.removeItem(`astral-db-${table}`);
+  await requireDb().execute(`DELETE FROM ${table}`);
 }
 
 /** 计数 */

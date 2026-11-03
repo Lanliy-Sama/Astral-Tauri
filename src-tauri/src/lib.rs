@@ -97,6 +97,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_vpn_service::init())
         .manage(CloseMinimizeState(std::sync::Mutex::new(true)))
         .invoke_handler(tauri::generate_handler![
             commands::easytier_version,
@@ -120,6 +121,9 @@ pub fn run() {
             commands::has_npcap_driver,
             commands::set_startup,
             commands::open_external,
+            commands::vpn_prepare,
+            commands::vpn_start,
+            commands::vpn_stop,
             set_close_minimize,
             destroy_tray,
         ])

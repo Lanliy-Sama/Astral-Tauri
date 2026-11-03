@@ -24,6 +24,9 @@ serde_json = "1.0"
 # 网络核心：直接复用原 Flutter 版的 rust/ crate（已移除 flutter_rust_bridge 绑定）
 astral-core = { path = "crates/astral-core" }
 
+# Android VpnService 桥接（其他平台为返回「不支持」的空实现）
+tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
+
 [profile.release]
 codegen-units = 1
 lto = true

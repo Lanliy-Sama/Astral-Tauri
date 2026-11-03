@@ -35,9 +35,10 @@ import {
   parseNetworkConfigShare,
   networkConfigShareFromState,
 } from '../utils/roomShareCodec.js';
-import { localHostname, isTauri, isWindows } from '../utils/platform.js';
+import { localHostname, isTauri, isWindows, isAndroid } from '../utils/platform.js';
 
 /* ============ 常量 ============ */
+const ANDROID_PACKAGE = 'com.kevin.astral';
 const GITHUB_OWNER = 'ldoubil';
 const GITHUB_REPO = 'astral';
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
@@ -76,6 +77,7 @@ class ServiceManager {
     this._monitorTimer = null;
     this._connectionDuration = 0;
     this._configBuilder = null;
+    this._androidTunAttaching = false;
 
     this.appVersion = APP_VERSION;
     this.initialized = false;
@@ -898,7 +900,20 @@ class ServiceManager {
           return false;
         }
 
+        /* Android：先申请系统 VPN 授权，未授权则视为用户取消 */
+        if (isAndroid()) {
+          const prepare = await rust.vpnPrepare();
+          if (!prepare?.granted) {
+            this.connectionState.connectionState = CoState.idle;
+            return null;
+          }
+        }
+
         const config = this._buildServerConfig(room);
+        if (isAndroid()) {
+          /* TUN 设备由 VpnService 提供，核心不再自行创建 */
+          config.flag.noTun = true;
+        }
         await rust.createServer(config);
 
         this.connectionState.connectionState = CoState.connecting;
@@ -976,7 +991,11 @@ class ServiceManager {
             this.networkConfigState.ipv4 = ipv4;
           }
           this._stopStatusCheck();
-          this._handleSuccessfulConnection();
+          if (isAndroid()) {
+            this._attachAndroidTun(ipv4);
+          } else {
+            this._handleSuccessfulConnection();
+          }
         }
       } catch {
         /* 忽略 */
@@ -988,6 +1007,35 @@ class ServiceManager {
     if (this._statusTimer) {
       clearInterval(this._statusTimer);
       this._statusTimer = null;
+    }
+  }
+
+  /**
+   * Android：拿到虚拟 IP 后建立 VpnService，并把 TUN fd 交给 EasyTier 核心。
+   * set_tun_fd 依赖已存在的运行实例，因此必须在 createServer 成功之后再调用。
+   */
+  async _attachAndroidTun(ipv4) {
+    if (this._androidTunAttaching) return;
+    this._androidTunAttaching = true;
+    try {
+      const routes = (this.vpnState.customVpn || []).filter((c) => isValidCIDR(c));
+      const res = await rust.vpnStart({
+        ipv4Addr: `${ipv4}/24`,
+        routes,
+        dns: null,
+        disallowedApplications: [ANDROID_PACKAGE],
+        mtu: this.networkConfigState.mtu || 1380,
+      });
+      const fd = Number(res?.fd);
+      if (!Number.isInteger(fd) || fd < 0) throw new Error('未取得 TUN fd');
+      await rust.setTunFd(fd);
+      this._handleSuccessfulConnection();
+    } catch (e) {
+      console.warn('Android TUN 挂载失败:', e);
+      this.pushLog(`Android TUN 挂载失败: ${e?.message || e}`);
+      await this.disconnect({ silent: true });
+    } finally {
+      this._androidTunAttaching = false;
     }
   }
 
@@ -1015,22 +1063,11 @@ class ServiceManager {
     this.serverStatusState.setActiveServers(activeIds);
 
     /* Windows：设置 TUN 网卡跃点最小 */
-    if (isWindows() || !isTauri()) {
+    if (isWindows()) {
       rust.setInterfaceMetric('astral', 0).catch(() => {});
     }
 
     this._startNetworkMonitor();
-
-    /* Mock 模式下产生事件日志 */
-    if (!isTauri()) {
-      const room = this.roomState.selectedRoom;
-      this.pushLog(`正在连接到网络 ${room?.roomName || ''} ...`);
-      setTimeout(() => this.pushLog('TUN 设备已就绪'), 1200);
-      setTimeout(() => this.pushLog('与服务器建立连接: tcp://js.629957.xyz:11012'), 2000);
-      setTimeout(() => this.pushLog('节点 Kevin-PC 已加入网络'), 3200);
-      setTimeout(() => this.pushLog('节点 浪浪云的主机 已加入网络'), 4600);
-      setTimeout(() => this.pushLog('节点 小探GamePC 已加入网络'), 6100);
-    }
   }
 
   /** 连接后网络监视器（1 秒周期） */
@@ -1099,12 +1136,16 @@ class ServiceManager {
     } catch {
       /* 忽略 */
     }
+    if (isAndroid()) {
+      try {
+        await rust.vpnStop();
+      } catch {
+        /* 忽略 */
+      }
+    }
     this.connectionState.connectionState = CoState.idle;
     this.connectionState.netStatus = null;
     this.serverStatusState.setActiveServers([]);
-    if (!silent && !isTauri()) {
-      this.pushLog('网络连接已断开');
-    }
   }
 
   /* ==================== 服务器状态检测 ==================== */

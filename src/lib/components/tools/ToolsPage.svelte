@@ -8,10 +8,10 @@
   import PortWhitelistPage from './PortWhitelistPage.svelte';
   import NatTestPage from '$lib/components/nat/NatTestPage.svelte';
   import { pushPage } from '$lib/router/page-router.svelte.js';
-  import { isWindows, platformSync } from '$lib/utils/platform.js';
+  import { isWindows } from '$lib/utils/platform.js';
 
-  /* Platform.isWindows（浏览器预览平台为 'browser'，同样显示以便验证） */
-  const showMagicWall = isWindows() || platformSync() === 'browser';
+  /* 魔法墙仅 Windows 提供（WFP 规则） */
+  const showMagicWall = isWindows();
 
   function go(target) {
     return () => pushPage(target);

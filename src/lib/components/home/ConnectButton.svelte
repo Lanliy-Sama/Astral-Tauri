@@ -83,7 +83,7 @@
     }
 
     /* 2. Npcap 检查（Windows + FakeTCP 场景） */
-    const desktopLike = isWindows() || !isTauri();
+    const desktopLike = isWindows();
     if (desktopLike && containsFaketcp() && !(await hasNpcapDriver())) {
       npcapOpen = true;
       return;
