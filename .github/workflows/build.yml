@@ -1,17 +1,19 @@
-name: 馃殌 鏋勫缓 Astral锛堝叏骞冲彴锛?
-# Windows / Linux / Android / macOS / iOS 鍏ㄩ儴鍦?push 鏃舵瀯寤猴紱
-# 涔熷彲琚?release.yml 閫氳繃 workflow_call 澶嶇敤锛堜紶鍏?version 瑕嗙洊搴旂敤鐗堟湰鍙凤級銆?on:
+name: 🚀 构建 Astral（全平台）
+
+# Windows / Linux / Android 在 push 时构建；macOS / iOS 在 build-apple.yml 单独构建。
+# 也可被 release.yml 通过 workflow_call 复用（传入 version 覆盖应用版本号）。
+on:
   workflow_call:
     inputs:
       version:
-        description: '瑕嗙洊搴旂敤鐗堟湰鍙凤紙鍙戝竷鏋勫缓鐢級'
+        description: '覆盖应用版本号（发布构建用）'
         type: string
         required: false
         default: ''
   workflow_dispatch:
     inputs:
       version:
-        description: '瑕嗙洊搴旂敤鐗堟湰鍙凤紙鐣欑┖浣跨敤浠撳簱榛樿锛?
+        description: '覆盖应用版本号（留空使用仓库默认）'
         type: string
         required: false
         default: ''
@@ -25,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ---------------- 妗岄潰锛歐indows + Linux ----------------
+  # ---------------- 桌面：Windows + Linux ----------------
   desktop:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.platform }}
@@ -44,23 +46,24 @@ jobs:
             bundles: deb,appimage
 
     steps:
-      - name: 馃洜锔?妫€鍑轰唬鐮?        uses: actions/checkout@v4
+      - name: 🛠️ 检出代码
+        uses: actions/checkout@v4
 
-      - name: 馃煝 瀹夎 Node.js
+      - name: 🟢 安装 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: 馃 瀹夎 Rust
+      - name: 🦀 安装 Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: 馃捑 缂撳瓨 Rust 鏋勫缓
+      - name: 💾 缓存 Rust 构建
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
-      - name: 馃摝 瀹夎 Linux 绯荤粺渚濊禆
+      - name: 📦 安装 Linux 系统依赖
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
@@ -75,21 +78,25 @@ jobs:
             build-essential \
             file
 
-      - name: 馃摝 瀹夎 protoc锛圠inux锛?        if: matrix.platform == 'ubuntu-22.04'
+      - name: 📦 安装 protoc（Linux）
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
-          # Ubuntu 22.04 鑷甫鐨?protoc 3.12 涓嶆敮鎸?proto3 optional锛屽畨瑁呭畼鏂规柊鐗?          PB_VERSION=27.3
+          # Ubuntu 22.04 自带的 protoc 3.12 不支持 proto3 optional，安装官方新版
+          PB_VERSION=27.3
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VERSION}/protoc-${PB_VERSION}-linux-x86_64.zip"
           sudo unzip -o -q /tmp/protoc.zip -d /usr/local
           protoc --version
 
-      - name: 馃摝 瀹夎 protoc锛圵indows锛?        if: matrix.platform == 'windows-latest'
+      - name: 📦 安装 protoc（Windows）
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           choco install protoc -y --no-progress
           protoc --version
 
-      - name: 馃摝 瀹夎 Npcap SDK锛圵indows 閾炬帴 Packet.lib / wpcap.lib锛?        if: matrix.platform == 'windows-latest'
+      - name: 📦 安装 Npcap SDK（Windows 链接 Packet.lib / wpcap.lib）
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $sdkVer = "1.16"
@@ -111,14 +118,15 @@ jobs:
           }
           & $append "LIB=$libDir;$env:LIB"
           & $append "NPCAP_SDK_LIB=$libDir"
-          Write-Host "Npcap SDK 宸查厤缃細$libDir"
+          Write-Host "Npcap SDK 已配置：$libDir"
 
-      - name: 馃摜 瀹夎 npm 渚濊禆
+      - name: 📥 安装 npm 依赖
         run: npm install --no-audit --no-fund
 
-      - name: 馃柤锔?浠庡師鍥鹃噸鏂扮敓鎴愬浘鏍囷紙鎭㈠鍦嗚锛?        run: npx tauri icon app-icon.png
+      - name: 🖼️ 从原图重新生成图标（恢复圆角）
+        run: npx tauri icon app-icon.png
 
-      - name: 馃敤 鏋勫缓 Tauri 搴旂敤
+      - name: 🔨 构建 Tauri 应用
         shell: bash
         run: |
           CFG=""
@@ -129,7 +137,8 @@ jobs:
           fi
           npx tauri build $CFG --bundles ${{ matrix.bundles }}
 
-      - name: 馃摛 涓婁紶瀹夎鍖咃紙Windows锛?        if: matrix.platform == 'windows-latest'
+      - name: 📤 上传安装包（Windows）
+        if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -137,7 +146,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # Linux 鎷嗘垚涓や釜 artifact锛歞eb 绾?21 MB锛孉ppImage 绾?95 MB锛堣嚜甯?WebKitGTK锛?      - name: 馃摛 涓婁紶 deb锛圠inux锛?        if: matrix.platform == 'ubuntu-22.04'
+      # Linux 拆成两个 artifact：deb 约 21 MB，AppImage 约 95 MB（自带 WebKitGTK）
+      - name: 📤 上传 deb（Linux）
+        if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
           name: astral-linux-deb
@@ -145,7 +156,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: 馃摛 涓婁紶 AppImage锛圠inux锛?        if: matrix.platform == 'ubuntu-22.04'
+      - name: 📤 上传 AppImage（Linux）
+        if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
           name: astral-linux-appimage
@@ -159,21 +171,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 馃洜锔?妫€鍑轰唬鐮?        uses: actions/checkout@v4
+      - name: 🛠️ 检出代码
+        uses: actions/checkout@v4
 
-      - name: 馃煝 瀹夎 Node.js
+      - name: 🟢 安装 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: 鈽?瀹夎 JDK 17
+      - name: ☕ 安装 JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: 馃 瀹夎 Android NDK
+      - name: 🤖 安装 Android NDK
         run: |
           set -e
           SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n1)"
@@ -184,34 +197,37 @@ jobs:
           fi
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
-          # kcp-sys 绛?C 渚濊禆閫氳繃 bindgen 鐢熸垚缁戝畾鏃堕渶瑕?NDK sysroot 澶存枃浠?          SYSROOT="$ANDROID_HOME/ndk/$NDK_VER/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          # kcp-sys 等 C 依赖通过 bindgen 生成绑定时需要 NDK sysroot 头文件
+          SYSROOT="$ANDROID_HOME/ndk/$NDK_VER/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
           echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--sysroot=$SYSROOT --target=aarch64-linux-android24" >> $GITHUB_ENV
 
-      - name: 馃 瀹夎 Rust 涓?Android 浜ゅ弶缂栬瘧鐩爣
+      - name: 🦀 安装 Rust 与 Android 交叉编译目标
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-      - name: 馃捑 缂撳瓨 Rust 鏋勫缓
+      - name: 💾 缓存 Rust 构建
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           key: android
 
-      - name: 馃摝 瀹夎 protoc锛堥渶鏂扮増鏀寔 proto3 optional锛?        run: |
+      - name: 📦 安装 protoc（需新版支持 proto3 optional）
+        run: |
           PB_VERSION=27.3
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VERSION}/protoc-${PB_VERSION}-linux-x86_64.zip"
           sudo unzip -o -q /tmp/protoc.zip -d /usr/local
           protoc --version
 
-      - name: 馃摜 瀹夎 npm 渚濊禆
+      - name: 📥 安装 npm 依赖
         run: npm install --no-audit --no-fund
 
-      - name: 馃彈锔?鍒濆鍖?Android 宸ョ▼
+      - name: 🏗️ 初始化 Android 工程
         run: npx tauri android init --ci
 
-      - name: 馃敤 鏋勫缓 APK锛坅rm64-v8a锛?        shell: bash
+      - name: 🔨 构建 APK（arm64-v8a）
+        shell: bash
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"
@@ -221,116 +237,10 @@ jobs:
           fi
           npx tauri android build --ci $CFG --apk --target aarch64
 
-      - name: 馃摛 涓婁紶 APK
+      - name: 📤 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: astral-android-arm64
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
-          retention-days: 14
-
-  # ---------------- macOS锛堟墜鍔ㄨЕ鍙戯級 ----------------
-  macos:
-    name: macos-arm64
-    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true
-    runs-on: macos-latest
-
-    steps:
-      - name: 馃洜锔?妫€鍑轰唬鐮?        uses: actions/checkout@v4
-
-      - name: 馃煝 瀹夎 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: 馃 瀹夎 Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
-
-      - name: 馃捑 缂撳瓨 Rust 鏋勫缓
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          key: macos
-
-      - name: 馃摝 瀹夎 protoc
-        run: |
-          brew install protobuf
-          protoc --version
-
-      - name: 馃摜 瀹夎 npm 渚濊禆
-        run: npm install --no-audit --no-fund
-
-      - name: 馃柤锔?浠庡師鍥鹃噸鏂扮敓鎴愬浘鏍囷紙鎭㈠鍦嗚锛?        run: npx tauri icon app-icon.png
-
-      - name: 馃敤 鏋勫缓搴旂敤
-        shell: bash
-        run: |
-          CFG=""
-          VERSION="${{ inputs.version }}"
-          if [ -n "$VERSION" ]; then
-            echo "{\"version\":\"$VERSION\"}" > "$RUNNER_TEMP/version.json"
-            CFG="--config $RUNNER_TEMP/version.json"
-          fi
-          npx tauri build $CFG --bundles app,dmg --target aarch64-apple-darwin
-
-      - name: 馃摛 涓婁紶 dmg
-        uses: actions/upload-artifact@v4
-        with:
-          name: astral-macos-arm64
-          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-          if-no-files-found: warn
-          retention-days: 14
-
-  # ---------------- iOS锛堟墜鍔ㄨЕ鍙戯級 ----------------
-  ios:
-    name: ios-sim
-    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true
-    runs-on: macos-latest
-
-    steps:
-      - name: 馃洜锔?妫€鍑轰唬鐮?        uses: actions/checkout@v4
-
-      - name: 馃煝 瀹夎 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: 馃 瀹夎 Rust 涓?iOS 鐩爣
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
-
-      - name: 馃捑 缂撳瓨 Rust 鏋勫缓
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          key: ios
-
-      - name: 馃摝 瀹夎 protoc
-        run: |
-          brew install protobuf
-          protoc --version
-
-      - name: 馃摜 瀹夎 npm 渚濊禆
-        run: npm install --no-audit --no-fund
-
-      - name: 馃彈锔?鍒濆鍖?iOS 宸ョ▼
-        run: npx tauri ios init --ci
-
-      - name: 馃敤 鏋勫缓妯℃嫙鍣ㄥ寘锛堟湭绛惧悕锛?        run: npx tauri ios build --ci --target aarch64-sim
-
-      - name: 馃摛 涓婁紶 .app
-        uses: actions/upload-artifact@v4
-        with:
-          name: astral-ios-sim
-          path: |
-            src-tauri/gen/apple/**/*.app
-            src-tauri/gen/apple/**/*.ipa
           if-no-files-found: warn
           retention-days: 14
