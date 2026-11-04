@@ -1,4 +1,4 @@
-﻿name: 馃殌 鏋勫缓 Astral锛堝叏骞冲彴锛?
+name: 馃殌 鏋勫缓 Astral锛堝叏骞冲彴锛?
 # Windows / Linux / Android / macOS / iOS 鍏ㄩ儴鍦?push 鏃舵瀯寤猴紱
 # 涔熷彲琚?release.yml 閫氳繃 workflow_call 澶嶇敤锛堜紶鍏?version 瑕嗙洊搴旂敤鐗堟湰鍙凤級銆?on:
   workflow_call:
@@ -232,6 +232,7 @@ jobs:
   # ---------------- macOS锛堟墜鍔ㄨЕ鍙戯級 ----------------
   macos:
     name: macos-arm64
+    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     runs-on: macos-latest
 
@@ -287,6 +288,7 @@ jobs:
   # ---------------- iOS锛堟墜鍔ㄨЕ鍙戯級 ----------------
   ios:
     name: ios-sim
+    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     runs-on: macos-latest
 
