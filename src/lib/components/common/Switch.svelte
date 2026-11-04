@@ -11,7 +11,7 @@
 </script>
 
 <button
-  class="md-switch {value ? 'on' : ''} {scale ? 'scale-08' : ''}"
+  class="md-switch lg-spec {value ? 'on' : ''} {scale ? 'scale-08' : ''}"
   class:disabled
   aria-checked={value}
   role="switch"

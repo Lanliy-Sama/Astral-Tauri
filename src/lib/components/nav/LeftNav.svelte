@@ -52,7 +52,7 @@
         onclick={() => onTap(index)}
       >
         {#if sm.uiState.selectedIndex === index}
-          <div class="selection-indicator" bind:this={indicatorEl}></div>
+          <div class="selection-indicator lg-spec" bind:this={indicatorEl}></div>
         {/if}
         <div class="nav-content">
           <Icon

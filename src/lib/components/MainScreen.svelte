@@ -32,6 +32,26 @@
     return () => window.removeEventListener('resize', onResize);
   });
 
+  /* 液态玻璃：html 根类随设置切换；开启时委派 pointermove，
+   * 实时把指针坐标写入 .lg-spec 元素级 --lg-x/--lg-y（反射高光跟随） */
+  $effect(() => {
+    const on = sm.appSettingsState.liquidGlass;
+    document.documentElement.classList.toggle('liquid-glass', on);
+    if (!on) return;
+    const move = (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('.lg-spec') : null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--lg-x', (e.clientX - r.left) + 'px');
+      el.style.setProperty('--lg-y', (e.clientY - r.top) + 'px');
+    };
+    document.addEventListener('pointermove', move);
+    return () => {
+      document.removeEventListener('pointermove', move);
+      document.documentElement.classList.remove('liquid-glass');
+    };
+  });
+
   /* Android 小窗口：宽<300 或 高<400（原版 SmallWindowAdapter 仅 Android 生效，桌面永不触发） */
   const isSmallWindow = $derived(
     isAndroid() && (windowWidth < 300 || windowHeight < 400)

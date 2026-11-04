@@ -34,6 +34,23 @@
   });
 </script>
 
+<!-- 液态玻璃折射滤镜：feTurbulence 流动噪声 + feDisplacementMap 对真实背景做位移折射 -->
+<svg class="lg-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="lg-refract" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="11" result="lg-noise">
+        <animate
+          attributeName="baseFrequency"
+          dur="16s"
+          values="0.008 0.012;0.013 0.007;0.008 0.012"
+          repeatCount="indefinite"
+        />
+      </feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="12" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+</svg>
+
 {#if ready}
   <MainScreen />
 {:else}
@@ -41,6 +58,12 @@
 {/if}
 
 <style>
+  .lg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
   .boot {
     height: 100%;
     display: flex;

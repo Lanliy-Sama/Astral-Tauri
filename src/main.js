@@ -1,5 +1,6 @@
 import { mount } from 'svelte';
 import './app.css';
+import './liquid-glass.css';
 import App from './App.svelte';
 import { initI18n } from './lib/i18n/index.svelte.js';
 import { initPlatform } from './lib/utils/platform.js';

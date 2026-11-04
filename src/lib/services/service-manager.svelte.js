@@ -553,6 +553,7 @@ class ServiceManager {
     this.appSettingsState.maxRetryCount = s.maxRetryCount ?? 3;
     this.appSettingsState.reduceAnimationUpdates =
       s.reduceAnimationUpdates === true;
+    this.appSettingsState.liquidGlass = s.liquidGlass === true;
 
     /* 同步关闭行为到 Tauri 窗口层 */
     this._syncCloseMinimize(this.windowState.closeMinimize);
@@ -668,6 +669,10 @@ class ServiceManager {
   async updateReduceAnimationUpdates(v) {
     this.appSettingsState.reduceAnimationUpdates = v;
     await this._persistSettings({ reduceAnimationUpdates: v });
+  }
+  async updateLiquidGlass(v) {
+    this.appSettingsState.liquidGlass = v;
+    await this._persistSettings({ liquidGlass: v });
   }
 
   /* ---------- 防火墙 ---------- */

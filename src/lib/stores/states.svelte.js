@@ -164,6 +164,7 @@ export class AppSettingsState {
   autoRetryOnFailure = $state(true);
   maxRetryCount = $state(3);
   reduceAnimationUpdates = $state(false);
+  liquidGlass = $state(false);
   logs = $state([]);
 }
 

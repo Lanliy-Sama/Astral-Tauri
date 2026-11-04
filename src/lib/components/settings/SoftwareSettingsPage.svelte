@@ -87,6 +87,20 @@
           onChange={(v) => sm.updateReduceAnimationUpdates(v)}
         />
       </div>
+
+      <div
+        class="md-switch-list-tile"
+        onclick={(e) => switchTileClick(e, sm.appSettingsState.liquidGlass, sm.updateLiquidGlass)}
+      >
+        <div class="tile-content">
+          <div class="tile-title">液态玻璃效果</div>
+          <div class="tile-subtitle">开关与侧边栏选中框使用液态玻璃材质（反射 · 折射 · 动态变形，基于背景实时运算）</div>
+        </div>
+        <Switch
+          value={sm.appSettingsState.liquidGlass}
+          onChange={(v) => sm.updateLiquidGlass(v)}
+        />
+      </div>
     </SettingsCard>
 
     <div class="gap-16"></div>
