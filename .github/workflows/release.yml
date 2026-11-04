@@ -51,13 +51,13 @@ jobs:
       contents: write
 
   build-apple:
+    if: vars.ENABLE_APPLE_BUILDS == 'true'
     needs: resolve-version
     uses: ./.github/workflows/build-apple.yml
     with:
       version: ${{ needs.resolve-version.outputs.version }}
     permissions:
       contents: write
-    continue-on-error: true
 
   publish:
     needs: [resolve-version, build, build-apple]

@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   macos:
+    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     runs-on: macos-latest
     steps:
@@ -74,6 +75,7 @@ jobs:
           retention-days: 14
 
   ios:
+    if: vars.ENABLE_APPLE_BUILDS == 'true' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     runs-on: macos-latest
     steps:
