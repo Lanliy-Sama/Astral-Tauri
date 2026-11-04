@@ -19,7 +19,8 @@
 
 > [!NOTE]
 > 本仓库是 Astral 的 **Tauri 分支**，而后者基于原始项目 [ldoubil/Astral](https://github.com/ldoubil/astral)开发。Tauri端的设计与实现全部归功于原项目。本分支聚焦于**Tauri轻量前端的移植与修复**。
->Astral-Tauri 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
+>
+> Astral-Tauri 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
 
 ## ✨ 主要特性
 
