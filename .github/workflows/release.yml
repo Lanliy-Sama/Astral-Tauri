@@ -1,96 +1,96 @@
 name: 🏷️ 发布 Release
-    
-    # 手动触发：计算版本号（默认 = 最新 Release 的 patch +1，如 2.9.60 → 2.9.61），
-    # 复用 build.yml（三平台）与 build-apple.yml（Apple 双端，尽力而为）构建，
-    # 然后把产物发布到 GitHub Release。
-    on:
-      workflow_dispatch:
-        inputs:
-          version:
-            description: '发布版本号（留空则自动 = 最新版本 patch +1）'
-            type: string
-            required: false
-            default: ''
-    
+
+# 手动触发：计算版本号（默认 = 最新 Release 的 patch +1，如 2.9.60 → 2.9.61），
+# 复用 build.yml（三平台）与 build-apple.yml（Apple 双端，尽力而为）构建，
+# 然后把产物发布到 GitHub Release。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（留空则自动 = 最新版本 patch +1）'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - name: 计算版本号
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          INPUT="${{ inputs.version }}"
+          if [ -n "$INPUT" ]; then
+            VER="${INPUT#v}"
+          else
+            TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+            BASE="${TAG#v}"
+            if [ -z "$BASE" ]; then BASE="2.9.60"; fi
+            MAJOR=$(echo "$BASE" | cut -d. -f1)
+            MINOR=$(echo "$BASE" | cut -d. -f2)
+            PATCH=$(echo "$BASE" | cut -d. -f3)
+            VER="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "发布版本: v$VER"
+
+  build:
+    needs: resolve-version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.resolve-version.outputs.version }}
     permissions:
       contents: write
-    
-    jobs:
-      resolve-version:
-        runs-on: ubuntu-latest
-        outputs:
-          version: ${{ steps.v.outputs.version }}
-        steps:
-          - name: 计算版本号
-            id: v
-            env:
-              GH_TOKEN: ${{ github.token }}
-            run: |
-              set -e
-              INPUT="${{ inputs.version }}"
-              if [ -n "$INPUT" ]; then
-                VER="${INPUT#v}"
-              else
-                TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || echo "")
-                BASE="${TAG#v}"
-                if [ -z "$BASE" ]; then BASE="2.9.60"; fi
-                MAJOR=$(echo "$BASE" | cut -d. -f1)
-                MINOR=$(echo "$BASE" | cut -d. -f2)
-                PATCH=$(echo "$BASE" | cut -d. -f3)
-                VER="$MAJOR.$MINOR.$((PATCH + 1))"
-              fi
-              echo "version=$VER" >> "$GITHUB_OUTPUT"
-              echo "发布版本: v$VER"
-    
-      build:
-        needs: resolve-version
-        uses: ./.github/workflows/build.yml
+
+  build-apple:
+    needs: resolve-version
+    uses: ./.github/workflows/build-apple.yml
+    with:
+      version: ${{ needs.resolve-version.outputs.version }}
+    permissions:
+      contents: write
+    continue-on-error: true
+
+  publish:
+    needs: [resolve-version, build, build-apple]
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 下载三平台构建产物
+        uses: actions/download-artifact@v4
         with:
-          version: ${{ needs.resolve-version.outputs.version }}
-        permissions:
-          contents: write
-    
-      build-apple:
-        needs: resolve-version
-        uses: ./.github/workflows/build-apple.yml
-        with:
-          version: ${{ needs.resolve-version.outputs.version }}
-        permissions:
-          contents: write
+          path: dist
+          merge-multiple: true
+
+      - name: 📥 下载 Apple 产物（如有）
         continue-on-error: true
-    
-      publish:
-        needs: [resolve-version, build, build-apple]
-        if: ${{ always() && !cancelled() && needs.build.result == 'success' }}
-        runs-on: ubuntu-latest
-        steps:
-          - name: 📥 下载三平台构建产物
-            uses: actions/download-artifact@v4
-            with:
-              path: dist
-              merge-multiple: true
-    
-          - name: 📥 下载 Apple 产物（如有）
-            continue-on-error: true
-            uses: actions/download-artifact@v4
-            with:
-              path: dist
-              merge-multiple: true
-              pattern: astral-*
-    
-          - name: 📤 创建 Release 并上传产物
-            env:
-              GH_TOKEN: ${{ github.token }}
-              VER: ${{ needs.resolve-version.outputs.version }}
-            run: |
-              set -e
-              ls -R dist
-              if gh release view "v$VER" --repo "${{ github.repository }}" > /dev/null 2>&1; then
-                gh release upload "v$VER" dist/* --repo "${{ github.repository }}" --clobber
-              else
-                gh release create "v$VER" dist/* \
-                  --repo "${{ github.repository }}" \
-                  --title "Astral v$VER" \
-                  --generate-notes
-              fi
-    
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: astral-*
+
+      - name: 📤 创建 Release 并上传产物
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -e
+          ls -R dist
+          if gh release view "v$VER" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release upload "v$VER" dist/* --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "v$VER" dist/* \
+              --repo "${{ github.repository }}" \
+              --title "Astral v$VER" \
+              --generate-notes
+          fi
+
