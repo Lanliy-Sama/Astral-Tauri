@@ -92,7 +92,13 @@ fn set_close_minimize(app: tauri::AppHandle, value: bool) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // v3 桌面端必须显式选择运行时（mobile 由 mobile_entry_point 注册）
+    #[cfg(desktop)]
+    let builder = builder.runtime(tauri_runtime_wry::Wry::default());
+
+    builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())

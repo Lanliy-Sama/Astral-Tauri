@@ -34,7 +34,7 @@ opt-level = "s"
 panic = "abort"
 strip = true
 
-# v3 起 tauri 不再传递依赖 tauri-runtime-wry，但 mobile_entry_point 宏
-# 在 Android 上仍展开为 ::tauri_runtime_wry::android_binding!，需要直接依赖。
-[target.'cfg(target_os = "android")'.dependencies]
+# v3 起 tauri 不再传递依赖 tauri-runtime-wry：
+# - Android 的 mobile_entry_point 宏仍展开为 ::tauri_runtime_wry::android_binding!
+# - 桌面端需显式 .runtime(tauri_runtime_wry::Wry::default())
 tauri-runtime-wry = "3.0.0-alpha.2"
