@@ -85,7 +85,13 @@ class ServiceManager {
 
   /* ==================== 初始化 ==================== */
   async init() {
-    await db.initDb();
+    try {
+      await db.initDb();
+    } catch (e) {
+      /* 初始化失败不阻断 UI：真实错误显示在日志页 */
+      console.error('数据库初始化失败:', e);
+      this.pushLog(String(e?.message || e));
+    }
 
     const tasks = [
       this._initTheme(),

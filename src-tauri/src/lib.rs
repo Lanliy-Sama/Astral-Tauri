@@ -50,6 +50,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "tray_show_window" => {
                 if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.unminimize();
                     let _ = win.show();
                     let _ = win.set_focus();
                 }
@@ -73,6 +74,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             {
                 let app = tray.app_handle().clone();
                 if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.unminimize();
                     let _ = win.show();
                     let _ = win.set_focus();
                 }

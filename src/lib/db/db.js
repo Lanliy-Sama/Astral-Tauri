@@ -23,12 +23,23 @@ let sqlDb = null;
 
 export async function initDb() {
   if (sqlDb) return;
-  const { Database } = await import('@tauri-apps/plugin-sql');
-  sqlDb = await Database.load('sqlite:astral.db');
-  for (const t of TABLES) {
-    await sqlDb.execute(
-      `CREATE TABLE IF NOT EXISTS ${t} (id INTEGER PRIMARY KEY, data TEXT NOT NULL)`
-    );
+  try {
+    const { Database } = await import('@tauri-apps/plugin-sql');
+    sqlDb = await Database.load('sqlite:astral.db');
+    for (const t of TABLES) {
+      await sqlDb.execute(
+        `CREATE TABLE IF NOT EXISTS ${t} (id INTEGER PRIMARY KEY, data TEXT NOT NULL)`
+      );
+    }
+  } catch (e) {
+    sqlDb = null;
+    /* 真实错误不能吞：写入全局与应用日志页，便于在 Release 包里定位 */
+    const detail = String(e?.message || e);
+    console.error('initDb failed:', e);
+    if (typeof window !== 'undefined') {
+      window.__astralDbError = detail;
+    }
+    throw new Error('数据库初始化失败: ' + detail);
   }
 }
 
@@ -37,7 +48,10 @@ export function dbMode() {
 }
 
 function requireDb() {
-  if (!sqlDb) throw new Error('数据库尚未初始化');
+  if (!sqlDb) {
+    const detail = (typeof window !== 'undefined' && window.__astralDbError) || null;
+    throw new Error(detail ? '数据库尚未初始化（' + detail + '）' : '数据库尚未初始化');
+  }
   return sqlDb;
 }
 
