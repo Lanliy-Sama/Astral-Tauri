@@ -19,7 +19,7 @@
 
 > [!NOTE]
 > 本仓库是 Astral 的 **Tauri 分支**，而后者基于原始项目 [ldoubil/Astral](https://github.com/ldoubil/astral)开发。Tauri端的设计与实现全部归功于原项目。本分支聚焦于**Tauri轻量前端的移植与修复**。
-Astral 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Flutter 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
+>Astral-Tauri 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
 
 ## ✨ 主要特性
 
@@ -29,7 +29,7 @@ Astral 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的
   - 💻 **桌面平台**: Windows、macOS、Linux
   - 📱 **移动平台**: Android、iOS
 - 🌍 **多语言支持** - 提供多种语言界面
-- 🎨 **现代化界面** - 基于 Flutter 的美观用户界面
+- 🎨 **现代化界面** - 基于 Tauri 的美观用户界面
 - ⚡ **高性能** - Rust 后端确保高效的网络处理
 - 🔧 **易于配置** - 简单的房间和服务器管理
 
@@ -39,7 +39,7 @@ Astral 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的
 
 ## 🛠️ 技术栈
 
-- **前端**: Flutter (Dart)
+- **前端**: Tauri (Svelte5 + JS)
 - **后端**: Rust (EasyTier)
 - **网络**: P2P、WireGuard
 
