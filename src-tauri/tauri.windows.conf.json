@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "dlls/Ak.dll": "Ak.dll",
+      "dlls/msvcp140.dll": "msvcp140.dll",
+      "dlls/Packet.dll": "Packet.dll",
+      "dlls/vcruntime140.dll": "vcruntime140.dll",
+      "dlls/vcruntime140_1.dll": "vcruntime140_1.dll",
+      "dlls/WinDivert64.sys": "WinDivert64.sys",
+      "dlls/wintun.dll": "wintun.dll"
+    }
+  }
+}

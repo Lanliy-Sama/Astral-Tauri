@@ -41,6 +41,7 @@
 
 <div
   class="md-text-field {focused ? 'focused' : ''} {errorText ? 'error' : ''} {disabled ? 'disabled' : ''} {dense ? 'dense' : ''}"
+  class:float-label={floating}
   style={style}
 >
   {#if prefixIcon}
