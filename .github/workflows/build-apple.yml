@@ -60,7 +60,7 @@ name: 🍎 构建 Astral（macOS / iOS）
           protoc --version
 
       - name: 📥 安装 npm 依赖
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: 🖼️ 从原图重新生成图标（恢复圆角）
         run: npx tauri icon app-icon.png
@@ -117,7 +117,7 @@ name: 🍎 构建 Astral（macOS / iOS）
           protoc --version
 
       - name: 📥 安装 npm 依赖
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: 🏗️ 初始化 iOS 工程
         run: npx tauri ios init --ci
