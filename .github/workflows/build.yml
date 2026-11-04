@@ -42,10 +42,6 @@ jobs:
           - platform: ubuntu-22.04
             name: linux-x64
             bundles: deb,appimage
-            artifact: astral-linux-x64
-            paths: |
-              src-tauri/target/release/bundle/deb/*.deb
-              src-tauri/target/release/bundle/appimage/*.AppImage
 
     steps:
       - name: 🛠️ 检出代码
@@ -128,11 +124,31 @@ jobs:
       - name: 🔨 构建 Tauri 应用
         run: npx tauri build --bundles ${{ matrix.bundles }}
 
-      - name: 📤 上传安装包
+      - name: 📤 上传安装包（Windows）
+        if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.paths }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Linux 拆成两个 artifact：deb 约 21 MB，AppImage 约 95 MB（自带 WebKitGTK）
+      - name: 📤 上传 deb（Linux）
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: astral-linux-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 📤 上传 AppImage（Linux）
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: astral-linux-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
           retention-days: 14
 
