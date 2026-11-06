@@ -150,7 +150,7 @@
         <div class="section-title">{section.title}</div>
         <div class="opts">
           {#each section.options as opt (opt.label)}
-            <button class="opt" class:selected={opt.selected} onclick={opt.onSelect}>
+            <button class="opt {opt.selected ? 'selected lg-glass' : ''}" onclick={opt.onSelect}>
               {opt.label}
             </button>
           {/each}

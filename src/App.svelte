@@ -34,19 +34,27 @@
   });
 </script>
 
-<!-- 液态玻璃折射滤镜：feTurbulence 流动噪声 + feDisplacementMap 对真实背景做位移折射 -->
+<!-- 液态玻璃折射滤镜（对齐 glassium 光学模型）：
+  feTurbulence + feDisplacementMap 只作用于边缘透镜层（liquid-glass.css 的 ::before，
+  被 mask 限制在边缘带内），中心磨砂层不带位移 —— 与 glassium「边缘折射、中心纯净」一致。
+  - #lg-edge：静止态，轻微几何位移（scale 9）
+  - #lg-edge-hot：按住/拖拽态，强位移（scale 18）+ baseFrequency 持续漂移 = 液态流动 -->
 <svg class="lg-defs" aria-hidden="true" focusable="false">
   <defs>
-    <filter id="lg-refract" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="11" result="lg-noise">
+    <filter id="lg-edge" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="7" result="lg-noise" />
+      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+    <filter id="lg-edge-hot" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.024" numOctaves="2" seed="7" result="lg-noise">
         <animate
           attributeName="baseFrequency"
-          dur="16s"
-          values="0.008 0.012;0.013 0.007;0.008 0.012"
+          dur="2.8s"
+          values="0.02 0.024;0.028 0.017;0.02 0.024"
           repeatCount="indefinite"
         />
       </feTurbulence>
-      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="12" xChannelSelector="R" yChannelSelector="G" />
+      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="18" xChannelSelector="R" yChannelSelector="G" />
     </filter>
   </defs>
 </svg>
