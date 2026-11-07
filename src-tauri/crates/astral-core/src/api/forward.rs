@@ -1,3 +1,29 @@
+/* ---- 安全 stdout 打印：GUI 子系统（windows_subsystem="windows"）下 ----
+ * stdout 句柄无效，print!/println! 写失败会 panic：
+ *   · 命令线程 panic  => Tauri IPC 响应丢失，前端 invoke 永远挂起
+ *     （"点连接无反应"的根因：create_server 入口的 print!）
+ *   · 事件桥任务 panic => Rust 日志转发整体中断
+ * 以下宏忽略写失败，替代全部 stdout/stderr 打印。 */
+macro_rules! safe_print {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+    }};
+}
+macro_rules! safe_println {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stdout().lock().write_all(b"\n");
+    }};
+}
+macro_rules! safe_eprintln {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stderr().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stderr().lock().write_all(b"\n");
+    }};
+}
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
@@ -169,7 +195,7 @@ pub fn create_forward_server(listen_addr: String, forward_addr: String) -> Resul
                 let mut servers = FORWARD_SERVERS.lock().await;
                 servers.push(server);
                 let index = servers.len() - 1;
-                println!("端口转发服务器已启动: {} -> {}, 索引: {}", listen_addr, forward_addr, index);
+                safe_println!("端口转发服务器已启动: {} -> {}, 索引: {}", listen_addr, forward_addr, index);
                 Ok(index)
             }
             Err(e) => Err(format!("启动端口转发服务器失败: {}", e))
@@ -187,7 +213,7 @@ pub fn stop_forward_server(index: usize) -> Result<(), String> {
         }
         
         servers[index].stop().await;
-        println!("端口转发服务器已停止，索引: {}", index);
+        safe_println!("端口转发服务器已停止，索引: {}", index);
         Ok(())
     })
 }
@@ -199,11 +225,11 @@ pub fn stop_all_forward_servers() -> Result<(), String> {
         
         for (index, server) in servers.iter_mut().enumerate() {
             server.stop().await;
-            println!("端口转发服务器已停止，索引: {}", index);
+            safe_println!("端口转发服务器已停止，索引: {}", index);
         }
         
         servers.clear();
-        println!("所有端口转发服务器已停止");
+        safe_println!("所有端口转发服务器已停止");
         Ok(())
     })
 }
