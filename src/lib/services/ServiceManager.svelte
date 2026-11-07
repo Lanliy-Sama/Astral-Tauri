@@ -991,6 +991,8 @@ class ServiceManager {
     const logs = [...this.appSettingsState.logs, line];
     if (logs.length > 1000) logs.splice(0, logs.length - 1000);
     this.appSettingsState.logs = logs;
+    /* 诊断镜像：日志同时落盘（astral-cmd.log），不依赖日志页可见性 */
+    rust.frontendLog(line).catch(() => {});
   }
 
   clearLogs() {
@@ -1168,7 +1170,13 @@ class ServiceManager {
     if (this.connectionState.connectionState !== CoState.idle) return false;
     const room = this.roomState.selectedRoom;
     if (room == null) return false;
-    this.pushLog('[connect] 开始: room=' + (room.name || room.roomName || '?'));
+    this.pushLog(
+      '[connect] 开始: room=' + (room.name || room.roomName || '?') +
+      ' roomServers=' + JSON.stringify((room.servers || []).length) +
+      ' allServers=' + JSON.stringify(
+        this.serverState.servers.map((s) => ({ n: s.name, e: !!s.enable, u: s.url }))
+      )
+    );
 
     if (isManual) this._retryCount = 0;
     this._cancelCompleter = { done: false };
