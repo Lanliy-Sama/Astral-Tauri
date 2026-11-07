@@ -64,6 +64,9 @@
 
   /* 与运行时 --md-primary 完全一致（buildSchemes(seed)[mode].primary） */
   const selectedBackground = $derived.by(() => {
+    /* 液态玻璃：中心完全透明（选中态由主色边框表达）——
+     * 内联 style 的 background 优先级高于玻璃基座的 transparent，必须在这里让位 */
+    if (sm.appSettingsState.liquidGlass) return 'transparent';
     if (!isSelected) return 'var(--md-surface-container-low)';
     void isDark;
     void sm.themeState.themeColor;
