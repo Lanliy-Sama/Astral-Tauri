@@ -2,6 +2,32 @@
 //! 
 //! 简化版实现，提供基本的防火墙规则管理接口
 
+/* ---- 安全 stdout 打印：GUI 子系统（windows_subsystem="windows"）下 ----
+ * stdout 句柄无效，print!/println! 写失败会 panic：
+ *   · 命令线程 panic  => Tauri IPC 响应丢失，前端 invoke 永远挂起
+ *     （"点连接无反应"的根因：create_server 入口的 print!）
+ *   · 事件桥任务 panic => Rust 日志转发整体中断
+ * 以下宏忽略写失败，替代全部 stdout/stderr 打印。 */
+macro_rules! safe_print {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+    }};
+}
+macro_rules! safe_println {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stdout().lock().write_all(b"\n");
+    }};
+}
+macro_rules! safe_eprintln {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stderr().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stderr().lock().write_all(b"\n");
+    }};
+}
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "windows")]
@@ -203,7 +229,7 @@ mod wfp_impl {
                     bail!("无法打开 WFP 引擎，错误代码: {:#x}", result);
                 }
 
-                println!("✓ WFP 动态会话已创建（规则随引擎自动清理）");
+                safe_println!("✓ WFP 动态会话已创建（规则随引擎自动清理）");
 
                 Ok(Self { engine_handle })
             }
@@ -231,7 +257,7 @@ mod wfp_impl {
                         Ok(filter_ids) => ids.extend(filter_ids),
                         Err(e) => {
                             // 回滚已添加的过滤器
-                            println!("⚠️  添加过滤器失败，回滚已添加的 {} 个过滤器", ids.len());
+                            safe_println!("⚠️  添加过滤器失败，回滚已添加的 {} 个过滤器", ids.len());
                             for id in &ids {
                                 let _ = self.remove_filter(*id);
                             }
@@ -244,7 +270,7 @@ mod wfp_impl {
                             Ok(filter_ids) => ids.extend(filter_ids),
                             Err(e) => {
                                 // 回滚已添加的过滤器
-                                println!("⚠️  添加过滤器失败，回滚已添加的 {} 个过滤器", ids.len());
+                                safe_println!("⚠️  添加过滤器失败，回滚已添加的 {} 个过滤器", ids.len());
                                 for id in &ids {
                                     let _ = self.remove_filter(*id);
                                 }
@@ -260,12 +286,12 @@ mod wfp_impl {
 
         pub fn remove_filter(&mut self, filter_id: u64) -> Result<()> {
             unsafe {
-                println!("🔍 尝试删除过滤器 ID: {}", filter_id);
+                safe_println!("🔍 尝试删除过滤器 ID: {}", filter_id);
                 let status = FwpmFilterDeleteById0(self.engine_handle, filter_id);
                 if status != 0 {
                     bail!("删除过滤器失败，错误代码: {:#x}", status);
                 }
-                println!("✅ 过滤器 {} 删除成功", filter_id);
+                safe_println!("✅ 过滤器 {} 删除成功", filter_id);
                 Ok(())
             }
         }
@@ -288,7 +314,7 @@ mod wfp_impl {
             match self.add_filter(rule, layer_key_v4, protocol, false) {
                 Ok(id) => ids.push(id),
                 Err(err) => {
-                    println!("!  添加 IPv4 过滤器失败: {err}");
+                    safe_println!("!  添加 IPv4 过滤器失败: {err}");
                     errors.push(format!("IPv4: {}", err));
                 }
             }
@@ -302,7 +328,7 @@ mod wfp_impl {
             match self.add_filter(rule, layer_key_v6, protocol, true) {
                 Ok(id) => ids.push(id),
                 Err(err) => {
-                    println!("!  添加 IPv6 过滤器失败: {err}");
+                    safe_println!("!  添加 IPv6 过滤器失败: {err}");
                     errors.push(format!("IPv6: {}", err));
                 }
             }
@@ -348,9 +374,9 @@ mod wfp_impl {
         fn drop(&mut self) {
             unsafe {
                 if !self.engine_handle.is_invalid() {
-                    println!("\n正在关闭 WFP 引擎（规则将自动清理）...");
+                    safe_println!("\n正在关闭 WFP 引擎（规则将自动清理）...");
                     FwpmEngineClose0(self.engine_handle);
-                    println!("✓ WFP 引擎已关闭，所有规则已自动清理");
+                    safe_println!("✓ WFP 引擎已关闭，所有规则已自动清理");
                 }
             }
         }
@@ -739,10 +765,10 @@ pub fn start_magic_wall() -> std::result::Result<(), String> {
     }
 
     let firewall = WfpFirewall::new().map_err(|e| e.to_string())?;
-    println!("\n🔥 ============ 魔法墙引擎启动 ============");
-    println!("✓ 引擎状态: 运行中");
-    println!("✓ 平台: Windows Filtering Platform (WFP)");
-    println!("============================================\n");
+    safe_println!("\n🔥 ============ 魔法墙引擎启动 ============");
+    safe_println!("✓ 引擎状态: 运行中");
+    safe_println!("✓ 平台: Windows Filtering Platform (WFP)");
+    safe_println!("============================================\n");
 
     *firewall_guard = Some(firewall);
     drop(firewall_guard);
@@ -751,7 +777,7 @@ pub fn start_magic_wall() -> std::result::Result<(), String> {
     let rules = RULE_STORE.lock().map_err(|e| e.to_string())?;
     for rule in rules.values().filter(|r| r.enabled) {
         if let Err(err) = apply_rule(rule) {
-            println!("⚠️  规则 {} 应用失败: {}", rule.name, err);
+            safe_println!("⚠️  规则 {} 应用失败: {}", rule.name, err);
         }
     }
 
@@ -777,10 +803,10 @@ pub fn stop_magic_wall() -> std::result::Result<(), String> {
     FILTER_TRACKER.lock().map_err(|e| e.to_string())?.clear();
     RULE_STORE.lock().map_err(|e| e.to_string())?.clear();
 
-    println!("\n🛑 ============ 魔法墙引擎停止 ============");
-    println!("✓ 引擎状态: 已停止");
-    println!("✓ 清理规则: {} 条活跃规则", active_count);
-    println!("============================================\n");
+    safe_println!("\n🛑 ============ 魔法墙引擎停止 ============");
+    safe_println!("✓ 引擎状态: 已停止");
+    safe_println!("✓ 清理规则: {} 条活跃规则", active_count);
+    safe_println!("============================================\n");
     Ok(())
 }
 
@@ -791,7 +817,7 @@ pub fn add_magic_wall_rule(rule: MagicWallRule) -> std::result::Result<(), Strin
     {
         let rules = RULE_STORE.lock().map_err(|e| e.to_string())?;
         if rules.contains_key(&rule.id) {
-            println!("⚠️  规则已存在，将更新: {}", rule.name);
+            safe_println!("⚠️  规则已存在，将更新: {}", rule.name);
             drop(rules);
             return update_magic_wall_rule(rule);
         }
@@ -801,7 +827,7 @@ pub fn add_magic_wall_rule(rule: MagicWallRule) -> std::result::Result<(), Strin
     if rule.enabled {
         apply_rule(&rule)?;
     } else {
-        println!("⏸️  规则已添加但未启用: {}", rule.name);
+        safe_println!("⏸️  规则已添加但未启用: {}", rule.name);
     }
 
     // 只有成功后才添加到存储
@@ -815,12 +841,12 @@ pub fn add_magic_wall_rule(rule: MagicWallRule) -> std::result::Result<(), Strin
 
 #[cfg(target_os = "windows")]
 fn apply_rule(rule: &MagicWallRule) -> std::result::Result<(), String> {
-    println!("\n➕ ============ 添加防火墙规则 ============");
-    println!("📌 规则名称: {}", rule.name);
-    println!("🔑 规则 ID: {}", rule.id);
-    println!("🎯 动作: {}", if rule.action == "allow" { "✅ 允许" } else { "🚫 阻止" });
-    println!("📡 协议: {}", rule.protocol.to_uppercase());
-    println!("🔄 方向: {}", match rule.direction.as_str() {
+    safe_println!("\n➕ ============ 添加防火墙规则 ============");
+    safe_println!("📌 规则名称: {}", rule.name);
+    safe_println!("🔑 规则 ID: {}", rule.id);
+    safe_println!("🎯 动作: {}", if rule.action == "allow" { "✅ 允许" } else { "🚫 阻止" });
+    safe_println!("📡 协议: {}", rule.protocol.to_uppercase());
+    safe_println!("🔄 方向: {}", match rule.direction.as_str() {
         "inbound" => "⬇️  入站",
         "outbound" => "⬆️  出站",
         "both" => "↕️  双向",
@@ -828,32 +854,32 @@ fn apply_rule(rule: &MagicWallRule) -> std::result::Result<(), String> {
     });
 
     if let Some(app_path) = &rule.app_path {
-        println!("💻 应用路径 (DOS): {}", app_path);
+        safe_println!("💻 应用路径 (DOS): {}", app_path);
         if let Some(nt_path) = crate::api::nt::get_nt_path(app_path) {
-            println!("💻 应用路径 (NT):  {}", nt_path);
+            safe_println!("💻 应用路径 (NT):  {}", nt_path);
         } else {
-            println!("⚠️  无法转换为 NT 路径");
+            safe_println!("⚠️  无法转换为 NT 路径");
         }
     }
 
     if let Some(remote_ip) = &rule.remote_ip {
-        println!("🌐 远程 IP: {}", remote_ip);
+        safe_println!("🌐 远程 IP: {}", remote_ip);
     }
 
     if let Some(local_ip) = &rule.local_ip {
-        println!("🏠 本地 IP: {}", local_ip);
+        safe_println!("🏠 本地 IP: {}", local_ip);
     }
 
     if let Some(remote_port) = &rule.remote_port {
-        println!("🔌 远程端口: {}", remote_port);
+        safe_println!("🔌 远程端口: {}", remote_port);
     }
 
     if let Some(local_port) = &rule.local_port {
-        println!("🔌 本地端口: {}", local_port);
+        safe_println!("🔌 本地端口: {}", local_port);
     }
 
     if let Some(description) = &rule.description {
-        println!("📝 说明: {}", description);
+        safe_println!("📝 说明: {}", description);
     }
 
     let mut firewall_guard = FIREWALL.lock().map_err(|e| e.to_string())?;
@@ -861,7 +887,7 @@ fn apply_rule(rule: &MagicWallRule) -> std::result::Result<(), String> {
         let ids = convert_rule(rule)
             .and_then(|f_rule| firewall.add_rule(&f_rule))
             .map_err(|e| {
-                println!("!  添加规则失败: {}", e);
+                safe_println!("!  添加规则失败: {}", e);
                 e.to_string()
             })?;
 
@@ -870,11 +896,11 @@ fn apply_rule(rule: &MagicWallRule) -> std::result::Result<(), String> {
             .map_err(|e| e.to_string())?
             .insert(rule.id.clone(), ids);
 
-        println!("✅ 状态: 已启用");
-        println!("============================================\n");
+        safe_println!("✅ 状态: 已启用");
+        safe_println!("============================================\n");
     } else {
-        println!("⚠️  魔法墙尚未启动，规则将在启动后生效");
-        println!("============================================\n");
+        safe_println!("⚠️  魔法墙尚未启动，规则将在启动后生效");
+        safe_println!("============================================\n");
     }
 
     Ok(())
@@ -885,13 +911,13 @@ fn apply_rule(rule: &MagicWallRule) -> std::result::Result<(), String> {
 pub fn remove_magic_wall_rule(rule_id: String) -> std::result::Result<(), String> {
     let mut rules = RULE_STORE.lock().map_err(|e| e.to_string())?;
     if let Some(rule) = rules.remove(&rule_id) {
-        println!("\n➖ ============ 删除防火墙规则 ============");
-        println!("📌 规则名称: {}", rule.name);
-        println!("🔑 规则 ID: {}", rule.id);
+        safe_println!("\n➖ ============ 删除防火墙规则 ============");
+        safe_println!("📌 规则名称: {}", rule.name);
+        safe_println!("🔑 规则 ID: {}", rule.id);
         if let Some(app_path) = &rule.app_path {
-            println!("💻 应用路径 (DOS): {}", app_path);
+            safe_println!("💻 应用路径 (DOS): {}", app_path);
             if let Some(nt_path) = crate::api::nt::get_nt_path(app_path) {
-                println!("💻 应用路径 (NT):  {}", nt_path);
+                safe_println!("💻 应用路径 (NT):  {}", nt_path);
             }
         }
 
@@ -903,22 +929,22 @@ pub fn remove_magic_wall_rule(rule_id: String) -> std::result::Result<(), String
             };
 
             if let Some(ids) = ids {
-                println!("📝 找到 {} 个过滤器需要删除", ids.len());
+                safe_println!("📝 找到 {} 个过滤器需要删除", ids.len());
                 for id in ids {
                     if let Err(err) = firewall.remove_filter(id) {
-                        println!("⚠️  删除过滤器失败: {}", err);
+                        safe_println!("⚠️  删除过滤器失败: {}", err);
                     }
                 }
             } else {
-                println!("⚠️  FILTER_TRACKER 中未找到规则 {} 的过滤器记录", rule_id);
+                safe_println!("⚠️  FILTER_TRACKER 中未找到规则 {} 的过滤器记录", rule_id);
             }
         }
 
-        println!("✅ 规则已从防火墙中移除");
-        println!("============================================\n");
+        safe_println!("✅ 规则已从防火墙中移除");
+        safe_println!("============================================\n");
         Ok(())
     } else {
-        println!("⚠️  规则不存在: {}", rule_id);
+        safe_println!("⚠️  规则不存在: {}", rule_id);
         Err("规则不存在".to_string())
     }
 }
@@ -926,15 +952,15 @@ pub fn remove_magic_wall_rule(rule_id: String) -> std::result::Result<(), String
 /// 更新规则
 #[cfg(target_os = "windows")]
 pub fn update_magic_wall_rule(rule: MagicWallRule) -> std::result::Result<(), String> {
-    println!("\n🔄 ============ 更新防火墙规则 ============");
-    println!("📌 规则名称: {}", rule.name);
-    println!("🔑 规则 ID: {}", rule.id);
-    println!("============================================\n");
+    safe_println!("\n🔄 ============ 更新防火墙规则 ============");
+    safe_println!("📌 规则名称: {}", rule.name);
+    safe_println!("🔑 规则 ID: {}", rule.id);
+    safe_println!("============================================\n");
 
     let _ = remove_magic_wall_rule(rule.id.clone());
     add_magic_wall_rule(rule)?;
 
-    println!("✅ 规则更新完成\n");
+    safe_println!("✅ 规则更新完成\n");
     Ok(())
 }
 
@@ -947,9 +973,9 @@ pub fn get_magic_wall_status() -> std::result::Result<MagicWallStatus, String> {
     let active_rules = rules.values().filter(|r| r.enabled).count();
     let total_rules = rules.len();
 
-    println!("📊 魔法墙状态查询:");
-    println!("   引擎: {}", if running { "🟢 运行中" } else { "🔴 已停止" });
-    println!("   活跃规则: {} / {} 条", active_rules, total_rules);
+    safe_println!("📊 魔法墙状态查询:");
+    safe_println!("   引擎: {}", if running { "🟢 运行中" } else { "🔴 已停止" });
+    safe_println!("   活跃规则: {} / {} 条", active_rules, total_rules);
 
     Ok(MagicWallStatus {
         is_running: running,
