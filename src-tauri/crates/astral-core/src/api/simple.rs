@@ -66,6 +66,16 @@ fn peer_conn_info_to_string(p: proto::api::instance::PeerConnInfo) -> String {
     )
 }
 
+/// 命令/任务文件日志：追加 %TEMP%\\astral-cmd.log（不依赖 UDP 桥与前端），
+/// 定位 create_server 全链路（命令线程 / RT 任务）死点；unwrap panic 也会在此留痕前记下。
+pub fn cmd_log(msg: &str) {
+    use std::io::Write;
+    let path = std::env::temp_dir().join("astral-cmd.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "[{:?}] {}", std::time::SystemTime::now(), msg);
+    }
+}
+
 pub fn send_udp_to_localhost(message: &str) -> Result<(), String> {
     use std::net::UdpSocket;
 
@@ -239,8 +249,15 @@ async fn create_and_store_network_instance(cfg: TomlConfigLoader) -> Result<(), 
     // 创建网络实例
     let mut network = NetworkInstance::new(cfg, ConfigFileControl::STATIC_CONFIG);
     // 启动网络实例，并处理可能的错误
-    handle_event(network.start().unwrap());
+    match network.start() {
+        Ok(events) => handle_event(events),
+        Err(e) => {
+            cmd_log(&format!("task: network.start() 失败: {e}"));
+            return;
+        }
+    }
     safe_println!("instance {} started", name);
+    cmd_log("task: 实例已启动并写入 INSTANCE");
     // 将实例存储到 INSTANCE 中
     let mut instance_guard = INSTANCE.write().await;
     *instance_guard = Some(network);
@@ -434,6 +451,7 @@ pub fn create_server(
     safe_print!("{}", format!("创建服务器: {}，启用DHCP: {}, 指定IP: {}, 房间名称: {}, 房间密码: {}, 服务器URL: {:?}, 监听器URL: {:?}", username, enable_dhcp, specified_ip, room_name, room_password, severurl, onurl));
     RT.spawn(async move {
         // Create config with better error handling
+        cmd_log("task: create_server 任务开始，构建配置");
         let cfg = TomlConfigLoader::default();
 
         // Set listeners with proper error handling
