@@ -308,6 +308,12 @@ pub fn has_npcap_driver() -> bool {
     }
 }
 
+/// 前端日志落盘（pushLog 镜像，写 %TEMP%\\astral-cmd.log）。
+#[tauri::command]
+pub fn frontend_log(msg: String) {
+    simple::cmd_log(&format!("[fe] {}", msg));
+}
+
 /// 开机自启动（对应 startup_url_scheme.dart：Windows 计划任务方式）。
 #[tauri::command]
 pub fn set_startup(enable: bool) -> Result<(), String> {
