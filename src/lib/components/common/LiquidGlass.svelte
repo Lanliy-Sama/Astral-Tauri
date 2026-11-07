@@ -262,12 +262,12 @@ html.liquid-glass .md-dialog::after {
       transparent 50%,
       rgb(0 0 0 / 0.028) 84%
     ),
-    /* 静息光：顶面反光 + 底部地面反射 */
+    /* 静息光：顶面反光 + 底部地面反射（--lg-rest=0 时完全清除，卡片中心全透） */
     linear-gradient(
       to bottom,
-      rgb(255 255 255 / 0.2),
+      rgb(255 255 255 / calc(0.2 * var(--lg-rest, 1))),
       transparent 34% 62%,
-      rgb(255 255 255 / 0.11)
+      rgb(255 255 255 / calc(0.11 * var(--lg-rest, 1)))
     ),
     /* 镜面反射：跟随指针的实时高光（悬停 --lg-spec） */
     radial-gradient(
@@ -421,6 +421,10 @@ html.liquid-glass .home-box:not(.borderless) {
   --lg-blur: 13px;
   --lg-spec-r: 150px;
   --lg-bright: 1.06;
+  /* 中心完全透明：镜面反光近零、静息光清零（见 ::after 的 --lg-rest），
+   * 卡内只留边缘扭曲折射带与一丝玻璃反光 */
+  --lg-sheen: 0.05;
+  --lg-rest: 0;
   /* 中心完全透明（无表面色无白雾）：卡片 = 边缘折射带 + 玻璃反光，
    * 中心直通背景。 */
   --lg-tint: transparent;
@@ -485,9 +489,9 @@ html.liquid-glass .md-fab {
   --lg-tint:
     linear-gradient(
       155deg,
-      color-mix(in srgb, var(--md-primary-container) 60%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-primary-container) 92%, rgb(255 255 255 / 0.12)) 58%,
-      color-mix(in srgb, var(--md-primary-container) 74%, rgb(255 255 255 / 0.3))
+      color-mix(in srgb, var(--md-primary-container) 34%, rgb(255 255 255 / 0.4)),
+      color-mix(in srgb, var(--md-primary-container) 50%, rgb(255 255 255 / 0.1)) 58%,
+      color-mix(in srgb, var(--md-primary-container) 30%, rgb(255 255 255 / 0.24))
     );
 }
 html.liquid-glass .md-filled-btn {
@@ -498,9 +502,9 @@ html.liquid-glass .md-filled-btn {
   --lg-tint:
     linear-gradient(
       155deg,
-      color-mix(in srgb, var(--md-primary) 62%, rgb(255 255 255 / 0.48)),
-      color-mix(in srgb, var(--md-primary) 96%, rgb(255 255 255 / 0.08)) 58%,
-      color-mix(in srgb, var(--md-primary) 78%, rgb(255 255 255 / 0.28))
+      color-mix(in srgb, var(--md-primary) 40%, rgb(255 255 255 / 0.38)),
+      color-mix(in srgb, var(--md-primary) 56%, rgb(255 255 255 / 0.08)) 58%,
+      color-mix(in srgb, var(--md-primary) 32%, rgb(255 255 255 / 0.22))
     );
 }
 html.liquid-glass .md-tonal-btn {
@@ -511,9 +515,9 @@ html.liquid-glass .md-tonal-btn {
   --lg-tint:
     linear-gradient(
       155deg,
-      color-mix(in srgb, var(--md-secondary-container) 58%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-secondary-container) 92%, rgb(255 255 255 / 0.12)) 58%,
-      color-mix(in srgb, var(--md-secondary-container) 74%, rgb(255 255 255 / 0.3))
+      color-mix(in srgb, var(--md-secondary-container) 36%, rgb(255 255 255 / 0.4)),
+      color-mix(in srgb, var(--md-secondary-container) 52%, rgb(255 255 255 / 0.1)) 58%,
+      color-mix(in srgb, var(--md-secondary-container) 30%, rgb(255 255 255 / 0.24))
     );
 }
 html.liquid-glass .md-elevated-btn,
@@ -525,9 +529,9 @@ html.liquid-glass .md-outlined-btn {
   --lg-tint:
     linear-gradient(
       155deg,
-      rgb(255 255 255 / 0.42),
-      rgb(255 255 255 / 0.08) 45%,
-      rgb(0 0 0 / 0.02)
+      rgb(255 255 255 / 0.16),
+      rgb(255 255 255 / 0.03) 45%,
+      rgb(0 0 0 / 0.01)
     );
 }
 /* 禁用态：玻璃褪为哑光淡板（颜色/阴影全部收敛） */
