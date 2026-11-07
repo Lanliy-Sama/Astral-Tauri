@@ -361,6 +361,66 @@ pub fn run() {
             // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
             astral_core::api::simple::preinit_runtime();
 
+                // --selftest：后端全链路自测（构建配置 -> create_server -> 核心启动检查），
+                // 结果写入 %TEMP%\\astral-cmd.log 后自动退出。绕开 UI，用于确定性交付验证。
+                if std::env::args().any(|a| a == "--selftest") {
+                    std::thread::spawn(|| {
+                        use astral_core::api::simple;
+                        simple::cmd_log("selftest: 启动，2 秒后提交 create_server");
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        let flag = simple::FlagsC {
+                            default_protocol: "tcp".into(),
+                            dev_name: "astral".into(),
+                            enable_encryption: true,
+                            enable_ipv6: false,
+                            mtu: 1420,
+                            latency_first: false,
+                            enable_exit_node: false,
+                            no_tun: true,
+                            use_smoltcp: false,
+                            relay_network_whitelist: "*".into(),
+                            disable_p2p: false,
+                            enable_udp_broadcast_relay: false,
+                            relay_all_peer_rpc: false,
+                            disable_udp_hole_punching: false,
+                            disable_tcp_hole_punching: false,
+                            multi_thread: false,
+                            data_compress_algo: 0,
+                            bind_device: String::new(),
+                            enable_kcp_proxy: false,
+                            disable_kcp_input: false,
+                            disable_relay_kcp: false,
+                            proxy_forward_by_system: false,
+                            accept_dns: false,
+                            private_mode: false,
+                            enable_quic_proxy: false,
+                            disable_quic_input: false,
+                            disable_sym_hole_punching: false,
+                            tcp_whitelist: String::new(),
+                            udp_whitelist: String::new(),
+                            socks5_port: 0,
+                        };
+                        let _ = simple::create_server(
+                            "selftest".into(),
+                            true,
+                            String::new(),
+                            "astral-test".into(),
+                            "astral-test".into(),
+                            vec!["tcp://127.0.0.1:11010".into()],
+                            vec![],
+                            Vec::new(),
+                            Vec::new(),
+                            flag,
+                        );
+                        simple::cmd_log("selftest: create_server 已提交，等待核心启动");
+                        std::thread::sleep(std::time::Duration::from_secs(8));
+                        let running = simple::rt_block_on_is_running();
+                        simple::cmd_log(&format!("selftest: is_easytier_running = {}", running));
+                        simple::cmd_log("selftest: 结束，进程退出");
+                        std::process::exit(0);
+                    });
+                }
+
             // UDP 9999 日志桥（对应 Flutter LogCapture）
             commands::start_log_bridge(app.handle().clone());
 
