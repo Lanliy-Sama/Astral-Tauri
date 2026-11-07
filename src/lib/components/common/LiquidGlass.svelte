@@ -311,7 +311,10 @@ html.liquid-glass .md-dialog::after {
 html.liquid-glass .md-switch .thumb,
 html.liquid-glass .nav-items > .selection-indicator,
 html.liquid-glass .md-segmented .segment-pill,
-html.liquid-glass .bottom-nav .selection-pill {
+html.liquid-glass .bottom-nav .selection-pill,
+html.liquid-glass .servers-fab,
+html.liquid-glass .logs-fab,
+html.liquid-glass .mw-fab {
   position: absolute; /* absolute 同样构成伪元素的 containing block，玻璃正确铺满 */
 }
 
