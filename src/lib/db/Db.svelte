@@ -29,7 +29,13 @@ let sqlDb = null;
 export async function initDb() {
   if (sqlDb) return;
   try {
-    const { Database } = await import('@tauri-apps/plugin-sql');
+    /* v2.6 修复：plugin-sql 的 Database 是 default 导出（export { Database as default }）。
+     * 此前误用命名导入 { Database } → undefined → initDb 永远失败 ——
+     * 真实应用里 SQLite/设置持久化自 svelte5 重构起从未生效（自定义背景
+     * “设置后没有生效”的根因之一）。default 与命名两种形态都兼容。 */
+    const mod = await import('@tauri-apps/plugin-sql');
+    const Database = mod.default ?? mod.Database;
+    if (!Database) throw new Error('plugin-sql 未导出 Database');
     sqlDb = await Database.load('sqlite:astral.db');
     for (const t of TABLES) {
       await sqlDb.execute(

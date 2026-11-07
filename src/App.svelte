@@ -156,14 +156,17 @@
     applyThemeNow();
   });
 
-  /* 自定义背景响应：设置 → 软件设置 → 自定义背景（data URL）。
+  /* 自定义背景响应：设置 → 软件设置 → 自定义背景。
+   * v2.6：背景 URL 为 astralbg:// 自定义协议（Tauri，磁盘直服务，任意大小）
+   * 或 Blob URL（浏览器预览）—— 均为短字符串，避开 Chromium 对 CSS
+   * 自定义属性 ~1.5MB 的上限（旧 data URL 方案超限即静默失效）。
    * 写入根元素 CSS 变量 + has-custom-bg 类；各层半透明适配见 :global 样式。
    * GIF 经 background-image 引用时在 WebView 中自动逐帧播放。 */
   $effect(() => {
     const bg = sm.appSettingsState.customBackground;
     const root = document.documentElement;
     if (bg) {
-      /* data URL 不含引号，可安全嵌入 url("...") */
+      /* 协议/Blob URL 不含引号，可安全嵌入 url("...") */
       root.style.setProperty('--astral-bg-image', `url("${bg}")`);
       root.classList.add('has-custom-bg');
     } else {
@@ -1215,7 +1218,8 @@ a {
 /* ============================================================
  * 自定义背景（设置 → 软件设置 → 自定义背景）
  * html.has-custom-bg 由 App.svelte 按设置切换；
- * --astral-bg-image 为 data URL（JPG/PNG/GIF，GIF 自动逐帧播放）。
+ * --astral-bg-image 为 astralbg:// 协议 URL（Tauri，磁盘直服务，
+ * 任意大小、GIF 自动逐帧播放）或 Blob URL（浏览器预览）。
  * 分层策略：
  *   · .main-screen 承载图像 + 半透明 surface 遮罩（保文字可读）；
  *   · 主页面容器转透明 → 图像直达内容层；

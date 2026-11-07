@@ -181,5 +181,9 @@
   "bg_applied_msg": "自定义背景已生效",
   "bg_cleared": "已恢复默认背景",
   "bg_cleared_msg": "自定义背景已移除",
-  "bg_read_failed": "读取文件失败"
+  "bg_read_failed": "读取文件失败",
+  "bg_processing": "正在应用背景",
+  "bg_processing_msg": "大文件正在流式写入，请稍候…",
+  "bg_decode_failed": "图像解码失败",
+  "bg_decode_failed_msg": "该文件无法被解码为图像，请换一个文件试试"
 }

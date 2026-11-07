@@ -181,5 +181,9 @@
   "bg_applied_msg": "Custom background is now active",
   "bg_cleared": "Default background restored",
   "bg_cleared_msg": "Custom background has been removed",
-  "bg_read_failed": "Failed to read file"
+  "bg_read_failed": "Failed to read file",
+  "bg_processing": "Applying background",
+  "bg_processing_msg": "Streaming a large file to disk, please wait…",
+  "bg_decode_failed": "Cannot decode image",
+  "bg_decode_failed_msg": "The file could not be decoded as an image; try another one"
 }

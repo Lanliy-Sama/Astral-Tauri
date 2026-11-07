@@ -761,14 +761,24 @@ class ServiceManager {
       s.reduceAnimationUpdates === true;
     this.appSettingsState.liquidGlass = s.liquidGlass === true;
 
-    /* 自定义背景：独立 app_assets 表（id=1），失败不阻断设置加载 */
+    /* 自定义背景（v2.6）：Tauri = 磁盘文件（astralbg:// 自定义协议服务，
+     * SoftwareSettingsPage 分块写入）；兼容 v2.5 及更早存于 app_assets 的
+     * data URL —— 后台迁移为磁盘文件。浏览器预览为会话级。 */
     try {
-      const assets = await db.listAll('app_assets');
-      const asset = assets.find((r) => r.id === 1);
-      this.appSettingsState.customBackground =
-        typeof asset?.image === 'string' && asset.image.startsWith('data:image/')
-          ? asset.image
-          : null;
+      if (isTauri()) {
+        const { invoke, convertFileSrc } = await import('@tauri-apps/api/core');
+        const info = await invoke('custom_background_info');
+        if (info && info.version != null) {
+          this.appSettingsState.customBackground =
+            convertFileSrc('bg', 'astralbg') + '?v=' + info.version;
+        } else {
+          const assets = await db.listAll('app_assets');
+          const asset = assets.find((r) => r.id === 1);
+          if (typeof asset?.image === 'string' && asset.image.startsWith('data:image/')) {
+            void this._migrateLegacyBackground(asset.image); // 异步迁移，不阻塞启动
+          }
+        }
+      }
     } catch (e) {
       console.warn('自定义背景加载失败:', e);
     }
@@ -893,18 +903,47 @@ class ServiceManager {
     await this._persistSettings({ liquidGlass: v });
   }
 
-  /* ---------- 自定义背景（app_assets 表，id=1） ---------- */
-  async updateCustomBackground(dataUrl) {
-    this.appSettingsState.customBackground = dataUrl || null;
+  /* ---------- 自定义背景（v2.6） ----------
+   * Tauri 端由磁盘文件 + astralbg:// 协议承载（写入/清除由
+   * SoftwareSettingsPage 调用 bg_write_* / clear_custom_background 命令完成）；
+   * 浏览器预览为 Blob URL（会话级）。此处仅维护会话状态。 */
+  async updateCustomBackground(url) {
+    this.appSettingsState.customBackground = url || null;
+  }
+
+  /* v2.5 data URL 背景 → 磁盘文件迁移（后台执行，失败仅警告） */
+  async _migrateLegacyBackground(dataUrl) {
     try {
-      if (dataUrl == null) {
-        await db.deleteRow('app_assets', 1);
-      } else {
-        await db.putRow('app_assets', { id: 1, image: dataUrl });
+      const comma = dataUrl.indexOf(',');
+      const baseType = dataUrl.slice(5, comma).split(';')[0];
+      const ext = {
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/apng': 'apng',
+        'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp',
+        'image/svg+xml': 'svg', 'image/x-icon': 'ico', 'image/tiff': 'tiff',
+        'image/avif': 'avif', 'image/heic': 'heic', 'image/heif': 'heif',
+        'image/heic-sequence': 'heic', 'image/jxl': 'jxl',
+      }[baseType];
+      if (!ext) return;
+      const blob = await (await fetch(dataUrl)).blob();
+      const { invoke, convertFileSrc } = await import('@tauri-apps/api/core');
+      await invoke('bg_write_begin', { ext });
+      const CHUNK = 1 << 20;
+      for (let off = 0; off < blob.size; off += CHUNK) {
+        const b64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result).split(',')[1] || '');
+          r.onerror = () => reject(r.error);
+          r.readAsDataURL(blob.slice(off, Math.min(off + CHUNK, blob.size)));
+        });
+        await invoke('bg_write_append', { b64 });
       }
+      const info = await invoke('bg_write_end');
+      await db.deleteRow('app_assets', 1); // 迁移完成，清理旧行
+      this.appSettingsState.customBackground =
+        convertFileSrc('bg', 'astralbg') + '?v=' + info.version;
+      console.info('自定义背景已由 data URL 迁移为磁盘文件');
     } catch (e) {
-      /* 浏览器预览无 SQLite：状态已生效（本次会话可用），仅持久化失败 */
-      console.warn('自定义背景持久化失败:', e);
+      console.warn('自定义背景迁移失败:', e);
     }
   }
 

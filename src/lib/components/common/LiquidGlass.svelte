@@ -381,15 +381,25 @@ html.liquid-glass .md-outlined-btn:active {
 
 /* ---- 选项/选项卡按压的局部反馈：指针下即时渗色压痕 ----
  * 选中胶囊（pill/indicator）负责“选了谁”，这里负责“按在哪”：
- * 按住的瞬间在指针下的选项上出现主色压痕，松手随胶囊滑动接续。 */
+ * 按住的瞬间在指针下的选项上出现主色压痕，松手随胶囊滑动接续。
+ * 分段拖动中（.lg-dragging）：改由 .segment.hovered 承接
+ * （胶囊连续跟随指针，原段 :active 压度不再有意义）。 */
 html.liquid-glass .nav-items:not(.lg-dragging) .nav-item:active,
-html.liquid-glass .md-segmented:not(:has(.live)) .segment:active,
+html.liquid-glass .md-segmented:not(.lg-dragging) .segment:active,
 html.liquid-glass .bottom-nav .bottom-nav-item:active {
   background: color-mix(in srgb, var(--md-primary) 10%, transparent);
   border-radius: 999px;
 }
 html.liquid-glass .nav-items:not(.lg-dragging) .nav-item:active {
   border-radius: 12px;
+}
+/* 分段拖动中：指针下的段即时高亮（胶囊连续跟随，段反馈“将落在哪”） */
+html.liquid-glass .md-segmented.lg-dragging .segment.hovered {
+  background: color-mix(in srgb, var(--md-primary) 10%, transparent);
+  border-radius: 999px;
+}
+html.liquid-glass .md-segmented.lg-dragging {
+  cursor: grabbing;
 }
 
 
@@ -780,12 +790,18 @@ html.liquid-glass .md-segmented .segment-pill {
       color-mix(in srgb, var(--md-secondary-container) 62%, rgb(255 255 255 / 0.26)) 55%,
       color-mix(in srgb, var(--md-primary) 10%, rgb(255 255 255 / 0.4))
     );
+  /* v2.6：transform 不参与过渡 —— 胶囊位置/液态形变由 rAF 弹簧逐帧直控
+   * （基底 .lg-glass 的 transform 150ms 会让拖拽跟随/回弹滞后）；
+   * 光影材质过渡（--lg-spec/--lg-press/border/shadow）保留。 */
+  transition-property: --lg-spec, --lg-press, --lg-on, border-color, box-shadow;
 }
-/* 按住任意段：胶囊进入按压态（液态流动 + 体积光） */
-html.liquid-glass .md-segmented:has(.segment:active) .segment-pill {
+/* 按住任意段：胶囊进入按压态（液态流动 + 体积光）；拖动中由 .lg-dragging 延续 */
+html.liquid-glass .md-segmented:has(.segment:active) .segment-pill,
+html.liquid-glass .md-segmented.lg-dragging .segment-pill {
   --lg-press: 1;
 }
-html.liquid-glass .md-segmented:has(.segment:active) .segment-pill::before {
+html.liquid-glass .md-segmented:has(.segment:active) .segment-pill::before,
+html.liquid-glass .md-segmented.lg-dragging .segment-pill::before {
   -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
   backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
 }
