@@ -415,16 +415,16 @@ html.liquid-glass .home-box:not(.borderless) {
   --lg-edge: 22px;
   --lg-blur: 13px;
   --lg-spec-r: 150px;
-  --lg-bright: 1.07;
-  /* 中心通透（同侧边栏选中框的低表面占比配方）：透明度主要交给
-   * 白色高光层，表面色只做浅色调 —— 后面是磨砂模糊的背景图，
-   * 卡内文字靠 blur(13px) + 光泽保持可读 */
+  --lg-bright: 1.06;
+  /* 磨砂玻璃体：本机 backdrop-filter 不渲染（与对话框同），"磨砂感"由
+   * tint 承担 —— 中心 66% 表面色让背景只透光不透形（完全透明 ❌），
+   * 边缘 48-56% 略透出环境光，白色高光层叠加液态光泽 */
   --lg-tint:
     linear-gradient(
       160deg,
-      color-mix(in srgb, var(--md-surface-container-low) 34%, rgb(255 255 255 / 0.52)),
-      color-mix(in srgb, var(--md-surface-container-low) 48%, rgb(255 255 255 / 0.18)) 55%,
-      color-mix(in srgb, var(--md-surface-container-low) 30%, rgb(255 255 255 / 0.4))
+      color-mix(in srgb, var(--md-surface-container-low) 48%, rgb(255 255 255 / 0.5)),
+      color-mix(in srgb, var(--md-surface-container-low) 66%, rgb(255 255 255 / 0.2)) 55%,
+      color-mix(in srgb, var(--md-surface-container-low) 56%, rgb(255 255 255 / 0.38))
     );
 }
 /* hover 描边回归组件语义（HomeBox.hovered = primary） */
