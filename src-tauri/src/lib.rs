@@ -326,6 +326,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::easytier_version,
+            commands::frontend_log,
             commands::get_running_info,
             commands::get_network_status,
             commands::create_server,
