@@ -291,6 +291,11 @@ pub fn easytier_version() -> Result<String, String> {
 }
 
 // 是否在运行
+/// 同步包装：在任意非 tokio 线程上以 RT 驱动 is_easytier_running。
+pub fn rt_block_on_is_running() -> bool {
+    RT.block_on(async { INSTANCE.read().await.is_some() })
+}
+
 pub async fn is_easytier_running() -> bool {
     let instance = INSTANCE.read().await;
     instance.is_some()
