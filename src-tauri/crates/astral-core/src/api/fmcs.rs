@@ -1,3 +1,29 @@
+/* ---- 安全 stdout 打印：GUI 子系统（windows_subsystem="windows"）下 ----
+ * stdout 句柄无效，print!/println! 写失败会 panic：
+ *   · 命令线程 panic  => Tauri IPC 响应丢失，前端 invoke 永远挂起
+ *     （"点连接无反应"的根因：create_server 入口的 print!）
+ *   · 事件桥任务 panic => Rust 日志转发整体中断
+ * 以下宏忽略写失败，替代全部 stdout/stderr 打印。 */
+macro_rules! safe_print {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+    }};
+}
+macro_rules! safe_println {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stdout().lock().write_all(b"\n");
+    }};
+}
+macro_rules! safe_eprintln {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stderr().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stderr().lock().write_all(b"\n");
+    }};
+}
 mod forward;
 mod multicast;
 
@@ -20,9 +46,9 @@ async fn main() -> io::Result<()> {
     )?;
     multicast.start().await?;
 
-    println!("TCP转发和组播服务已启动");
-    println!("监听: 0.0.0.0:25568 -> 43.248.189.79:25565");
-    println!("组播: 224.0.2.60:4445");
+    safe_println!("TCP转发和组播服务已启动");
+    safe_println!("监听: 0.0.0.0:25568 -> 43.248.189.79:25565");
+    safe_println!("组播: 224.0.2.60:4445");
     
     // 持续运行
     loop {
