@@ -601,8 +601,7 @@ pub fn create_server(
 // 关闭服务器实例
 pub fn close_server() {
     cmd_log("close_server: 步骤1-进入");
-    simple_step_log();
-    cmd_log("close_server: 步骤2-UDP发送完成，准备 RT.spawn");
+    cmd_log("close_server: 步骤2-准备 RT.spawn");
     RT.spawn(async {
     cmd_log("close_server: 步骤3-任务已提交到运行时");
         // 获取mutex锁
