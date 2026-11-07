@@ -361,6 +361,14 @@ pub fn run() {
             // UDP 9999 日志桥（对应 Flutter LogCapture）
             commands::start_log_bridge(app.handle().clone());
 
+            // 诊断开关：ASTRAL_DEVTOOLS=1 时打开 WebView2 DevTools（发布默认关闭）
+            if std::env::var("ASTRAL_DEVTOOLS").as_deref() == Ok("1") {
+                #[cfg(feature = "devtools")]
+                if let Some(win) = app.get_webview_window("main") {
+                    win.open_devtools();
+                }
+            }
+
             // 系统托盘（对应原版 tray_manager：显示主界面 / 隐藏托盘 / 退出）
             #[cfg(desktop)]
             setup_tray(app)?;
