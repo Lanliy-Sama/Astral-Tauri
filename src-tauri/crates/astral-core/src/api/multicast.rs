@@ -1,3 +1,29 @@
+/* ---- 安全 stdout 打印：GUI 子系统（windows_subsystem="windows"）下 ----
+ * stdout 句柄无效，print!/println! 写失败会 panic：
+ *   · 命令线程 panic  => Tauri IPC 响应丢失，前端 invoke 永远挂起
+ *     （"点连接无反应"的根因：create_server 入口的 print!）
+ *   · 事件桥任务 panic => Rust 日志转发整体中断
+ * 以下宏忽略写失败，替代全部 stdout/stderr 打印。 */
+macro_rules! safe_print {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+    }};
+}
+macro_rules! safe_println {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stdout().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stdout().lock().write_all(b"\n");
+    }};
+}
+macro_rules! safe_eprintln {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = std::io::stderr().lock().write_all(format!($($arg)*).as_bytes());
+        let _ = std::io::stderr().lock().write_all(b"\n");
+    }};
+}
 use tokio::io;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
@@ -118,7 +144,7 @@ pub fn create_multicast_sender(
                 let mut senders = MULTICAST_SENDERS.lock().await;
                 senders.push(sender);
                 let index = senders.len() - 1;
-                println!("组播发送器已启动: {}:{}, 间隔: {}ms, 索引: {}", multicast_addr, port, interval_ms, index);
+                safe_println!("组播发送器已启动: {}:{}, 间隔: {}ms, 索引: {}", multicast_addr, port, interval_ms, index);
                 Ok(index)
             }
             Err(e) => Err(format!("启动组播发送器失败: {}", e))
@@ -145,7 +171,7 @@ pub fn create_multicast_sender_with_bind(
                 let mut senders = MULTICAST_SENDERS.lock().await;
                 senders.push(sender);
                 let index = senders.len() - 1;
-                println!("组播发送器已启动: {}:{}, 绑定: {}, 间隔: {}ms, 索引: {}",
+                safe_println!("组播发送器已启动: {}:{}, 绑定: {}, 间隔: {}ms, 索引: {}",
                     multicast_addr, port, bind_addr, interval_ms, index);
                 Ok(index)
             }
@@ -164,7 +190,7 @@ pub fn stop_multicast_sender(index: usize) -> Result<(), String> {
         }
         
         senders[index].stop().await;
-        println!("组播发送器已停止，索引: {}", index);
+        safe_println!("组播发送器已停止，索引: {}", index);
         Ok(())
     })
 }
@@ -176,11 +202,11 @@ pub fn stop_all_multicast_senders() -> Result<(), String> {
         
         for (index, sender) in senders.iter_mut().enumerate() {
             sender.stop().await;
-            println!("组播发送器已停止，索引: {}", index);
+            safe_println!("组播发送器已停止，索引: {}", index);
         }
         
         senders.clear();
-        println!("所有组播发送器已停止");
+        safe_println!("所有组播发送器已停止");
         Ok(())
     })
 }
