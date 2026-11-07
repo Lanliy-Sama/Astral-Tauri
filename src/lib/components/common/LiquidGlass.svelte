@@ -416,16 +416,9 @@ html.liquid-glass .home-box:not(.borderless) {
   --lg-blur: 13px;
   --lg-spec-r: 150px;
   --lg-bright: 1.06;
-  /* 磨砂玻璃体：本机 backdrop-filter 不渲染（与对话框同），"磨砂感"由
-   * tint 承担 —— 中心 66% 表面色让背景只透光不透形（完全透明 ❌），
-   * 边缘 48-56% 略透出环境光，白色高光层叠加液态光泽 */
-  --lg-tint:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--md-surface-container-low) 48%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-surface-container-low) 66%, rgb(255 255 255 / 0.2)) 55%,
-      color-mix(in srgb, var(--md-surface-container-low) 56%, rgb(255 255 255 / 0.38))
-    );
+  /* 中心完全透明（无表面色无白雾）：卡片 = 边缘折射带 + 玻璃反光，
+   * 中心直通背景。 */
+  --lg-tint: transparent;
 }
 /* hover 描边回归组件语义（HomeBox.hovered = primary） */
 html.liquid-glass .home-box:not(.borderless).hovered {
