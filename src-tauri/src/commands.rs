@@ -79,6 +79,7 @@ pub async fn get_network_status() -> Result<Value, String> {
 /// 成败由前端轮询 get_running_info 判定）。
 #[tauri::command]
 pub fn create_server(config: CreateServerConfig) -> Result<(), String> {
+    simple::send_udp_to_localhost("[cmd] create_server 进入");
     let flag = astral_core::api::simple::FlagsC {
         default_protocol: config.flag.default_protocol,
         dev_name: config.flag.dev_name,
@@ -124,12 +125,15 @@ pub fn create_server(config: CreateServerConfig) -> Result<(), String> {
         Vec::new(),
         flag,
     );
+    simple::send_udp_to_localhost("[cmd] create_server 退出");
     Ok(())
 }
 
 #[tauri::command]
 pub fn close_server() {
+    simple::send_udp_to_localhost("[cmd] close_server 进入");
     simple::close_server();
+    simple::send_udp_to_localhost("[cmd] close_server 退出");
 }
 
 #[tauri::command]
