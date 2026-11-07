@@ -37,16 +37,32 @@
 
   /* ---------- 点击逻辑 ---------- */
   async function toggle() {
-    if (isIdle) {
-      await handleConnect();
-    } else if (isConnecting) {
-      await sm.cancelConnection();
-    } else if (isConnected) {
-      await sm.disconnect();
+    try {
+      if (isIdle) {
+        await handleConnect();
+      } else if (isConnecting) {
+        await sm.cancelConnection();
+      } else if (isConnected) {
+        await sm.disconnect();
+      }
+    } catch (e) {
+      console.error('connect toggle error:', e);
+      snackError('连接控制异常', String(e?.message || e));
     }
   }
 
   async function handleConnect() {
+    try {
+      return await handleConnectInner();
+    } catch (e) {
+      /* 连接链路任何异常都必须可见：此前未捕获的异常会表现为"点连接无任何反应" */
+      console.error('connect error:', e);
+      snackError('连接失败', String(e?.message || e));
+      return undefined;
+    }
+  }
+
+  async function handleConnectInner() {
     /* 1. 连接目标检查（ConnectionConnectGuard.connectTargetIssue） */
     const issue = sm.connectTargetIssue();
     if (issue) {
