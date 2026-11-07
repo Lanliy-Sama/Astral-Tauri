@@ -250,10 +250,12 @@ async fn create_and_store_network_instance(cfg: TomlConfigLoader) -> Result<(), 
     let mut network = NetworkInstance::new(cfg, ConfigFileControl::STATIC_CONFIG);
     // 启动网络实例，并处理可能的错误
     match network.start() {
-        Ok(events) => handle_event(events),
+        Ok(events) => {
+            handle_event(events);
+        }
         Err(e) => {
             cmd_log(&format!("task: network.start() 失败: {e}"));
-            return;
+            return Ok(());
         }
     }
     safe_println!("instance {} started", name);
