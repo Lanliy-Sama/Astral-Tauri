@@ -1153,9 +1153,22 @@ class ServiceManager {
    * @returns {Promise<boolean|null>} true 成功 / false 失败 / null 用户取消
    */
   async connect({ isManual = true } = {}) {
+    try {
+      return await this._connectInner({ isManual });
+    } catch (e) {
+      /* 连接流程任何未预期异常：写入应用日志页并保持 idle */
+      console.error('connect() 异常:', e);
+      this.pushLog('[connect] 异常: ' + String(e?.message || e));
+      this.connectionState.connectionState = CoState.idle;
+      return false;
+    }
+  }
+
+  async _connectInner({ isManual = true } = {}) {
     if (this.connectionState.connectionState !== CoState.idle) return false;
     const room = this.roomState.selectedRoom;
     if (room == null) return false;
+    this.pushLog('[connect] 开始: room=' + (room.name || room.roomName || '?'));
 
     if (isManual) this._retryCount = 0;
     this._cancelCompleter = { done: false };
@@ -1197,9 +1210,11 @@ class ServiceManager {
           /* TUN 设备由 VpnService 提供，核心不再自行创建 */
           config.flag.noTun = true;
         }
+        this.pushLog('[connect] createServer 提交');
         await rust.createServer(config);
 
         this.connectionState.connectionState = CoState.connecting;
+        this.pushLog('[connect] 进入 connecting（等待虚拟 IP）');
         this._setupConnectionTimeout();
         this._startConnectionStatusCheck();
 
