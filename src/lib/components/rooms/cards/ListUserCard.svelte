@@ -5,14 +5,14 @@
    * hover bg primary@0.06；底边框 outlineVariant@0.5（非最后）；点击复制 IP。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { snackSuccess } from '$lib/components/common/snackbars.svelte.js';
-  import { writeClipboard } from '$lib/rust/api.js';
+  import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
+  import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
     mapConnectionType,
     connectionTypeColor,
     latencyColor,
     lossColor,
-  } from '$lib/utils/display.js';
+  } from '$lib/utils/Display.svelte';
 
   let { player, localIpv4 = '', showDivider = true } = $props();
 

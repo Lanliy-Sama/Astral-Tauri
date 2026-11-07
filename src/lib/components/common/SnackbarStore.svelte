@@ -1,8 +1,10 @@
+<script module>
+/** Snackbar 全局队列（Svelte 5 模块）—— 对应 AppSnackBars。 */
 /**
  * Snackbar 系统 —— 对应 AppSnackBars。
  * floating 行为；error 红 / success 绿 / info 蓝；图标白色、标题加粗。
  */
-import { writeClipboard } from '../../rust/api.js';
+import { writeClipboard } from '../../rust/Api.svelte';
 
 const state = $state({
   queue: [],
@@ -59,3 +61,4 @@ export function snackErrorCopy(title, message) {
     },
   });
 }
+</script>

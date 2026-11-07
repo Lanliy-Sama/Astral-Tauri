@@ -7,7 +7,7 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
 
   const tcpWhitelist = $derived(sm.networkConfigState.tcpWhitelist);
   const udpWhitelist = $derived(sm.networkConfigState.udpWhitelist);

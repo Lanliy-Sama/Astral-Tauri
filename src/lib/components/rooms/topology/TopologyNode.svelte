@@ -6,7 +6,7 @@
    * 中心偏移 ±2px）。dense(≥12 节点) 时身体行序为 延迟→IP（无平台行），默认 IP→平台→延迟。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { latencyColor } from '$lib/utils/display.js';
+  import { latencyColor } from '$lib/utils/Display.svelte';
 
   let { node, denseMode = false, onMeasure = () => {} } = $props();
 

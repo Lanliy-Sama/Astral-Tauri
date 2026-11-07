@@ -7,7 +7,7 @@
    *    松手后带初速度弹回最近选项 —— 在选项之间拖动选择。
    */
   import Icon from '../common/Icon.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
+  import { sm } from '../../services/ServiceManager.svelte';
 
   let { items = [] } = $props();
 
@@ -31,14 +31,15 @@
     return el ? el.offsetTop : 0;
   }
 
-  /* 弹簧：欠阻尼积分器（点击切换 / 松手回弹共用），v0 供松手时接续拖拽速度 */
+  /* 弹簧：欠阻尼积分器（点击切换 / 松手回弹共用），v0 供松手时接续拖拽速度
+   * 2.4 调优：刚度略降、阻尼略升 —— 过冲更小、收敛更平顺（优雅而非弹跳） */
   function springTo(target, v0 = 0) {
     cancelAnimationFrame(springRaf);
     springTarget = target;
     let y = currentY;
     let v = v0;
-    const stiffness = 460;
-    const damping = 30;
+    const stiffness = 420;
+    const damping = 33;
     let lastT = performance.now();
     const step = (t) => {
       const dt = Math.min((t - lastT) / 1000, 0.032);
@@ -105,6 +106,9 @@
   /* ---- 按住拖动 ---- */
   function onItemPointerDown(e, index) {
     if (e.button !== 0) return;
+    /* 拖一拖滑块（选中框拖动选择）是液态玻璃专属交互：
+     * 关闭液态玻璃时仅允许点击切换，不建立拖动会话 */
+    if (!sm.appSettingsState.liquidGlass) return;
     suppressClick = false;
     dragInfo = { v: 0, lastY: e.clientY, lastT: performance.now(), moved: false, index };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -181,7 +185,7 @@
 
 <div class="left-nav">
   <div class="nav-items" bind:this={navItemsEl}>
-    <!-- 选中块：容器级玻璃透镜（液态玻璃下由 liquid-glass.css 赋材质） -->
+    <!-- 选中块：容器级玻璃透镜（液态玻璃下由 LiquidGlass.svelte 赋材质） -->
     <div
       class="selection-indicator lg-glass lg-spec"
       class:dragging

@@ -7,8 +7,8 @@
   import MagicWallPage from '$lib/components/magicwall/MagicWallPage.svelte';
   import PortWhitelistPage from './PortWhitelistPage.svelte';
   import NatTestPage from '$lib/components/nat/NatTestPage.svelte';
-  import { pushPage } from '$lib/router/page-router.svelte.js';
-  import { isWindows } from '$lib/utils/platform.js';
+  import { pushPage } from '$lib/router/PageRouter.svelte';
+  import { isWindows } from '$lib/utils/Platform.svelte';
 
   /* 魔法墙仅 Windows 提供（WFP 规则） */
   const showMagicWall = isWindows();

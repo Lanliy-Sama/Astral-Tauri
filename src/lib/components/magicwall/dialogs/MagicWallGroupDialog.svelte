@@ -6,8 +6,8 @@
   import Dialog from '$lib/components/common/Dialog.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
-  import { uuidV4 } from '$lib/utils/display.js';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
+  import { uuidV4 } from '$lib/utils/Display.svelte';
 
   let {
     group = null,

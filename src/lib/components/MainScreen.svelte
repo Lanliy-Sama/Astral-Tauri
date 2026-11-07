@@ -13,10 +13,10 @@
   import SnackbarHost from './common/SnackbarHost.svelte';
   import UpdateDialogs from './common/update/UpdateDialogs.svelte';
   import Dialog from './common/Dialog.svelte';
-  import { getStack, popPage } from '../router/page-router.svelte.js';
-  import { sm } from '../services/service-manager.svelte.js';
-  import { t } from '../i18n/index.svelte.js';
-  import { isTauri, isAndroid } from '../utils/platform.js';
+  import { getStack, popPage } from '../router/PageRouter.svelte';
+  import { sm } from '../services/ServiceManager.svelte';
+  import { t } from '../i18n/I18n.svelte';
+  import { isTauri, isAndroid } from '../utils/Platform.svelte';
 
   let windowWidth = $state(window.innerWidth);
   let windowHeight = $state(window.innerHeight);
@@ -32,25 +32,8 @@
     return () => window.removeEventListener('resize', onResize);
   });
 
-  /* 液态玻璃：html 根类随设置切换；开启时委派 pointermove，
-   * 实时把指针坐标写入 .lg-spec 元素级 --lg-x/--lg-y（反射高光跟随） */
-  $effect(() => {
-    const on = sm.appSettingsState.liquidGlass;
-    document.documentElement.classList.toggle('liquid-glass', on);
-    if (!on) return;
-    const move = (e) => {
-      const el = e.target && e.target.closest ? e.target.closest('.lg-spec') : null;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--lg-x', (e.clientX - r.left) + 'px');
-      el.style.setProperty('--lg-y', (e.clientY - r.top) + 'px');
-    };
-    document.addEventListener('pointermove', move);
-    return () => {
-      document.removeEventListener('pointermove', move);
-      document.documentElement.classList.remove('liquid-glass');
-    };
-  });
+  /* 液态玻璃系统（html 根类切换 / 指针高光跟随 / 全局材质）已收拢至
+   * lib/components/common/LiquidGlass.svelte，由 App.svelte 挂载一次 */
 
   /* Android 小窗口：宽<300 或 高<400（原版 SmallWindowAdapter 仅 Android 生效，桌面永不触发） */
   const isSmallWindow = $derived(
@@ -220,11 +203,12 @@
     inset: 0;
     z-index: 500;
     background: var(--md-surface);
-    /* MaterialPageRoute + Windows ZoomPageTransitionsBuilder：300ms 淡入+缩放 0.80→1 */
-    animation: route-in 300ms cubic-bezier(0.2, 0, 0, 1);
+    /* MaterialPageRoute + Windows ZoomPageTransitionsBuilder：2.4 调优 ——
+     * 缩放幅度收敛（0.88→1）+ emphasized-decelerate，入场更柔和流畅 */
+    animation: route-in 320ms cubic-bezier(0.05, 0.7, 0.1, 1);
   }
   @keyframes route-in {
-    from { opacity: 0; transform: scale(0.8); }
+    from { opacity: 0; transform: scale(0.88); }
     to { opacity: 1; transform: scale(1); }
   }
 </style>

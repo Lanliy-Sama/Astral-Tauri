@@ -6,9 +6,9 @@
   import SubPage from '$lib/components/common/SubPage.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
   import Progress from '$lib/components/common/Progress.svelte';
-  import { t } from '$lib/i18n/index.svelte.js';
-  import { openExternal } from '$lib/rust/api.js';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
+  import { t } from '$lib/i18n/I18n.svelte';
+  import { openExternal } from '$lib/rust/Api.svelte';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
 
   let versions = $state([]);
   let isLoading = $state(true);

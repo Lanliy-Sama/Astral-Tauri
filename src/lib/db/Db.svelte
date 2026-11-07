@@ -1,3 +1,5 @@
+<script module>
+/** 数据持久层（Svelte 5 模块）—— tauri-plugin-sql + SQLite。 */
 /**
  * 数据持久层 —— 替代 Flutter 端的 Isar 数据库。
  *
@@ -17,6 +19,9 @@ const TABLES = [
   'mw_rules',
   'mw_groups',
   'mw_events',
+  /* 大体积应用资产（自定义背景等）独立成表：
+   * 避免塞进 all_settings 单行 JSON —— 那样每次设置写入都要整体重写数 MB 文本 */
+  'app_assets',
 ];
 
 let sqlDb = null;
@@ -113,3 +118,4 @@ export async function countRows(table) {
   const rows = await listAll(table);
   return rows.length;
 }
+</script>

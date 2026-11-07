@@ -9,9 +9,10 @@
   import BareDropdown from './parts/BareDropdown.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { t } from '$lib/i18n/index.svelte.js';
-  import { isAndroid } from '$lib/utils/platform.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
+  import { isAndroid } from '$lib/utils/Platform.svelte';
+  import { snackError, snackSuccess, snackInfo } from '$lib/components/common/SnackbarStore.svelte';
 
   const retryOptions = [1, 2, 3, 5, 10].map((n) => ({ value: n, label: `${n} 次` }));
 
@@ -76,6 +77,9 @@
   }
 
   function onSegPointerDown(e) {
+    /* 按住拖动胶囊（拖动选择分段）是液态玻璃专属交互：
+     * 关闭液态玻璃时仅允许点击切换，不建立拖动会话/按压收缩 */
+    if (!sm.appSettingsState.liquidGlass) return;
     segDrag = { moved: false };
     pillSquish = 0.93; // 按住：胶囊液态收缩（按住分段控件的选中块）
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -135,6 +139,74 @@
       return;
     }
     sm.setUserListStyle(idx);
+  }
+
+  /* ---- 自定义背景：选择电脑中的任意图像文件作为 Astral 背景 ----
+   * 支持全部图像格式：MIME 以 image/ 开头即可（jpg/png/gif/webp/bmp/svg/avif/heic/tiff…），
+   * 另按扩展名兜底（部分系统对 svg/ico/heic 等不回填 MIME type）。
+   * data URL 的 MIME 一律显式指定 —— 系统 MIME 缺失时 FileReader 会生成
+   * 无类型 data URL，背景将无法渲染。 */
+  const BG_MIME_BY_EXT = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg', pjpe: 'image/jpeg', pjp: 'image/jpeg',
+    png: 'image/png', apng: 'image/apng', gif: 'image/gif', webp: 'image/webp',
+    bmp: 'image/bmp', dib: 'image/bmp', svg: 'image/svg+xml',
+    ico: 'image/x-icon', cur: 'image/x-icon',
+    tif: 'image/tiff', tiff: 'image/tiff',
+    avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', heics: 'image/heic-sequence',
+    jxl: 'image/jxl', flif: 'image/flif',
+    psd: 'image/vnd.adobe.photoshop', raw: 'image/x-dcraw', tga: 'image/x-targa',
+  };
+  const BG_ACCEPT_ATTR = `image/*,${Object.keys(BG_MIME_BY_EXT).map((e) => '.' + e).join(',')}`;
+  const BG_MAX_SIZE = 32 * 1024 * 1024; // 32MB（data URL 存 SQLite 足够）
+  let bgFileEl = null; // 隐藏 file input
+
+  function resolveImageMime(file) {
+    if (file.type && file.type.startsWith('image/')) return file.type;
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    return BG_MIME_BY_EXT[ext] || null;
+  }
+
+  function chooseBackground() {
+    bgFileEl?.click();
+  }
+
+  /* 原始字节 → 显式 MIME 的 data URL（GIF/APNG 保留原始字节，引用时自动逐帧播放） */
+  async function fileToDataUrl(file, mime) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    const CHUNK = 0x8000; // 32KB 一段，避免 fromCharCode 参数上限
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+  }
+
+  async function onBgFileChosen(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 允许再次选择同一文件
+    if (!file) return;
+    const mime = resolveImageMime(file);
+    if (!mime) {
+      snackError(t('bg_invalid_type'), t('bg_invalid_type_msg'));
+      return;
+    }
+    if (file.size > BG_MAX_SIZE) {
+      snackError(t('bg_too_large'), t('bg_too_large_msg'));
+      return;
+    }
+    try {
+      const dataUrl = await fileToDataUrl(file, mime);
+      await sm.updateCustomBackground(dataUrl);
+      snackSuccess(t('bg_applied'), t('bg_applied_msg'));
+    } catch (err) {
+      snackError(t('bg_read_failed'), String(err?.message || err));
+    }
+  }
+
+  async function clearBackground() {
+    await sm.updateCustomBackground(null);
+    snackInfo(t('bg_cleared'), t('bg_cleared_msg'));
   }
 </script>
 
@@ -227,6 +299,40 @@
 
     <div class="gap-16"></div>
 
+    <!-- 自定义背景：选择电脑中的任意图像文件（全部图像格式）作为应用背景 -->
+    <SettingsCard>
+      <div class="md-list-tile two-line no-cursor">
+        <span class="tile-leading"><Icon name="wallpaper" size={24} color="var(--md-on-surface-variant)" /></span>
+        <div class="tile-content">
+          <div class="tile-title">{t('custom_background')}</div>
+          <div class="tile-subtitle">{t('custom_background_desc')}</div>
+        </div>
+        {#if sm.appSettingsState.customBackground}
+          <span class="tile-trailing bg-preview-wrap">
+            <img class="bg-preview" src={sm.appSettingsState.customBackground} alt="" />
+          </span>
+        {/if}
+      </div>
+      <div class="md-divider"></div>
+      <div class="bg-actions">
+        <button class="md-btn md-tonal-btn" onclick={chooseBackground}>{t('choose_image')}</button>
+        <button
+          class="md-btn md-text-btn"
+          onclick={clearBackground}
+          disabled={!sm.appSettingsState.customBackground}
+        >{t('reset_background')}</button>
+        <input
+          type="file"
+          accept={BG_ACCEPT_ATTR}
+          bind:this={bgFileEl}
+          onchange={onBgFileChosen}
+          hidden
+        />
+      </div>
+    </SettingsCard>
+
+    <div class="gap-16"></div>
+
     <SettingsCard>
       <div class="md-list-tile two-line no-cursor">
         <span class="tile-leading"><Icon name="sync" size={24} color="var(--md-on-surface-variant)" /></span>
@@ -312,12 +418,32 @@
   }
   /* 液态玻璃：滑动带过冲回弹（squash & stretch） */
   :global(html.liquid-glass) .segment-pill {
-    background: transparent; /* 材质由 liquid-glass.css 双层伪元素承载 */
+    background: transparent; /* 材质由 LiquidGlass.svelte 双层伪元素承载 */
     border-color: transparent;
     box-shadow: none;
-    transition: transform 340ms cubic-bezier(0.3, 1.4, 0.45, 1);
+    transition: transform 380ms cubic-bezier(0.22, 1.2, 0.36, 1);
   }
   :global(html.liquid-glass) .segment-pill.live {
     transition: none; /* 拖动跟随中由 JS 直控 */
+  }
+
+  /* ---- 自定义背景卡片 ---- */
+  .bg-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px 16px;
+  }
+  .bg-preview-wrap {
+    flex-shrink: 0;
+  }
+  .bg-preview {
+    display: block;
+    width: 72px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--md-outline-variant);
+    background: var(--md-surface-container-low);
   }
 </style>

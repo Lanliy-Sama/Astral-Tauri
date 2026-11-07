@@ -1,10 +1,12 @@
+<script module>
+/** Rust 核心 API 桥接层（Svelte 5 模块）。 */
 /**
  * Rust 核心 API 桥接层。
  *
  * 所有调用都直接走 Tauri `invoke()`，桌面端与 Android 端共用同一套命令；
  * 不再包含任何浏览器 Mock 实现——非 Tauri 环境下调用会直接报错。
  */
-import { isTauri } from '../utils/platform.js';
+import { isTauri } from '../utils/Platform.svelte';
 
 const NOT_CONNECTED =
   '当前运行在浏览器中，未连接后端（请使用 Tauri 桌面端或 Android 端）';
@@ -187,3 +189,4 @@ export async function readClipboard() {
     return '';
   }
 }
+</script>

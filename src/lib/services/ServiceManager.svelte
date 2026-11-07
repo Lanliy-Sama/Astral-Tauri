@@ -1,41 +1,237 @@
+<script module>
 /**
  * ServiceManager —— 对应 lib/core/services/service_manager.dart 的全部装配。
  * 包含：数据库初始化、15 个状态、领域服务（房间/服务器/网络配置/设置/主题/防火墙）、
  * 连接管理器（ServerConnectionManager + 状态轮询 + 网络监视器）、更新检查、
  * 日志捕获（Tauri 事件 / Mock）、启动自动连接守卫。
  */
-import * as db from '../db/db.js';
-import * as rust from '../rust/api.js';
-import { CoState } from '../stores/enums.js';
-import {
-  AppSettingsState,
-  ConnectionState,
-  DisplayState,
-  FirewallState,
-  NetworkConfigState,
-  PlayerState,
-  RoomState,
-  ServerState,
-  ServerStatusState,
-  StartupState,
-  ThemeState,
-  UIState,
-  UpdateState,
-  VpnState,
-  WindowState,
-} from '../stores/states.svelte.js';
+import * as db from '../db/Db.svelte';
+import * as rust from '../rust/Api.svelte';
+import { CoState } from '../stores/Enums.svelte';
 import {
   isDeprecatedServer,
   isValidIpAddress,
   isValidCIDR,
   pingHost,
   intToIp,
-} from '../utils/network.js';
+} from '../utils/Network.svelte';
 import {
   parseNetworkConfigShare,
   networkConfigShareFromState,
-} from '../utils/roomShareCodec.js';
-import { localHostname, isTauri, isWindows, isAndroid } from '../utils/platform.js';
+} from '../utils/RoomShareCodec.svelte';
+import { localHostname, isTauri, isWindows, isAndroid } from '../utils/Platform.svelte';
+
+/* ============ 状态类（原 src/lib/stores/states.svelte.js，已内联） ============ */
+/**
+ * 全部响应式状态（Svelte 5 runes 版 ServiceManager 状态层）。
+ * 每个 class 与原 Dart 的 core/states/*.dart 字段一一对应。
+ * （Svelte 5 的 $state 类字段会生成响应式代理，方法内 this.x 读写自动追踪）
+ */
+
+/* ============ ThemeState ============ */
+export class ThemeState {
+  themeColor = $state('#2196F3'); // 默认 Colors.blue
+  themeMode = $state('system');
+}
+
+/* ============ UIState（临时态，不持久化） ============ */
+export class UIState {
+  selectedIndex = $state(0);
+  hoveredIndex = $state(null);
+  isDesktop = $state(false);
+  isInBackground = $state(false);
+  trayHidden = $state(false);
+
+  goTo(tab) {
+    this.selectedIndex = tab;
+  }
+  updateScreenSplitWidth(width) {
+    this.isDesktop = width > 480;
+  }
+  setBackground(v) {
+    this.isInBackground = v;
+  }
+}
+
+/* ============ RoomState ============ */
+export class RoomState {
+  rooms = $state([]);
+  selectedRoom = $state(null);
+  setRooms(list) {
+    this.rooms = list;
+  }
+}
+
+/* ============ ServerState ============ */
+export class ServerState {
+  servers = $state([]);
+  setServers(list) {
+    this.servers = list;
+  }
+}
+
+/* ============ NetworkConfigState（与 NetConfig 字段一致） ============ */
+export class NetworkConfigState {
+  instanceName = $state('default');
+  ipv4 = $state('');
+  dhcp = $state(true);
+  defaultProtocol = $state('tcp');
+  devName = $state('');
+  enableEncryption = $state(true);
+  enableIpv6 = $state(true);
+  mtu = $state(1360);
+  latencyFirst = $state(false);
+  enableExitNode = $state(false);
+  noTun = $state(false);
+  enableSocks5 = $state(false);
+  socks5Port = $state(1080);
+  useSmoltcp = $state(false);
+  relayNetworkWhitelist = $state('*');
+  disableP2p = $state(false);
+  enableUdpBroadcastRelay = $state(false);
+  relayAllPeerRpc = $state(false);
+  disableUdpHolePunching = $state(false);
+  disableTcpHolePunching = $state(false);
+  disableSymHolePunching = $state(false);
+  multiThread = $state(true);
+  dataCompressAlgo = $state(1);
+  bindDevice = $state(true);
+  enableKcpProxy = $state(true);
+  disableKcpInput = $state(false);
+  disableRelayKcp = $state(true);
+  proxyForwardBySystem = $state(false);
+  acceptDns = $state(false);
+  privateMode = $state(false);
+  enableQuicProxy = $state(false);
+  disableQuicInput = $state(false);
+  tcpWhitelist = $state('');
+  udpWhitelist = $state('');
+}
+
+/* ============ PlayerState ============ */
+export class PlayerState {
+  playerName = $state('');
+  listenList = $state(['tcp://0.0.0.0:0', 'udp://0.0.0.0:0']);
+}
+
+/* ============ DisplayState ============ */
+export class DisplayState {
+  sortOption = $state(0);
+  sortOrder = $state(0);
+  displayMode = $state(0);
+  userListStyle = $state(0);
+
+  get userListSimple() {
+    return this.userListStyle === 0;
+  }
+}
+
+/* ============ StartupState ============ */
+export class StartupState {
+  startup = $state(false);
+  startupMinimize = $state(false);
+  startupAutoConnect = $state(false);
+}
+
+/* ============ UpdateState ============ */
+export class UpdateState {
+  beta = $state(false);
+  autoCheckUpdate = $state(true);
+  downloadAccelerate = $state('auto');
+  resolvedDownloadAccelerate = $state(null);
+  latestVersion = $state(null);
+
+  get hasNewVersion() {
+    return this.latestVersion != null && this.latestVersion !== '';
+  }
+}
+
+/* ============ ConnectionState ============ */
+export class ConnectionState {
+  connectionState = $state('idle');
+  netStatus = $state(null);
+}
+
+/* ============ WindowState ============ */
+export class WindowState {
+  closeMinimize = $state(true);
+}
+
+/* ============ FirewallState ============ */
+export class FirewallState {
+  firewallStatus = $state(false);
+  setFirewallStatus(v) {
+    this.firewallStatus = v;
+  }
+}
+
+/* ============ VpnState（自定义 VPN 网段） ============ */
+export class VpnState {
+  customVpn = $state([]);
+  setCustomVpn(list) {
+    this.customVpn = list;
+  }
+  addCustomVpn(value) {
+    this.customVpn = [...this.customVpn, value];
+  }
+  removeCustomVpn(index) {
+    const list = [...this.customVpn];
+    list.splice(index, 1);
+    this.customVpn = list;
+  }
+}
+
+/* ============ AppSettingsState ============ */
+export class AppSettingsState {
+  appName = $state('Astral');
+  enableConnectionNotification = $state(true);
+  autoRetryOnFailure = $state(true);
+  maxRetryCount = $state(3);
+  reduceAnimationUpdates = $state(false);
+  liquidGlass = $state(false);
+  /* 自定义背景（data URL，null = 默认纯色背景）：存独立 app_assets 表 */
+  customBackground = $state(null);
+  logs = $state([]);
+}
+
+/* ============ ServerStatusState ============ */
+export class ServerStatusState {
+  serverStatuses = $state({});
+  activeServerIds = $state([]);
+  _timer = null;
+
+  setActiveServers(ids) {
+    this.activeServerIds = ids;
+  }
+
+  async _checkOnce(servers, pingFn) {
+    const map = {};
+    for (const server of servers) {
+      if (this.activeServerIds.includes(server.id)) {
+        map[server.id] = 'inUse';
+      } else {
+        const ms = await pingFn(server.url);
+        map[server.id] = ms != null ? 'online' : 'offline';
+      }
+    }
+    this.serverStatuses = map;
+  }
+
+  startPeriodicCheck(servers, intervalMs, pingFn) {
+    this.stopPeriodicCheck();
+    this._checkOnce(servers, pingFn);
+    this._timer = setInterval(() => {
+      this._checkOnce(servers, pingFn);
+    }, intervalMs);
+  }
+
+  stopPeriodicCheck() {
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+  }
+}
 
 /* ============ 常量 ============ */
 const ANDROID_PACKAGE = 'com.kevin.astral';
@@ -140,24 +336,34 @@ class ServiceManager {
 
   async updateThemeColor(colorHex) {
     this.themeState.themeColor = colorHex;
-    const c = parseInt(colorHex.replace('#', ''), 16);
-    await db.putRow('theme_settings', {
-      id: 1,
-      colorValue: c,
-      themeModeValue: this.themeState.themeMode,
-    });
+    try {
+      const c = parseInt(colorHex.replace('#', ''), 16);
+      await db.putRow('theme_settings', {
+        id: 1,
+        colorValue: c,
+        themeModeValue: this.themeState.themeMode,
+      });
+    } catch (e) {
+      /* 浏览器预览无 SQLite：状态已生效，仅持久化失败（与自定义背景一致） */
+      console.warn('主题色持久化失败:', e);
+    }
   }
 
   async updateThemeMode(mode) {
     this.themeState.themeMode = mode;
-    const rows = await db.listAll('theme_settings');
-    const row = rows.find((r) => r.id === 1) || { id: 1 };
-    await db.putRow('theme_settings', {
-      ...row,
-      id: 1,
-      colorValue: parseInt(this.themeState.themeColor.replace('#', ''), 16),
-      themeModeValue: mode,
-    });
+    try {
+      const rows = await db.listAll('theme_settings');
+      const row = rows.find((r) => r.id === 1) || { id: 1 };
+      await db.putRow('theme_settings', {
+        ...row,
+        id: 1,
+        colorValue: parseInt(this.themeState.themeColor.replace('#', ''), 16),
+        themeModeValue: mode,
+      });
+    } catch (e) {
+      /* 同上：浏览器预览下仅持久化失败 */
+      console.warn('主题模式持久化失败:', e);
+    }
   }
 
   /* ---------- 房间 ---------- */
@@ -555,6 +761,18 @@ class ServiceManager {
       s.reduceAnimationUpdates === true;
     this.appSettingsState.liquidGlass = s.liquidGlass === true;
 
+    /* 自定义背景：独立 app_assets 表（id=1），失败不阻断设置加载 */
+    try {
+      const assets = await db.listAll('app_assets');
+      const asset = assets.find((r) => r.id === 1);
+      this.appSettingsState.customBackground =
+        typeof asset?.image === 'string' && asset.image.startsWith('data:image/')
+          ? asset.image
+          : null;
+    } catch (e) {
+      console.warn('自定义背景加载失败:', e);
+    }
+
     /* 同步关闭行为到 Tauri 窗口层 */
     this._syncCloseMinimize(this.windowState.closeMinimize);
   }
@@ -673,6 +891,21 @@ class ServiceManager {
   async updateLiquidGlass(v) {
     this.appSettingsState.liquidGlass = v;
     await this._persistSettings({ liquidGlass: v });
+  }
+
+  /* ---------- 自定义背景（app_assets 表，id=1） ---------- */
+  async updateCustomBackground(dataUrl) {
+    this.appSettingsState.customBackground = dataUrl || null;
+    try {
+      if (dataUrl == null) {
+        await db.deleteRow('app_assets', 1);
+      } else {
+        await db.putRow('app_assets', { id: 1, image: dataUrl });
+      }
+    } catch (e) {
+      /* 浏览器预览无 SQLite：状态已生效（本次会话可用），仅持久化失败 */
+      console.warn('自定义背景持久化失败:', e);
+    }
   }
 
   /* ---------- 防火墙 ---------- */
@@ -1278,3 +1511,4 @@ class ServiceManager {
 
 /* 单例 */
 export const sm = new ServiceManager();
+</script>

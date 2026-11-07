@@ -5,9 +5,9 @@
    * 子页通过 pushPage() 打开（SubPage AppBar 居中标题 + 返回）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { t } from '$lib/i18n/index.svelte.js';
-  import { pushPage } from '$lib/router/page-router.svelte.js';
-  import { isAndroid } from '$lib/utils/platform.js';
+  import { t } from '$lib/i18n/I18n.svelte';
+  import { pushPage } from '$lib/router/PageRouter.svelte';
+  import { isAndroid } from '$lib/utils/Platform.svelte';
   import ListenListPage from './ListenListPage.svelte';
   import VpnSegmentPage from './VpnSegmentPage.svelte';
   import NetworkSettingsPage from './NetworkSettingsPage.svelte';

@@ -6,8 +6,8 @@
   import TextField from '$lib/components/common/TextField.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { randomRoomName, uuidV4 } from '$lib/utils/display.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { randomRoomName, uuidV4 } from '$lib/utils/Display.svelte';
 
   let { open = $bindable(false) } = $props();
 

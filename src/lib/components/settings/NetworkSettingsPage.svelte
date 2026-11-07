@@ -9,10 +9,10 @@
   import Switch from '$lib/components/common/Switch.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { t } from '$lib/i18n/index.svelte.js';
-  import { getAllInterfacesMetrics } from '$lib/rust/api.js';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
+  import { getAllInterfacesMetrics } from '$lib/rust/Api.svelte';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
 
   const protocolOptions = [
     { value: 'tcp', label: 'TCP' },

@@ -14,14 +14,14 @@
   import AllUserCard from './cards/AllUserCard.svelte';
   import RoomSettingsSheet from './RoomSettingsSheet.svelte';
   import NetworkTopologyView from './topology/NetworkTopologyView.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { isServerNode } from '$lib/utils/network.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { isServerNode } from '$lib/utils/Network.svelte';
   import {
     UserSortOption,
     UserSortOrder,
     UserDisplayMode,
     UserListStyle,
-  } from '$lib/stores/enums.js';
+  } from '$lib/stores/Enums.svelte';
 
   /* 是否显示拓扑图（局部 state，IndexedStack 切 Tab 后保留） */
   let showTopology = $state(false);

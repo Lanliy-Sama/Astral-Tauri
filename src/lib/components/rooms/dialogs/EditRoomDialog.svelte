@@ -6,7 +6,7 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
 
   let { open = $bindable(false), room = null } = $props();
 

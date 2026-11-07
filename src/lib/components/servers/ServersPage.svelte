@@ -9,10 +9,10 @@
   import Switch from '$lib/components/common/Switch.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
   import ServerDialog from './dialogs/ServerDialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { ServerStatus } from '$lib/stores/enums.js';
-  import { isBlockedServer } from '$lib/utils/network.js';
-  import { snackInfo } from '$lib/components/common/snackbars.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { ServerStatus } from '$lib/stores/Enums.svelte';
+  import { isBlockedServer } from '$lib/utils/Network.svelte';
+  import { snackInfo } from '$lib/components/common/SnackbarStore.svelte';
 
   /* ---- 添加 / 编辑 / 删除对话框 ---- */
   let dialogOpen = $state(false);
@@ -72,6 +72,17 @@
     menuPos = { x: rect.right, y: top };
     menuServer = server;
     menuOpen = true;
+  }
+
+  /* v2.5：fixed 锚点 portal 到 <body>（同 IconMenu 保险）；
+   * destroy 里 node.remove() 兜底（Svelte 按兄弟链卸载）。 */
+  function portalToBody(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
   }
 
   function onMenuSelect(value) {
@@ -230,7 +241,7 @@
   <!-- PopupMenuButton：编辑 / 删除 -->
   {#if menuOpen}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="pop-anchor" style="left:{menuPos.x}px; top:{menuPos.y}px">
+    <div class="pop-anchor" use:portalToBody style="left:{menuPos.x}px; top:{menuPos.y}px">
       <div class="md-menu pop-menu" bind:this={menuEl}>
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div class="md-menu-item" onclick={() => onMenuSelect('edit')}>

@@ -6,8 +6,8 @@
    */
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { buildSchemes } from '$lib/theme/material3.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { buildSchemes } from '$lib/theme/Material3.svelte';
 
   let {
     room,

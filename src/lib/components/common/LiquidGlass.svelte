@@ -1,3 +1,74 @@
+<script>
+  /**
+   * 液态玻璃系统（光学参数对齐 glassium）—— 本 Svelte 5 组件自包含全部实现：
+   *   1. <style> 的 :global 块承载全部光学材质（原独立 liquid-glass.css）：
+   *      双层伪元素结构（::before 边缘透镜折射/色散 + ::after 中心磨砂/高光），
+   *      按压/拖拽（--lg-press）、镜面高光跟随（--lg-spec/--lg-x/--lg-y）、
+   *      开关玻璃管插值（--lg-on）。
+   *   2. SVG 折射滤镜 defs：#lg-edge 静止态、#lg-edge-hot 按住/拖动态
+   *      （feTurbulence + feDisplacementMap 只作用于边缘透镜层，
+   *       中心磨砂层不带位移 —— 「边缘折射、中心纯净」）。
+   *   3. JS：html.liquid-glass 根类随「软件设置 → 液态玻璃效果」开关切换；
+   *      开启时委派 pointermove，把指针坐标写入 .lg-spec 元素的
+   *      --lg-x/--lg-y（镜面高光跟随指针）。
+   * 使用：App.svelte 渲染一次 <LiquidGlass />（无 UI，仅 defs + 全局样式 + 效果）。
+   */
+  import { sm } from '../../services/ServiceManager.svelte';
+
+  $effect(() => {
+    const on = sm.appSettingsState.liquidGlass;
+    document.documentElement.classList.toggle('liquid-glass', on);
+    if (!on) return;
+    const move = (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('.lg-spec') : null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--lg-x', (e.clientX - r.left) + 'px');
+      el.style.setProperty('--lg-y', (e.clientY - r.top) + 'px');
+    };
+    document.addEventListener('pointermove', move);
+    return () => {
+      document.removeEventListener('pointermove', move);
+      document.documentElement.classList.remove('liquid-glass');
+    };
+  });
+</script>
+
+<!-- 液态玻璃折射滤镜（对齐 glassium 光学模型）：
+  feTurbulence + feDisplacementMap 只作用于边缘透镜层（:global 样式的 ::before，
+  被 mask 限制在边缘带内），中心磨砂层不带位移 —— 与 glassium「边缘折射、中心纯净」一致。
+  - #lg-edge：静止态，轻微几何位移（scale 9）
+  - #lg-edge-hot：按住/拖拽态，强位移（scale 18）+ baseFrequency 持续漂移 = 液态流动 -->
+<svg class="lg-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="lg-edge" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="7" result="lg-noise" />
+      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+    <filter id="lg-edge-hot" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.024" numOctaves="2" seed="7" result="lg-noise">
+        <animate
+          attributeName="baseFrequency"
+          dur="2.8s"
+          values="0.02 0.024;0.028 0.017;0.02 0.024"
+          repeatCount="indefinite"
+        />
+      </feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="18" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+</svg>
+
+<style>
+  .lg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* ===== 液态玻璃 2.2 全局光学材质（原 src/liquid-glass.css，:global 全局作用） ===== */
+  :global {
 /* ============================================================
  * 液态玻璃 2.2 —— 光学参数对齐 glassium（WebGPU 液态玻璃渲染框架）
  * 的实测定标：docs/calibration.md + shaders/glass.wgsl.ts 常数。
@@ -46,14 +117,15 @@
   initial-value: 0;
 }
 
-/* ---- 全局光学参数（继承到所有玻璃元素；暗色模式自动收敛） ---- */
+/* ---- 全局光学参数（继承到所有玻璃元素；暗色模式自动收敛） ----
+ * 2.3 增强档：光泽/斜面/饱和略升，色散改为全周棱镜彩环（见 ::before） */
 html.liquid-glass {
-  --lg-sheen: 0.3; /* 永久对角光泽强度（受光面白） */
-  --lg-bevel: 0.5; /* 顶缘斜面光强度 */
+  --lg-sheen: 0.34; /* 永久对角光泽强度（受光面白） */
+  --lg-bevel: 0.55; /* 顶缘斜面光强度 */
 }
 html.liquid-glass[data-theme-mode='dark'] {
-  --lg-sheen: 0.17;
-  --lg-bevel: 0.3;
+  --lg-sheen: 0.2;
+  --lg-bevel: 0.34;
 }
 
 /* ---- 玻璃材质基座：元素自身（外线 + 投影 + 状态变量） ----
@@ -83,12 +155,12 @@ html.liquid-glass .md-dialog {
     0 1px 2px rgba(0, 0, 0, 0.12),
     0 4px 14px rgba(0, 0, 0, 0.12);
   transition:
-    --lg-spec 280ms ease,
-    --lg-press 150ms ease,
-    --lg-on 260ms ease,
-    border-color 200ms ease,
-    box-shadow 200ms ease,
-    transform 120ms ease;
+    --lg-spec 320ms cubic-bezier(0.2, 0, 0, 1),
+    --lg-press 180ms ease,
+    --lg-on 300ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 150ms ease;
 }
 
 /* ---- 底层：边缘透镜（折射 · 色散 · 斜面光 · 全周亮环） ---- */
@@ -108,19 +180,23 @@ html.liquid-glass .md-dialog::before {
   border-radius: inherit;
   z-index: -1;
   pointer-events: none;
-  -webkit-backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.35) brightness(1.02);
-  backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.35) brightness(1.02);
+  -webkit-backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.45) brightness(1.04);
+  backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.45) brightness(1.04);
   background:
+    /* 色散（棱镜彩环）2.3：四向边缘染色 —— 左红右蓝为主，
+     * 上下补充暖橙/冷青，彩色光沿整圈轮廓连续可辨；
+     * 叠在斜面光之上，避免被白光洗掉 */
+    linear-gradient(to right, rgb(255 72 72 / 0.28), transparent 36%),
+    linear-gradient(to left, rgb(72 138 255 / 0.28), transparent 36%),
+    linear-gradient(to bottom, rgb(255 122 82 / 0.16), transparent 30%),
+    linear-gradient(to top, rgb(82 190 255 / 0.16), transparent 30%),
     /* 斜面光：顶缘受光、底缘地面反光（glassium bevel） */
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 28%),
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
-    /* 色散（左右边缘红/蓝染）+ 组件附加边缘色调 */
-    linear-gradient(to right, rgb(255 80 80 / 0.2), transparent 38%),
-    linear-gradient(to left, rgb(80 132 255 / 0.2), transparent 38%),
     var(--lg-tint-edge);
   /* 全周亮环（按压时增亮）+ 上下主亮边 + 最外极细暗线（glassium「灰线+白线」三明治） */
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / calc(0.4 + 0.3 * var(--lg-press))),
+    inset 0 0 0 1px rgb(255 255 255 / calc(0.44 + 0.3 * var(--lg-press))),
     inset 0 0 0.5px 0.5px rgb(0 0 0 / 0.1),
     inset 0 3px 2px rgb(255 255 255 / 0.9),
     inset 0 -3px 2px rgb(255 255 255 / 0.7),
@@ -162,8 +238,8 @@ html.liquid-glass .md-dialog::after {
   border-radius: inherit;
   z-index: -1;
   pointer-events: none;
-  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(1.6) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
-  backdrop-filter: blur(var(--lg-blur)) saturate(1.6) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(1.7) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
+  backdrop-filter: blur(var(--lg-blur)) saturate(1.7) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
   background:
     /* 按压变暗层：玻璃被压入表面 → 变厚变暗（浅色背景下清晰可读的按压反馈）
      * 注：浅色背景上“提亮”会裁剪到白色而不可见，Apple 液态玻璃按压缩果同样是变暗 */
@@ -239,6 +315,15 @@ html.liquid-glass .bottom-nav .selection-pill {
   position: absolute; /* absolute 同样构成伪元素的 containing block，玻璃正确铺满 */
 }
 
+/* ---- 弹出菜单：必须保持 fixed（App.svelte .md-menu） ----
+ * 玻璃基座的 position:relative 会把弹出菜单拉回文档流：
+ * 状态栏主题/语言菜单打开时菜单变成 flex 子项，把主题选择、
+ * 色彩调整、语言设置图标整体挤出原位（错位 bug 的根因）。
+ * fixed 元素自身仍是伪元素的 containing block，玻璃照常铺满。 */
+html.liquid-glass .md-menu {
+  position: fixed;
+}
+
 /* ---- 悬停：镜面高光亮起 + 投影加深（玻璃浮起） ---- */
 html.liquid-glass .lg-glass:hover,
 html.liquid-glass .lg-glass.lg-hover,
@@ -281,8 +366,8 @@ html.liquid-glass .md-filled-btn:active::before,
 html.liquid-glass .md-tonal-btn:active::before,
 html.liquid-glass .md-elevated-btn:active::before,
 html.liquid-glass .md-outlined-btn:active::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
+  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
 }
 
 /* ---- 按压回弹：按钮/卡片轻微收缩（选中块/滑块的位置由 JS 内联 transform 驱动，不参与） ---- */
@@ -317,7 +402,7 @@ html.liquid-glass .home-box:not(.borderless) {
   --lg-edge: 22px;
   --lg-blur: 13px;
   --lg-spec-r: 150px;
-  --lg-bright: 1.045;
+  --lg-bright: 1.055;
   --lg-tint:
     linear-gradient(
       160deg,
@@ -342,7 +427,7 @@ html.liquid-glass .md-dialog {
   --lg-edge: 20px;
   --lg-blur: 16px;
   --lg-spec-r: 160px;
-  --lg-bright: 1.06;
+  --lg-bright: 1.07;
   --lg-tint:
     linear-gradient(
       160deg,
@@ -350,6 +435,24 @@ html.liquid-glass .md-dialog {
       color-mix(in srgb, var(--md-surface-container) 78%, rgb(255 255 255 / 0.28)) 55%,
       color-mix(in srgb, var(--md-surface-container) 56%, rgb(255 255 255 / 0.4))
     );
+}
+
+/* v2.5 —— 悬浮面板色散改为【上下镜像对称】：
+ * 基座的四向色散（左红右蓝）在小面板上读作左右色温不均，
+ * 整块玻璃像被染歪/倾斜；对角分布仍残留倾斜感（v2.5 首版试过）。
+ * 最终方案：只保留上缘暖色棱镜 + 下缘冷色棱镜（左右严格镜像），
+ * 横向零失衡 —— 光像从玻璃顶面射入、底面折射出，物理上说得通，
+ * 棱镜彩感保留，面板端正不歪。 */
+html.liquid-glass .md-menu::before,
+html.liquid-glass .md-dialog::before {
+  background:
+    /* 上下棱镜色散（左右镜像对称）：顶缘暖橙、底缘冷青 */
+    linear-gradient(to bottom, rgb(255 110 70 / 0.26), transparent 40%),
+    linear-gradient(to top, rgb(70 160 255 / 0.26), transparent 40%),
+    /* 斜面光：与基座一致（顶缘受光、底缘地面反光） */
+    linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 28%),
+    linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
+    var(--lg-tint-edge);
 }
 
 /* ============================================================
@@ -429,12 +532,12 @@ html.liquid-glass .md-fab:disabled {
 html.liquid-glass .md-fab.connect-fab {
   transition:
     width 200ms cubic-bezier(0, 0, 0.2, 1),
-    --lg-spec 280ms ease,
-    --lg-press 150ms ease,
-    --lg-on 260ms ease,
-    border-color 200ms ease,
-    box-shadow 200ms ease,
-    transform 120ms ease;
+    --lg-spec 320ms cubic-bezier(0.2, 0, 0, 1),
+    --lg-press 180ms ease,
+    --lg-on 300ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 150ms ease;
 }
 
 /* ============================================================
@@ -477,11 +580,11 @@ html.liquid-glass .md-switch.on {
  * （色散梯度长度对齐边缘带宽度：红/蓝集中在最外缘再衰减到 0） */
 html.liquid-glass .md-switch::before {
   background:
-    linear-gradient(to right, rgb(255 85 85 / 0.62), transparent 20%),
-    linear-gradient(to left, rgb(85 145 255 / 0.62), transparent 20%),
+    linear-gradient(to right, rgb(255 85 85 / 0.68), transparent 20%),
+    linear-gradient(to left, rgb(85 145 255 / 0.68), transparent 20%),
     /* 上下缘的弱色散：让彩边沿整条轮廓连续（横向为主、纵向为辅） */
-    linear-gradient(to bottom, rgb(255 85 85 / 0.15), transparent 18%),
-    linear-gradient(to top, rgb(85 145 255 / 0.15), transparent 18%),
+    linear-gradient(to bottom, rgb(255 110 80 / 0.18), transparent 18%),
+    linear-gradient(to top, rgb(80 185 255 / 0.18), transparent 18%),
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 24%),
     linear-gradient(to top, rgb(255 255 255 / calc(0.42 * var(--lg-bevel))), transparent 36%);
   box-shadow:
@@ -599,19 +702,19 @@ html.liquid-glass .md-switch.dragging {
   --lg-press: 1;
 }
 html.liquid-glass .md-switch.dragging::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
+  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
 }
 /* 拖动 thumb 时：位置由 JS 内联控制，禁用过渡 */
 html.liquid-glass .md-switch.dragging .thumb {
   transition: none;
 }
 html.liquid-glass .md-switch:not(.dragging) .thumb {
-  /* 液态弹性：left/width 过冲回落（glassium 动态变形） */
+  /* 液态弹性：left/width 过冲回落（glassium 动态变形；2.4 软化过冲 → 更优雅） */
   transition:
-    left 0.42s cubic-bezier(0.3, 1.5, 0.5, 1),
-    width 0.42s cubic-bezier(0.3, 1.5, 0.5, 1),
-    height 0.42s cubic-bezier(0.3, 1.5, 0.5, 1),
+    left 0.38s cubic-bezier(0.22, 1.2, 0.36, 1),
+    width 0.38s cubic-bezier(0.22, 1.2, 0.36, 1),
+    height 0.38s cubic-bezier(0.22, 1.2, 0.36, 1),
     filter 0.2s ease;
 }
 /* 禁用态：整体降不透明度，玻璃仍保留 */
@@ -683,8 +786,8 @@ html.liquid-glass .md-segmented:has(.segment:active) .segment-pill {
   --lg-press: 1;
 }
 html.liquid-glass .md-segmented:has(.segment:active) .segment-pill::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.5) brightness(1.1);
+  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
 }
 
 /* ============================================================
@@ -746,3 +849,6 @@ html.liquid-glass .sheet-body .opt.selected:active {
     animation: none;
   }
 }
+  }
+</style>
+

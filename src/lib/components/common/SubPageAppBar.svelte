@@ -3,7 +3,7 @@
    * 子页面 AppBar（Flutter M3 AppBar：56px、surface 背景、居中标题、返回箭头）。
    */
   import Icon from './Icon.svelte';
-  import { popPage } from '../../router/page-router.svelte.js';
+  import { popPage } from '../../router/PageRouter.svelte';
 
   let { title = '', actions = null, showBackButton = true, onBack = null } = $props();
 

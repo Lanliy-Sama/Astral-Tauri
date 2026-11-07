@@ -1,6 +1,6 @@
 <script>
   import Icon from './Icon.svelte';
-  import { getSnackbars } from './snackbars.svelte.js';
+  import { getSnackbars } from './SnackbarStore.svelte';
 
   const snacks = $derived(getSnackbars());
 </script>

@@ -9,10 +9,10 @@
   import Dialog from '../Dialog.svelte';
   import Icon from '../Icon.svelte';
   import Progress from '../Progress.svelte';
-  import { sm } from '../../../services/service-manager.svelte.js';
-  import { openExternal } from '../../../rust/api.js';
-  import { isAndroid, isWindows, isTauri } from '../../../utils/platform.js';
-  import { snackError } from '../snackbars.svelte.js';
+  import { sm } from '../../../services/ServiceManager.svelte';
+  import { openExternal } from '../../../rust/Api.svelte';
+  import { isAndroid, isWindows, isTauri } from '../../../utils/Platform.svelte';
+  import { snackError } from '../SnackbarStore.svelte';
 
   /* ---------- 自动检查结果对话框 ---------- */
   let resultOpen = $state(false);

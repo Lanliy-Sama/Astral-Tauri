@@ -12,12 +12,12 @@
    */
   import Icon from '../common/Icon.svelte';
   import NpcapDialog from './NpcapDialog.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
-  import { CoState, MainTab } from '../../stores/enums.js';
-  import { t } from '../../i18n/index.svelte.js';
-  import { showSnackbar } from '../common/snackbars.svelte.js';
-  import { openExternal, hasNpcapDriver } from '../../rust/api.js';
-  import { isWindows, isTauri } from '../../utils/platform.js';
+  import { sm } from '../../services/ServiceManager.svelte';
+  import { CoState, MainTab } from '../../stores/Enums.svelte';
+  import { t } from '../../i18n/I18n.svelte';
+  import { showSnackbar } from '../common/SnackbarStore.svelte';
+  import { openExternal, hasNpcapDriver } from '../../rust/Api.svelte';
+  import { isWindows, isTauri } from '../../utils/Platform.svelte';
 
   let npcapOpen = $state(false);
   let progressKey = $state(0); // 每次进入 connecting 重置 15s 动画

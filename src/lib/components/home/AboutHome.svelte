@@ -6,10 +6,10 @@
   import { onMount } from 'svelte';
   import HomeBox from './HomeBox.svelte';
   import Icon from '../common/Icon.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
-  import { t } from '../../i18n/index.svelte.js';
-  import { parsePlatformVersion, compareVersions, stripVPrefix } from '../../utils/display.js';
-  import { easytierVersion } from '../../rust/api.js';
+  import { sm } from '../../services/ServiceManager.svelte';
+  import { t } from '../../i18n/I18n.svelte';
+  import { parsePlatformVersion, compareVersions, stripVPrefix } from '../../utils/Display.svelte';
+  import { easytierVersion } from '../../rust/Api.svelte';
 
   let kernelVersion = $state('');
 

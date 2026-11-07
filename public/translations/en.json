@@ -168,5 +168,18 @@
   "permission_notification_success": "Notification permission granted successfully",
   "permission_notification_failed": "Failed to get notification permission",
   "permission_notification_request_failed": "Request for notification permission failed",
-  "permission_notification_denied_message": "Notification permission is permanently denied. Please enable it manually in system settings."
+  "permission_notification_denied_message": "Notification permission is permanently denied. Please enable it manually in system settings.",
+  "custom_background": "Custom Background",
+  "custom_background_desc": "Pick any image file from your computer (JPG / PNG / GIF / WebP / BMP / SVG…) as the Astral background",
+  "choose_image": "Choose Image",
+  "reset_background": "Reset to Default",
+  "bg_invalid_type": "Unsupported file type",
+  "bg_invalid_type_msg": "Please choose an image file (JPG, PNG, GIF, WebP, BMP, SVG or any other image format)",
+  "bg_too_large": "File too large",
+  "bg_too_large_msg": "Background image must be under 32MB",
+  "bg_applied": "Background applied",
+  "bg_applied_msg": "Custom background is now active",
+  "bg_cleared": "Default background restored",
+  "bg_cleared_msg": "Custom background has been removed",
+  "bg_read_failed": "Failed to read file"
 }

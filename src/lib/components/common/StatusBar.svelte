@@ -7,9 +7,9 @@
   import IconMenu from './IconMenu.svelte';
   import WindowControls from './WindowControls.svelte';
   import ThemeSelector from './ThemeSelector.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
-  import { setLocale, t } from '../../i18n/index.svelte.js';
-  import { isTauri, isDesktopPlatform } from '../../utils/platform.js';
+  import { sm } from '../../services/ServiceManager.svelte';
+  import { setLocale, t } from '../../i18n/I18n.svelte';
+  import { isTauri, isDesktopPlatform } from '../../utils/Platform.svelte';
 
   let { isSmallWindow = false } = $props();
 
@@ -22,7 +22,9 @@
   });
 
   const themeModeItems = $derived.by(() => {
-    const modeIcons = { system: 'auto_mode', light: 'wb_sunny', dark: 'nightlight_round' };
+    /* 暗色用 bedtime：墨迹 65.8% 且完全居中；nightlight 只有 48.3% 宽且偏左，
+     * 菜单里比太阳/自动模式小一圈，整行看起来像没对齐（v2.5 修复） */
+    const modeIcons = { system: 'auto_mode', light: 'wb_sunny', dark: 'bedtime' };
     const modeLabels = { system: '跟随系统', light: '亮色模式', dark: '暗色模式' };
     return ['system', 'light', 'dark'].map((m) => ({
       value: m,
@@ -33,7 +35,7 @@
   });
 
   const themeModeIcon = $derived.by(() => {
-    const modeIcons = { system: 'auto_mode', light: 'wb_sunny', dark: 'nightlight_round' };
+    const modeIcons = { system: 'auto_mode', light: 'wb_sunny', dark: 'bedtime' };
     return modeIcons[sm.themeState.themeMode] || 'auto_mode';
   });
 

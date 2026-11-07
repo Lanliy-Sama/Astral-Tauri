@@ -6,8 +6,8 @@
   import SettingsCard from './parts/SettingsCard.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { t } from '$lib/i18n/index.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
 
   /* SwitchListTile 整行可点；点 Switch 本体时避免与 tile 冒泡双触发 */
   function switchTileClick(e, current, update) {

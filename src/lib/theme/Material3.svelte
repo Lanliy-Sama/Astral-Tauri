@@ -1,3 +1,5 @@
+<script module>
+/** Material 3 主题令牌生成（Svelte 5 模块）。 */
 /**
  * Material 3 主题引擎 —— 与 Flutter `ThemeData(colorSchemeSeed: ..., useMaterial3: true)` 100% 等价。
  *
@@ -174,3 +176,4 @@ export function cssVar(name) {
 }
 
 export { hexFromArgb, argbFromHex };
+</script>

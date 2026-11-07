@@ -168,5 +168,18 @@
   "permission_notification_success": "通知权限获取成功",
   "permission_notification_failed": "通知权限获取失败",
   "permission_notification_request_failed": "请求通知权限失败",
-  "permission_notification_denied_message": "通知权限已被永久拒绝，请在系统设置页面手动开启权限。"
+  "permission_notification_denied_message": "通知权限已被永久拒绝，请在系统设置页面手动开启权限。",
+  "custom_background": "自定义背景",
+  "custom_background_desc": "选择电脑中的任意图像文件（JPG / PNG / GIF / WebP / BMP / SVG…）作为 Astral 的背景",
+  "choose_image": "选择图片",
+  "reset_background": "恢复默认",
+  "bg_invalid_type": "不支持的文件类型",
+  "bg_invalid_type_msg": "请选择图像文件（JPG、PNG、GIF、WebP、BMP、SVG 等任意图像格式）",
+  "bg_too_large": "文件过大",
+  "bg_too_large_msg": "背景图片大小不能超过 32MB",
+  "bg_applied": "背景已应用",
+  "bg_applied_msg": "自定义背景已生效",
+  "bg_cleared": "已恢复默认背景",
+  "bg_cleared_msg": "自定义背景已移除",
+  "bg_read_failed": "读取文件失败"
 }

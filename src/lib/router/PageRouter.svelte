@@ -1,3 +1,5 @@
+<script module>
+/** 子页面路由（Svelte 5 模块）—— 对应 Flutter 根 Navigator 的 push/pop。 */
 /**
  * 子页面路由 —— 对应 Flutter 根 Navigator 的 push/pop。
  * MainScreen 在最上层渲染路由栈（覆盖整个壳，与原版行为一致）。
@@ -21,3 +23,4 @@ export function getStack() {
 export function clearPages() {
   stack.length = 0;
 }
+</script>

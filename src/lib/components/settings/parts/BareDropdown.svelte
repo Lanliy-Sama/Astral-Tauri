@@ -22,6 +22,18 @@
   let menuEl = $state(null);
   let menuPos = $state({ left: 0, top: 0, minWidth: 0 });
 
+  /* v2.5：与 IconMenu/PopupMenu 相同的 portal 保险 —— 菜单挂到 <body>，
+   * 不受锚点祖先 transform/filter 影响，fixed 定位永远相对视口；
+   * destroy 里 node.remove() 兜底（Svelte 按兄弟链卸载，移走的节点不在链上）。 */
+  function portalToBody(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
+
   const selectedLabel = $derived(
     options.find((o) => String(o.value) === String(value))?.label ??
       (value != null && value !== '' ? String(value) : '')
@@ -70,6 +82,7 @@
 {#if menuOpen}
   <div
     class="md-menu"
+    use:portalToBody
     bind:this={menuEl}
     style="left:{menuPos.left}px; top:{menuPos.top}px; min-width:{menuPos.minWidth}px"
   >

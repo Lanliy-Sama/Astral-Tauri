@@ -1,3 +1,5 @@
+<script module>
+/** 网络工具（Svelte 5 模块）。 */
 /**
  * 网络工具 —— 翻译自 lib/shared/utils/network/ip_utils.dart 等。
  */
@@ -96,3 +98,4 @@ export const DEPRECATED_DOMAINS = [
 export function isDeprecatedServer(url) {
   return DEPRECATED_DOMAINS.some((d) => (url || '').includes(d));
 }
+</script>

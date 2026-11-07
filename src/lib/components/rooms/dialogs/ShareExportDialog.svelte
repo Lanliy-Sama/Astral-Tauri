@@ -3,15 +3,15 @@
    * 复制房间分享链接 —— 翻译自 room_share_copy_link.dart 的 copyRoomShareLink。
    * linkOnly=true 时仅复制 astral:// 链接（当前房间卡点击 / 分享对话框按钮都走此路径）。
    */
-  import { writeClipboard } from '$lib/rust/api.js';
-  import { snackError, snackSuccess } from '$lib/components/common/snackbars.svelte.js';
+  import { writeClipboard } from '$lib/rust/Api.svelte';
+  import { snackError, snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import {
     encryptRoom,
     validateRoom,
     cleanRoom,
     generateShareLink,
     generateShareText,
-  } from '$lib/utils/roomShareCodec.js';
+  } from '$lib/utils/RoomShareCodec.svelte';
 
   export async function copyRoomShareLink(room, { linkOnly = false } = {}) {
     try {
@@ -52,8 +52,8 @@
    * - Dialog r28 / bg surface / 整体滚动（maxWidth 560，M3 Dialog 默认约束）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { networkConfigShareFromState } from '$lib/utils/roomShareCodec.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { networkConfigShareFromState } from '$lib/utils/RoomShareCodec.svelte';
 
   let { open = $bindable(false), room = null } = $props();
 

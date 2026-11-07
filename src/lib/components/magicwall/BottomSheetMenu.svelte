@@ -78,7 +78,7 @@
       0 3px 3px rgba(0, 0, 0, 0.3),
       0 12px 24px 6px rgba(0, 0, 0, 0.15);
     overflow: hidden;
-    animation: mw-sheet-in 200ms ease;
+    animation: mw-sheet-in 280ms cubic-bezier(0.05, 0.7, 0.1, 1);
   }
   @keyframes mw-sheet-in {
     from {

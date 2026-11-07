@@ -18,6 +18,18 @@
   let menuEl = $state(null);
   let menuWidth = $state(0);
 
+  /* v2.5：与 IconMenu 相同的 portal 保险 —— 菜单挂到 <body>，
+   * 不受锚点祖先 transform/filter 影响，fixed 定位永远相对视口。
+   * destroy 里 node.remove() 兜底：Svelte 按兄弟链卸载，移走的节点不在链上。 */
+  function portalToBody(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
+
   $effect(() => {
     if (open && menuEl) {
       menuWidth = menuEl.offsetWidth;
@@ -48,6 +60,7 @@
 {#if open}
   <div
     class="md-menu"
+    use:portalToBody
     bind:this={menuEl}
     style={alignEnd ? `right:${x}px; top:${y}px` : `left:${x}px; top:${y}px`}
   >

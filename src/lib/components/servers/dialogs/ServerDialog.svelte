@@ -7,8 +7,8 @@
   import Dialog from '$lib/components/common/Dialog.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { isBlockedServer } from '$lib/utils/network.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { isBlockedServer } from '$lib/utils/Network.svelte';
 
   let { open = $bindable(false), server = null } = $props();
 

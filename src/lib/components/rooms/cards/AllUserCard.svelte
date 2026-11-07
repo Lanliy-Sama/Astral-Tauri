@@ -7,8 +7,8 @@
    * 点击整卡复制 IP（注意原版此处 snack 文案为 'IP: '，与列表/简约卡的 'IP地址: ' 不同）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { snackSuccess } from '$lib/components/common/snackbars.svelte.js';
-  import { writeClipboard } from '$lib/rust/api.js';
+  import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
+  import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
     mapConnectionType,
     connectionTypeColor,
@@ -19,7 +19,7 @@
     parsePlatformVersion,
     formatTunnelProto,
     formatSpeed,
-  } from '$lib/utils/display.js';
+  } from '$lib/utils/Display.svelte';
 
   let { player, localIpv4 = '' } = $props();
 

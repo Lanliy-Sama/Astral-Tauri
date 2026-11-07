@@ -1,3 +1,5 @@
+<script module>
+/** 魔法墙控制器（Svelte 5 模块）。 */
 /**
  * MagicWall 控制器服务 —— 移植自：
  * - core/database/dao/magic_wall_dao.dart（DAO → db.js 表 mw_rules/mw_groups/mw_events）
@@ -11,11 +13,11 @@
  * 调用 loadData / checkStatus / toggleEngine / addRule / ... ；snackbar 由本服务统一弹出
  * （标题固定 '成功' / '错误'，对应原版页面的 onSuccess/onError 回调）。
  */
-import * as db from '../db/db.js';
-import * as rust from '../rust/api.js';
-import { uuidV4 } from '../utils/display.js';
-import { isWindows } from '../utils/platform.js';
-import { snackSuccess, snackError } from '../components/common/snackbars.svelte.js';
+import * as db from '../db/Db.svelte';
+import * as rust from '../rust/Api.svelte';
+import { uuidV4 } from '../utils/Display.svelte';
+import { isWindows } from '../utils/Platform.svelte';
+import { snackSuccess, snackError } from '../components/common/SnackbarStore.svelte';
 
 const RULES_TABLE = 'mw_rules';
 const GROUPS_TABLE = 'mw_groups';
@@ -724,7 +726,7 @@ class MagicWallController {
 
   /**
    * 原版经 PowerShell `Get-Process` 解析进程完整路径（仅 Windows）。
-   * Tauri/浏览器端暂无进程桥接 API（rust/api.js 未暴露对应命令），恒返回 null——
+   * Tauri/浏览器端暂无进程桥接 API（rust/Api.svelte 未暴露对应命令），恒返回 null——
    * 自动监听与路径修复逻辑保持移植结构，待 Rust 侧补充命令后即恢复行为。
    */
   async getProcessExecutablePath(processName) {
@@ -1040,3 +1042,4 @@ class MagicWallController {
 
 /** 单例控制器（页面直接导入使用） */
 export const mwController = new MagicWallController();
+</script>

@@ -1,8 +1,10 @@
+<script module>
+/** i18n（Svelte 5 模块）—— 对齐 easy_localization（zh/en，回退 zh）。 */
 /**
  * i18n —— 对齐 easy_localization 行为（zh/en，回退 zh）。
  * 翻译文件直接沿用原版 assets/translations/{zh,en}.json（170 键，扁平结构）。
  */
-import { browserLocale } from '../utils/platform.js';
+import { browserLocale } from '../utils/Platform.svelte';
 
 const dictionaries = { zh: null, en: null };
 let current = $state('zh');
@@ -55,3 +57,4 @@ export function t(key, params) {
   }
   return value;
 }
+</script>

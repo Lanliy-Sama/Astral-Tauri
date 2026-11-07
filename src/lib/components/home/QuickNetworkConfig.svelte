@@ -6,9 +6,9 @@
   import HomeBox from './HomeBox.svelte';
   import Icon from '../common/Icon.svelte';
   import Switch from '../common/Switch.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
-  import { t } from '../../i18n/index.svelte.js';
-  import { isWindows } from '../../utils/platform.js';
+  import { sm } from '../../services/ServiceManager.svelte';
+  import { t } from '../../i18n/I18n.svelte';
+  import { isWindows } from '../../utils/Platform.svelte';
 
   /* 广播转发 / 防火墙仅 Windows 显示 */
   const showWindowsOnly = isWindows();

@@ -1,3 +1,5 @@
+<script module>
+/** 房间/网络配置分享码编解码（Svelte 5 模块）。 */
 /**
  * 房间分享编解码 —— 翻译自 lib/core/room/room_share_codec.dart。
  * shareCode = base64Url(gzip(utf8(json)))，去除 '=' 填充；
@@ -240,3 +242,4 @@ export function networkConfigShareSummary(share) {
   if (share.noTun != null) lines.push(`• TUN设备: ${share.noTun ? '禁用' : '启用'}`);
   return lines;
 }
+</script>

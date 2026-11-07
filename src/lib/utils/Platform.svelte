@@ -1,3 +1,5 @@
+<script module>
+/** 平台检测（Svelte 5 模块）。 */
 /**
  * 平台检测工具 —— 替代 Flutter 的 Platform.isXXX。
  * Tauri 环境读取 OS 信息；浏览器预览模式下默认按 Windows 桌面处理
@@ -79,3 +81,4 @@ export function localHostname() {
     return 'localhost';
   }
 }
+</script>

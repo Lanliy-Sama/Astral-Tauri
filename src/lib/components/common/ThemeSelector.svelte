@@ -5,7 +5,7 @@
    */
   import Icon from './Icon.svelte';
   import Dialog from './Dialog.svelte';
-  import { sm } from '../../../lib/services/service-manager.svelte.js';
+  import { sm } from '../../../lib/services/ServiceManager.svelte';
 
   let { open = $bindable(false) } = $props();
 

@@ -5,7 +5,7 @@
    * 非 Windows 追加平台提示（12, orange）。
    */
   import Switch from '$lib/components/common/Switch.svelte';
-  import { isWindows } from '$lib/utils/platform.js';
+  import { isWindows } from '$lib/utils/Platform.svelte';
 
   let { isRunning = false, onToggle = () => {} } = $props();
 </script>

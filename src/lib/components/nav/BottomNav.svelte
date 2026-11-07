@@ -2,10 +2,10 @@
   /**
    * 底部导航（移动端 / 窄窗）—— BottomNavigationBar(fixed)。
    * 小窗口模式：图标 20，选中字号 10，未选中不显示标签。
-   * 液态玻璃：选中项下方为滑动玻璃胶囊（liquid-glass.css 材质，带过冲回弹）。
+   * 液态玻璃：选中项下方为滑动玻璃胶囊（LiquidGlass.svelte 材质，带过冲回弹）。
    */
   import Icon from '../common/Icon.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
+  import { sm } from '../../services/ServiceManager.svelte';
 
   let { items = [], isSmallWindow = false } = $props();
 
@@ -91,7 +91,7 @@
     position: relative;
     z-index: 1;
   }
-  /* 液态玻璃选中胶囊：默认隐藏（非玻璃模式保持原样），玻璃模式由 liquid-glass.css 激活 */
+  /* 液态玻璃选中胶囊：默认隐藏（非玻璃模式保持原样），玻璃模式由 LiquidGlass.svelte 激活 */
   .selection-pill {
     display: none;
     position: absolute;
@@ -104,7 +104,7 @@
   }
   :global(html.liquid-glass) .selection-pill {
     display: block;
-    transition: transform 360ms cubic-bezier(0.3, 1.4, 0.45, 1), width 360ms cubic-bezier(0.3, 1.4, 0.45, 1);
+    transition: transform 420ms cubic-bezier(0.22, 1.2, 0.36, 1), width 420ms cubic-bezier(0.22, 1.2, 0.36, 1);
   }
   .bn-label {
     line-height: 16px;

@@ -5,8 +5,8 @@
    * 点击复制 IP。NAT 走游戏化等级文案（natMiniInfo）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { snackSuccess } from '$lib/components/common/snackbars.svelte.js';
-  import { writeClipboard } from '$lib/rust/api.js';
+  import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
+  import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
     mapConnectionType,
     connectionTypeColor,
@@ -15,7 +15,7 @@
     natMiniInfo,
     parsePlatformVersion,
     formatTunnelProto,
-  } from '$lib/utils/display.js';
+  } from '$lib/utils/Display.svelte';
 
   let { player, localIpv4 = '' } = $props();
 

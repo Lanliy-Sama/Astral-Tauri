@@ -7,8 +7,8 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { t } from '$lib/i18n/index.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
 
   const listenList = $derived(sm.playerState.listenList);
 

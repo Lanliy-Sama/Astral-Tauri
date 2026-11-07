@@ -1,3 +1,5 @@
+<script module>
+/** 展示工具（Svelte 5 模块）。 */
 /**
  * 展示工具集 —— 平台版本解析 / 连接样式 / NAT 显示 / 流量格式化 / 随机房间名。
  * 全部翻译自 lib/shared/utils 与 features/rooms/widgets 中的对应 Dart 逻辑。
@@ -219,3 +221,4 @@ export function uuidV4() {
 export function randomSixDigits() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
+</script>

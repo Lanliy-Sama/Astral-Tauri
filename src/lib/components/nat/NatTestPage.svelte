@@ -8,8 +8,8 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import Progress from '$lib/components/common/Progress.svelte';
   import DropdownField from '$lib/components/common/DropdownField.svelte';
-  import { testNetworkConnectivity } from '$lib/rust/api.js';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
+  import { testNetworkConnectivity } from '$lib/rust/Api.svelte';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
 
   let testResult = $state(null);
   let isTesting = $state(false);

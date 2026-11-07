@@ -8,16 +8,16 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import TextField from '$lib/components/common/TextField.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { readClipboard } from '$lib/rust/api.js';
-  import { snackError, snackInfo, snackSuccess } from '$lib/components/common/snackbars.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { readClipboard } from '$lib/rust/Api.svelte';
+  import { snackError, snackInfo, snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import {
     decryptRoom,
     validateRoom,
     cleanRoom,
     parseNetworkConfigShare,
     networkConfigShareSummary,
-  } from '$lib/utils/roomShareCodec.js';
+  } from '$lib/utils/RoomShareCodec.svelte';
 
   let { open = $bindable(false) } = $props();
 

@@ -1,8 +1,8 @@
 <script>
   /** 窗口控制按钮（最小化/最大化/关闭）—— 对应 WindowsControls */
   import Icon from './Icon.svelte';
-  import { isTauri, isDesktopPlatform } from '../../../lib/utils/platform.js';
-  import { sm } from '../../../lib/services/service-manager.svelte.js';
+  import { isTauri, isDesktopPlatform } from '../../../lib/utils/Platform.svelte';
+  import { sm } from '../../../lib/services/ServiceManager.svelte';
 
   let maximized = $state(false);
 

@@ -1,10 +1,13 @@
 <script>
   /**
    * M3 Switch（对应 Flutter Switch）+ 液态玻璃增强：
-   * - 液态玻璃模式（html.liquid-glass）下轨道与 thumb 均为双层玻璃材质（liquid-glass.css）
+   * - 液态玻璃模式（html.liquid-glass）下轨道与 thumb 均为双层玻璃材质（LiquidGlass.svelte）
    * - 按住 thumb 可拖动：thumb 位置/尺寸实时跟随（液态形变），跨过中点即时预览开关态，
    *   松手吸附最近一侧并弹性回落；未拖动的点按保持原生 toggle 行为
+   * - 拖动玻璃珠是液态玻璃专属交互：关闭液态玻璃时仅允许点击（无 pointer capture / 形变）
    */
+  import { sm } from '../../services/ServiceManager.svelte';
+
   let { value = $bindable(false), disabled = false, scale = false, onChange = null } = $props();
 
   let trackEl = null; // 轨道
@@ -30,6 +33,8 @@
 
   function onPointerDown(e) {
     if (disabled || e.button !== 0) return;
+    /* 非液态玻璃模式：不建立拖动会话，仅保留原生点击 toggle */
+    if (!sm.appSettingsState.liquidGlass) return;
     suppressClick = false;
     drag = { p: null };
     trackEl.setPointerCapture(e.pointerId);

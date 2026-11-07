@@ -11,12 +11,12 @@
   import TextField from '$lib/components/common/TextField.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
   import Progress from '$lib/components/common/Progress.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { t } from '$lib/i18n/index.svelte.js';
-  import { pushPage } from '$lib/router/page-router.svelte.js';
-  import { openExternal } from '$lib/rust/api.js';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
-  import { isAndroid, isWindows, isTauri } from '$lib/utils/platform.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
+  import { pushPage } from '$lib/router/PageRouter.svelte';
+  import { openExternal } from '$lib/rust/Api.svelte';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
+  import { isAndroid, isWindows, isTauri } from '$lib/utils/Platform.svelte';
   import HistoryVersionsPage from './HistoryVersionsPage.svelte';
 
   /* GitHubProxySelector 常量 */

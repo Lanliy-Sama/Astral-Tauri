@@ -8,9 +8,9 @@
   import Icon from '../common/Icon.svelte';
   import TextField from '../common/TextField.svelte';
   import Switch from '../common/Switch.svelte';
-  import { sm } from '../../services/service-manager.svelte.js';
-  import { CoState } from '../../stores/enums.js';
-  import { t } from '../../i18n/index.svelte.js';
+  import { sm } from '../../services/ServiceManager.svelte';
+  import { CoState } from '../../stores/Enums.svelte';
+  import { t } from '../../i18n/I18n.svelte';
 
   /* 控制器初值只同步一次（对照 initState；此后外部状态变更不回写输入框） */
   let username = $state(sm.playerState.playerName || '');

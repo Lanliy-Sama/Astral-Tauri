@@ -9,8 +9,8 @@
   import DropdownField from '$lib/components/common/DropdownField.svelte';
   import Switch from '$lib/components/common/Switch.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
-  import { uuidV4 } from '$lib/utils/display.js';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
+  import { uuidV4 } from '$lib/utils/Display.svelte';
 
   let {
     rule = null,

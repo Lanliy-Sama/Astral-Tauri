@@ -5,7 +5,7 @@
    * 排序：HTML5 drag & drop，整卡可拖（对应 ReorderableDragStartListener 包裹整卡）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
 
   let { open = $bindable(false), rooms = [] } = $props();
 

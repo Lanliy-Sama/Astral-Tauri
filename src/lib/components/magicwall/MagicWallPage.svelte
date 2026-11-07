@@ -8,9 +8,9 @@
   import SubPage from '$lib/components/common/SubPage.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { snackError } from '$lib/components/common/snackbars.svelte.js';
-  import { isWindows } from '$lib/utils/platform.js';
-  import { mwController } from '$lib/services/magic-wall-service.svelte.js';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
+  import { isWindows } from '$lib/utils/Platform.svelte';
+  import { mwController } from '$lib/services/MagicWallService.svelte';
   import MagicWallControlPanel from './MagicWallControlPanel.svelte';
   import MagicWallGroupList from './MagicWallGroupList.svelte';
   import BottomSheetMenu from './BottomSheetMenu.svelte';

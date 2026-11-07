@@ -1,3 +1,5 @@
+<script module>
+/** 枚举常量（Svelte 5 模块）。 */
 /** 全局枚举 —— 与 Dart 端一一对应 */
 
 /** CoState: 连接状态机 */
@@ -57,3 +59,4 @@ export const ServerStatus = Object.freeze({
   inUse: 'inUse',
   unknown: 'unknown',
 });
+</script>

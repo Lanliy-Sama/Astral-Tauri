@@ -6,7 +6,7 @@
    */
   import Icon from '$lib/components/common/Icon.svelte';
   import MasonryGrid from '$lib/components/common/MasonryGrid.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
   import RoomCard from './RoomCard.svelte';
   import UserPage from './UserPage.svelte'; // 任务 7-a：UserPage 由另一同事实现（无 props）
   import RoomReorderSheet from './RoomReorderSheet.svelte';

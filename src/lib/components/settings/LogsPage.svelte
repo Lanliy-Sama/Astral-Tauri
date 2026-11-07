@@ -6,9 +6,9 @@
   import SubPage from '$lib/components/common/SubPage.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
   import Dialog from '$lib/components/common/Dialog.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { writeClipboard } from '$lib/rust/api.js';
-  import { snackInfo, snackSuccess } from '$lib/components/common/snackbars.svelte.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { writeClipboard } from '$lib/rust/Api.svelte';
+  import { snackInfo, snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
 
   let scrollEl = $state(null);
   let clearOpen = $state(false);

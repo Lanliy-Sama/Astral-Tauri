@@ -14,9 +14,9 @@
    */
   import Icon from '$lib/components/common/Icon.svelte';
   import TopologyNode from './TopologyNode.svelte';
-  import { sm } from '$lib/services/service-manager.svelte.js';
-  import { parsePlatformVersion } from '$lib/utils/display.js';
-  import { isServerNode } from '$lib/utils/network.js';
+  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { parsePlatformVersion } from '$lib/utils/Display.svelte';
+  import { isServerNode } from '$lib/utils/Network.svelte';
 
   let { nodes = [], reduceUpdates = false, isInBackground = false } = $props();
 
