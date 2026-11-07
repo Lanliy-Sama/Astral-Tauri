@@ -1179,6 +1179,7 @@ class ServiceManager {
     let result = false;
     do {
       this._retryCount += 1;
+      this.pushLog('[connect] 第 ' + this._retryCount + ' 次尝试');
       if (this._retryCount > 1) {
         await this._delay(2000);
       }
@@ -1212,6 +1213,7 @@ class ServiceManager {
         }
         this.pushLog('[connect] createServer 提交');
         await rust.createServer(config);
+        this.pushLog('[connect] createServer 已返回');
 
         this.connectionState.connectionState = CoState.connecting;
         this.pushLog('[connect] 进入 connecting（等待虚拟 IP）');
@@ -1226,6 +1228,7 @@ class ServiceManager {
         }
       } catch (e) {
         console.warn('连接过程异常:', e);
+        this.pushLog('[connect] 第 ' + this._retryCount + ' 次尝试异常: ' + String(e?.message || e));
         result = false;
       }
       if (!autoRetry || this._retryCount >= maxRetries) {
