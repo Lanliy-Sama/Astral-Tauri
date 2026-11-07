@@ -415,13 +415,16 @@ html.liquid-glass .home-box:not(.borderless) {
   --lg-edge: 22px;
   --lg-blur: 13px;
   --lg-spec-r: 150px;
-  --lg-bright: 1.055;
+  --lg-bright: 1.07;
+  /* 中心通透（同侧边栏选中框的低表面占比配方）：透明度主要交给
+   * 白色高光层，表面色只做浅色调 —— 后面是磨砂模糊的背景图，
+   * 卡内文字靠 blur(13px) + 光泽保持可读 */
   --lg-tint:
     linear-gradient(
       160deg,
-      color-mix(in srgb, var(--md-surface-container-low) 55%, rgb(255 255 255 / 0.62)),
-      color-mix(in srgb, var(--md-surface-container-low) 82%, rgb(255 255 255 / 0.24)) 55%,
-      color-mix(in srgb, var(--md-surface-container-low) 66%, rgb(255 255 255 / 0.4))
+      color-mix(in srgb, var(--md-surface-container-low) 34%, rgb(255 255 255 / 0.52)),
+      color-mix(in srgb, var(--md-surface-container-low) 48%, rgb(255 255 255 / 0.18)) 55%,
+      color-mix(in srgb, var(--md-surface-container-low) 30%, rgb(255 255 255 / 0.4))
     );
 }
 /* hover 描边回归组件语义（HomeBox.hovered = primary） */
