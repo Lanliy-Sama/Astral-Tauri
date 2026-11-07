@@ -171,6 +171,15 @@ export function listenRustLogs(callback) {
   };
 }
 
+/** 前端日志落盘（fire-and-forget：诊断用，不抛错） */
+export async function frontendLog(msg) {
+  try {
+    await tauriInvoke('frontend_log', { msg });
+  } catch {
+    /* 诊断日志失败忽略 */
+  }
+}
+
 /** 写剪贴板 */
 export async function writeClipboard(text) {
   try {
