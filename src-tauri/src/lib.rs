@@ -205,8 +205,8 @@ fn bg_write_begin(app: tauri::AppHandle, ext: String) -> Result<(), String> {
     }
     let dir = bg_dir(&app)?;
     let tmp = dir.join("custom_background.tmp");
-    let mut guard = app
-        .state::<BgWriteState>()
+    let bg_state = app.state::<BgWriteState>();
+    let mut guard = bg_state
         .0
         .lock()
         .map_err(|e| e.to_string())?;
@@ -228,8 +228,8 @@ fn bg_write_append(app: tauri::AppHandle, b64: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(b64.as_bytes())
         .map_err(|e| format!("base64 解码失败: {e}"))?;
-    let mut guard = app
-        .state::<BgWriteState>()
+    let bg_state = app.state::<BgWriteState>();
+    let mut guard = bg_state
         .0
         .lock()
         .map_err(|e| e.to_string())?;
@@ -244,8 +244,8 @@ fn bg_write_append(app: tauri::AppHandle, b64: String) -> Result<(), String> {
 /// 结束写入：落盘为正式背景文件（替换其它扩展名的旧背景），返回路径与版本
 #[tauri::command]
 fn bg_write_end(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let mut guard = app
-        .state::<BgWriteState>()
+    let bg_state = app.state::<BgWriteState>();
+    let mut guard = bg_state
         .0
         .lock()
         .map_err(|e| e.to_string())?;
