@@ -358,6 +358,9 @@ pub fn run() {
             clear_custom_background,
         ])
         .setup(|app| {
+            // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
+            astral_core::api::simple::preinit_runtime();
+
             // UDP 9999 日志桥（对应 Flutter LogCapture）
             commands::start_log_bridge(app.handle().clone());
 
