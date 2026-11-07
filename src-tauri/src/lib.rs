@@ -386,7 +386,7 @@ pub fn run() {
                             disable_tcp_hole_punching: false,
                             multi_thread: false,
                             data_compress_algo: 0,
-                            bind_device: String::new(),
+                            bind_device: false,
                             enable_kcp_proxy: false,
                             disable_kcp_input: false,
                             disable_relay_kcp: false,
