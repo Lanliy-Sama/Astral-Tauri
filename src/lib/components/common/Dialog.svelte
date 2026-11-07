@@ -35,6 +35,21 @@
       onDismiss?.();
     }
   }
+
+  /* scrim 挂到 body：玻璃基座给卡片设了 isolation:isolate（层叠上下文），
+   * 对话框若留在组件树里，scrim 的 z-index:1000 只在所在卡片的上下文内生效，
+   * DOM 靠后的其它卡片会画在对话框之上（弹层与页面内容重叠的根因）。
+   * portal 后 scrim 是 body 直系子节点，z-index 全局比较；样式为
+   * position:fixed 不受挂载点影响。destroy 里 node.remove() 兜底：
+   * Svelte 按兄弟链卸载，移走的节点不在链上（与 PopupMenu 同法）。 */
+  function portalToBody(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -43,6 +58,7 @@
   {#key cycle}
     <div
       class="md-dialog-scrim"
+      use:portalToBody
       class:closing
       onclick={(e) => {
         if (e.target === e.currentTarget && dismissible && open) {
