@@ -17,7 +17,9 @@ const PLATFORM_MAP = {
 
 /** 版本串 "版本号|平台名" 解析 */
 export function parsePlatformVersion(version) {
-  if (!version || !version.includes('|')) return { number: '', platform: '', name: '', icon: 'memory' };
+  if (!version) return { number: '', platform: '', name: '', icon: 'memory' };
+  /* 防御：无 '|' 的裸版本号仍显示数字（缺平台徽章） */
+  if (!version.includes('|')) return { number: version.trim(), platform: '', name: '', icon: 'devices' };
   const [number, platformRaw] = version.split('|');
   const platform = (platformRaw || '').trim();
   const mapped = PLATFORM_MAP[platform.toLowerCase()];
