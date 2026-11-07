@@ -1105,7 +1105,7 @@ class ServiceManager {
       noTun: pick(roomConfig?.noTun, net.noTun),
       useSmoltcp: net.useSmoltcp,
       relayNetworkWhitelist: '*',
-      disableP2P: pick(roomConfig?.disableP2p, net.disableP2p),
+      disableP2p: pick(roomConfig?.disableP2p, net.disableP2p),
       enableUdpBroadcastRelay: net.enableUdpBroadcastRelay,
       relayAllPeerRpc: net.relayAllPeerRpc,
       disableUdpHolePunching: pick(
