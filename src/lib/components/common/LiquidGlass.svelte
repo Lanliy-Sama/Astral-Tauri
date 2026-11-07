@@ -151,7 +151,15 @@ html.liquid-glass .md-dialog {
   isolation: isolate; /* 元素自成 backdrop root：伪元素不被自身背景干扰 */
   background: transparent; /* 色调全部由伪元素承载 */
   border: 1px solid color-mix(in srgb, var(--md-on-surface) 15%, transparent);
+  /* 全周亮环从 ::before 移回本体：::before 挂着扭曲滤镜，环会被一起扭成波浪；
+   * 本体不受 filter 影响，保证卡片外形规则挺括，只有边缘带内的画面折射 */
   box-shadow:
+        inset 0 0 0 1px rgb(255 255 255 / calc(0.44 + 0.3 * var(--lg-press))),
+    inset 0 0 0.5px 0.5px rgb(0 0 0 / 0.1),
+    inset 0 3px 2px rgb(255 255 255 / 0.9),
+    inset 0 -3px 2px rgb(255 255 255 / 0.7),
+    inset 2px 0 2px rgb(255 255 255 / 0.38),
+    inset -2px 0 2px rgb(255 255 255 / 0.38),
     0 1px 2px rgba(0, 0, 0, 0.12),
     0 4px 14px rgba(0, 0, 0, 0.12);
   transition:
@@ -199,14 +207,6 @@ html.liquid-glass .md-dialog::before {
     /* 背景图副本（fixed = 相对视口，与 .main-screen 的 cover/center 对齐）：
      * 经 #lg-edge 位移后呈现边缘扭曲折射；无自定义背景时该层为空 */
     var(--astral-bg-image, none) fixed center / cover no-repeat;
-  /* 全周亮环（按压时增亮）+ 上下主亮边 + 最外极细暗线（glassium「灰线+白线」三明治） */
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / calc(0.44 + 0.3 * var(--lg-press))),
-    inset 0 0 0.5px 0.5px rgb(0 0 0 / 0.1),
-    inset 0 3px 2px rgb(255 255 255 / 0.9),
-    inset 0 -3px 2px rgb(255 255 255 / 0.7),
-    inset 2px 0 2px rgb(255 255 255 / 0.38),
-    inset -2px 0 2px rgb(255 255 255 / 0.38);
   /* 边缘带 mask（四层 add 合成 = 四边框；显式 size/repeat 防合成层平铺） */
   -webkit-mask-image:
     linear-gradient(to right, #000 0, transparent var(--lg-edge)),
@@ -578,6 +578,14 @@ html.liquid-glass .md-switch {
       color-mix(in srgb, var(--md-primary) calc(91% * var(--lg-on)), rgb(105 115 133 / 0.36)) 46%,
       color-mix(in srgb, var(--md-primary) calc(80% * var(--lg-on)), rgb(132 140 155 / 0.48))
     );
+  /* 亮环移回本体（同卡片）：::before 只承担扭曲折射带 */
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / calc(0.4 + 0.3 * var(--lg-on) + 0.2 * var(--lg-press))),
+    inset 0 0 0.5px 0.5px rgb(0 0 0 / calc(0.14 + 0.1 * (1 - var(--lg-on)))),
+    inset 0 2px 1.5px rgb(255 255 255 / 0.98),
+    inset 0 -2.5px 2px rgb(255 255 255 / 0.6),
+    inset 2px 0 2px rgb(255 255 255 / 0.42),
+    inset -2px 0 2px rgb(255 255 255 / 0.42);
   /* 外线：OFF 中性细线 → ON 主色描边（玻璃管透出管色） */
   border-color: color-mix(
     in srgb,
@@ -607,13 +615,6 @@ html.liquid-glass .md-switch::before {
     var(--astral-bg-image, none) fixed center / cover no-repeat;
   /* 开关轨道同样做边缘扭曲折射（与卡片同一滤镜/同一背景对齐） */
   filter: url(#lg-edge);
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / calc(0.4 + 0.3 * var(--lg-on) + 0.2 * var(--lg-press))),
-    inset 0 0 0.5px 0.5px rgb(0 0 0 / calc(0.14 + 0.1 * (1 - var(--lg-on)))),
-    inset 0 2px 1.5px rgb(255 255 255 / 0.98),
-    inset 0 -2.5px 2px rgb(255 255 255 / 0.6),
-    inset 2px 0 2px rgb(255 255 255 / 0.42),
-    inset -2px 0 2px rgb(255 255 255 / 0.42);
 }
 /* 轨道中心磨砂：管内体光（顶受光/底反弹）+ 指针高光 + 按压光效 + 主体色 */
 html.liquid-glass .md-switch::after {
