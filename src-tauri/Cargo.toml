@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "3.0.0-alpha.3", features = [] }
 
 [dependencies]
-tauri = { version = "3.0.0-alpha.5", features = ["tray-icon", "devtools"] }
+tauri = { version = "3.0.0-alpha.6", features = ["tray-icon", "devtools"] }
 tauri-plugin-sql = { version = "3.0.0-alpha.3", features = ["sqlite"] }
 tauri-plugin-os = "3.0.0-alpha.3"
 tauri-plugin-opener = "3.0.0-alpha.3"
@@ -30,7 +30,7 @@ astral-core = { path = "crates/astral-core" }
 # v3 起 tauri 不再传递依赖 tauri-runtime-wry：
 # - Android 的 mobile_entry_point 宏仍展开为 ::tauri_runtime_wry::android_binding!
 # - 桌面端需显式 .runtime(tauri_runtime_wry::Wry::default())
-tauri-runtime-wry = "3.0.0-alpha.2"
+tauri-runtime-wry = "3.0.0-alpha.6"
 
 # Android VpnService 桥接（其他平台为返回「不支持」的空实现）
 tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
