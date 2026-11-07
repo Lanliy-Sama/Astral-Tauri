@@ -16,7 +16,8 @@ use tauri_plugin_vpn_service::{models::StartVpnRequest, VpnserviceExt};
 
 #[tauri::command]
 pub fn easytier_version() -> Result<String, String> {
-    simple::easytier_version()
+    // 前端契约："版本号|平台名"（parsePlatformVersion 以 '|' 分隔出平台徽章）
+    simple::easytier_version().map(|v| format!("{}|{}", v, std::env::consts::OS))
 }
 
 #[tauri::command]
