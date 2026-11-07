@@ -76,6 +76,18 @@ pub fn cmd_log(msg: &str) {
     }
 }
 
+/// 启动时预热 tokio 运行时：close_server/create_server 首次访问 RT 的
+/// lazy_static 初始化曾卡死命令线程（两次进入、永不返回）。
+/// 在 setup 阶段（非命令线程）提前完成初始化。
+pub fn preinit_runtime() {
+    cmd_log("preinit_runtime: 开始初始化 tokio 运行时");
+    let handle = RT.handle().clone();
+    cmd_log("preinit_runtime: 运行时就绪");
+    let _ = handle.spawn(async {
+        cmd_log("preinit_runtime: 测试任务执行");
+    });
+}
+
 pub fn send_udp_to_localhost(message: &str) -> Result<(), String> {
     use std::net::UdpSocket;
 
@@ -588,7 +600,11 @@ pub fn create_server(
 
 // 关闭服务器实例
 pub fn close_server() {
+    cmd_log("close_server: 步骤1-进入");
+    simple_step_log();
+    cmd_log("close_server: 步骤2-UDP发送完成，准备 RT.spawn");
     RT.spawn(async {
+    cmd_log("close_server: 步骤3-任务已提交到运行时");
         // 获取mutex锁
         let mut locked_instance = INSTANCE.write().await;
 
