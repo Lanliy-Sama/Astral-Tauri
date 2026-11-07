@@ -432,8 +432,9 @@ html.liquid-glass .home-box:not(.borderless).hovered {
 /* ============================================================
  * 悬浮面板：菜单 / 对话框 —— 真实折射的最佳舞台
  * 它们浮在任意内容之上：背景被边缘透镜弯折、中心磨砂。
- * 色调透明度 ~75%：内容透过模糊层隐约可见（玻璃感来源），
- * blur(16px) + 亮度抬升保证文字可读。
+ * 色调取近实色 surface（96%+）：Chromium 在 fixed scrim 内不渲染
+ * backdrop-filter（blur 失效），可读性由 tint 承担；玻璃感保留在
+ * 边缘折射带 + 亮边 + 光泽。
  * ============================================================ */
 html.liquid-glass .md-menu,
 html.liquid-glass .md-dialog {
@@ -444,9 +445,9 @@ html.liquid-glass .md-dialog {
   --lg-tint:
     linear-gradient(
       160deg,
-      color-mix(in srgb, var(--md-surface-container) 46%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-surface-container) 78%, rgb(255 255 255 / 0.28)) 55%,
-      color-mix(in srgb, var(--md-surface-container) 56%, rgb(255 255 255 / 0.4))
+      color-mix(in srgb, var(--md-surface-container) 96%, rgb(255 255 255 / 0.5)),
+      color-mix(in srgb, var(--md-surface-container) 99%, rgb(255 255 255 / 0.28)) 55%,
+      color-mix(in srgb, var(--md-surface-container) 97%, rgb(255 255 255 / 0.4))
     );
 }
 
