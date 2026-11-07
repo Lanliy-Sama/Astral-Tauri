@@ -180,8 +180,10 @@ html.liquid-glass .md-dialog::before {
   border-radius: inherit;
   z-index: -1;
   pointer-events: none;
-  -webkit-backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.45) brightness(1.04);
-  backdrop-filter: url(#lg-edge) blur(1.5px) saturate(1.45) brightness(1.04);
+  /* 边缘扭曲折射：backdrop-filter 的 SVG url() 引用 Chromium 不支持（且本机
+   * 带 mask 的伪元素 backdrop 全不渲染），改用普通 filter —— 对边缘带内的
+   * 【背景图副本】做湍流位移扭曲（#lg-edge），mask 裁回边带 = 真折射。 */
+  filter: url(#lg-edge);
   background:
     /* 色散（棱镜彩环）2.3：四向边缘染色 —— 左红右蓝为主，
      * 上下补充暖橙/冷青，彩色光沿整圈轮廓连续可辨；
@@ -193,7 +195,10 @@ html.liquid-glass .md-dialog::before {
     /* 斜面光：顶缘受光、底缘地面反光（glassium bevel） */
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 28%),
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
-    var(--lg-tint-edge);
+    var(--lg-tint-edge),
+    /* 背景图副本（fixed = 相对视口，与 .main-screen 的 cover/center 对齐）：
+     * 经 #lg-edge 位移后呈现边缘扭曲折射；无自定义背景时该层为空 */
+    var(--astral-bg-image, none) fixed center / cover no-repeat;
   /* 全周亮环（按压时增亮）+ 上下主亮边 + 最外极细暗线（glassium「灰线+白线」三明治） */
   box-shadow:
     inset 0 0 0 1px rgb(255 255 255 / calc(0.44 + 0.3 * var(--lg-press))),
@@ -462,7 +467,9 @@ html.liquid-glass .md-dialog::before {
     /* 斜面光：与基座一致（顶缘受光、底缘地面反光） */
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 28%),
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
-    var(--lg-tint-edge);
+    var(--lg-tint-edge),
+    var(--astral-bg-image, none) fixed center / cover no-repeat;
+  filter: url(#lg-edge);
 }
 
 /* ============================================================
@@ -596,7 +603,10 @@ html.liquid-glass .md-switch::before {
     linear-gradient(to bottom, rgb(255 110 80 / 0.18), transparent 18%),
     linear-gradient(to top, rgb(80 185 255 / 0.18), transparent 18%),
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 24%),
-    linear-gradient(to top, rgb(255 255 255 / calc(0.42 * var(--lg-bevel))), transparent 36%);
+    linear-gradient(to top, rgb(255 255 255 / calc(0.42 * var(--lg-bevel))), transparent 36%),
+    var(--astral-bg-image, none) fixed center / cover no-repeat;
+  /* 开关轨道同样做边缘扭曲折射（与卡片同一滤镜/同一背景对齐） */
+  filter: url(#lg-edge);
   box-shadow:
     inset 0 0 0 1px rgb(255 255 255 / calc(0.4 + 0.3 * var(--lg-on) + 0.2 * var(--lg-press))),
     inset 0 0 0.5px 0.5px rgb(0 0 0 / calc(0.14 + 0.1 * (1 - var(--lg-on)))),
@@ -712,8 +722,8 @@ html.liquid-glass .md-switch.dragging {
   --lg-press: 1;
 }
 html.liquid-glass .md-switch.dragging::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  /* 拖动中：动画噪声 + 强位移（#lg-edge-hot）—— 边缘"沸腾"折射 */
+  filter: url(#lg-edge-hot);
 }
 /* 拖动 thumb 时：位置由 JS 内联控制，禁用过渡 */
 html.liquid-glass .md-switch.dragging .thumb {
