@@ -7,6 +7,7 @@
    * 点击整卡复制 IP（注意原版此处 snack 文案为 'IP: '，与列表/简约卡的 'IP地址: ' 不同）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
+  import { sm } from '$lib/services/ServiceManager.svelte';
   import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
@@ -58,6 +59,23 @@
   function statItem(icon, label, value, color) {
     return { icon, label, value, color };
   }
+  /* 延迟历史曲线（原版 Flutter 的延迟折线图）：本卡节点的逐秒延迟采样 */
+  const latencyHistory = $derived(sm.latencyHistory[String(player.peerId ?? player.hostname)] || []);
+  const chartPoints = $derived.by(() => {
+    const h = latencyHistory;
+    if (!h || h.length < 2) return '';
+    const W = 300;
+    const Hh = 44;
+    const maxMs = Math.max(60, ...h);
+    const step = W / (h.length - 1);
+    return h
+      .map((ms, i) => {
+        const y = Hh - 3 - Math.min(ms, maxMs) / maxMs * (Hh - 6);
+        return `${(i * step).toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
+  });
+
   const leftStats = $derived(
     connection
       ? [
@@ -114,6 +132,16 @@
     </div>
 
     <div class="md-divider d1"></div>
+
+    <!-- 延迟历史曲线 -->
+    {#if chartPoints}
+      <svg class="lat-chart" viewBox="0 0 300 44" preserveAspectRatio="none">
+        <polyline points={chartPoints} fill="none" stroke={latColor} stroke-width="1.5"
+          stroke-linejoin="round" stroke-linecap="round" />
+      </svg>
+    {:else if connection}
+      <div class="lat-chart-hint">正在收集延迟数据…</div>
+    {/if}
 
     <!-- 网络数据（无连接数据时居中提示） -->
     {#if !connection}
@@ -300,6 +328,21 @@
   }
 
   /* 网络统计区 */
+  .lat-chart {
+    display: block;
+    width: 100%;
+    height: 44px;
+    padding: 2px 8px 0;
+    box-sizing: border-box;
+  }
+  .lat-chart-hint {
+    padding: 4px 16px 6px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--md-on-surface-variant);
+    opacity: 0.7;
+  }
+
   .stats-section {
     margin-top: 12px;
   }
