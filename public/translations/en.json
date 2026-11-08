@@ -146,6 +146,8 @@
   "update_channel": "Update Channel",
   "advanced_network_settings": "Advanced Network Settings",
   "advanced_network_settings_desc": "Configuration options for advanced users",
+  "mtu": "MTU",
+  "mtu_desc": "Virtual adapter MTU (1280-1500, press Enter)",
   "disable_sym_hole_punching": "Disable Symmetric NAT Hole Punching",
   "disable_sym_hole_punching_desc": "Disable symmetric NAT hole punching, will use relay server in symmetric NAT environment",
   "startup_description": "Startup Description",

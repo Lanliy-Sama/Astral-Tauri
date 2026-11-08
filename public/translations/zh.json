@@ -146,6 +146,8 @@
   "update_channel": "更新通道",
   "advanced_network_settings": "高级网络设置",
   "advanced_network_settings_desc": "专业用户配置选项",
+  "mtu": "MTU",
+  "mtu_desc": "虚拟网卡 MTU（1280–1500，回车确认）",
   "disable_sym_hole_punching": "禁用UDP对称打洞",
   "disable_sym_hole_punching_desc": "断网或网络不稳定时请开启此选项",
   "startup_description": "启动说明",

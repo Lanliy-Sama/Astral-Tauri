@@ -55,6 +55,14 @@
     }
   }
 
+  /* MTU（回车提交：1280–1500；非法值回落当前值，{#key} 重建输入框） */
+  function submitMtu(value) {
+    const v = Number(value);
+    if (Number.isInteger(v) && v >= 1280 && v <= 1500) {
+      sm.updateMtu(v);
+    }
+  }
+
   /* 跃点列表对话框 */
   let hopOpen = $state(false);
   let hopList = $state([]);
@@ -144,6 +152,27 @@
         </div>
       </div>
       <div class="md-divider"></div>
+
+      <!-- MTU：数字输入（回车提交，1280–1500） -->
+      <div class="md-list-tile two-line no-cursor">
+        <div class="tile-content">
+          <div class="tile-title">{t('mtu')}</div>
+          <div class="tile-subtitle">{t('mtu_desc')}</div>
+        </div>
+        <span class="tile-trailing">
+          {#key sm.networkConfigState.mtu}
+            <input
+              class="port-input"
+              type="text"
+              inputmode="numeric"
+              value={String(sm.networkConfigState.mtu)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') submitMtu(e.currentTarget.value);
+              }}
+            />
+          {/key}
+        </span>
+      </div>
 
       <div
         class="md-switch-list-tile"
