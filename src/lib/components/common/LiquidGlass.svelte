@@ -140,6 +140,9 @@ html.liquid-glass .md-tonal-btn,
 html.liquid-glass .md-elevated-btn,
 html.liquid-glass .md-outlined-btn,
 html.liquid-glass .md-menu,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog {
   --lg-edge: 18px; /* 边缘折射带宽度（各组件按尺寸覆盖） */
   --lg-blur: 9px; /* 中心磨砂半径 */
@@ -181,6 +184,9 @@ html.liquid-glass .md-tonal-btn::before,
 html.liquid-glass .md-elevated-btn::before,
 html.liquid-glass .md-outlined-btn::before,
 html.liquid-glass .md-menu::before,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog::before {
   content: '';
   position: absolute;
@@ -236,6 +242,9 @@ html.liquid-glass .md-tonal-btn::after,
 html.liquid-glass .md-elevated-btn::after,
 html.liquid-glass .md-outlined-btn::after,
 html.liquid-glass .md-menu::after,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog::after {
   content: '';
   position: absolute;
@@ -450,6 +459,9 @@ html.liquid-glass .home-box:not(.borderless).hovered {
  * 边缘折射带 + 亮边 + 光泽。
  * ============================================================ */
 html.liquid-glass .md-menu,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog {
   --lg-edge: 20px;
   --lg-blur: 16px;
@@ -471,6 +483,9 @@ html.liquid-glass .md-dialog {
  * 横向零失衡 —— 光像从玻璃顶面射入、底面折射出，物理上说得通，
  * 棱镜彩感保留，面板端正不歪。 */
 html.liquid-glass .md-menu::before,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog::before {
   background:
     /* 上下棱镜色散（左右镜像对称）：顶缘暖橙、底缘冷青 */
@@ -889,5 +904,22 @@ html.liquid-glass .sheet-body .opt.selected:active {
   }
 }
   }
+
+/* ---- 成员卡专属色调：可见的半透明表面（不可用 transparent，否则卡片隐形） ---- */
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card {
+  --lg-tint:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--md-surface-container-low) 28%, transparent),
+      color-mix(in srgb, var(--md-surface-container-low) 42%, transparent) 55%,
+      color-mix(in srgb, var(--md-surface-container-low) 24%, transparent)
+    );
+  --lg-tint-edge:
+    linear-gradient(to right, rgb(255 72 72 / 0.14), transparent 36%),
+    linear-gradient(to left, rgb(72 138 255 / 0.14), transparent 36%);
+}
+
 </style>
 
