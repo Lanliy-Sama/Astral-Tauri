@@ -126,6 +126,28 @@ jobs:
       - name: 🖼️ 从原图重新生成图标（恢复圆角）
         run: npx tauri icon app-icon.png
 
+      - name: 🧰 预热 NSIS 工具链（Windows，带重试防 GitHub 504）
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:LOCALAPPDATA "tauri"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $makensis = Join-Path $dest "NSIS\makensis.exe"
+          if (Test-Path $makensis) { Write-Host "NSIS 已缓存，跳过下载"; exit 0 }
+          $url = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"
+          for ($i = 1; $i -le 6; $i++) {
+            try {
+              Write-Host "下载 NSIS 第 $i 次尝试..."
+              Invoke-WebRequest -Uri $url -OutFile "$dest\nsis.zip" -UserAgent astral -ErrorAction Stop
+              Expand-Archive "$dest\nsis.zip" -DestinationPath $dest -Force
+              Remove-Item "$dest\nsis.zip" -ErrorAction SilentlyContinue
+              if (Test-Path $makensis) { Write-Host "NSIS 预热完成"; break }
+            } catch {
+              Write-Host "第 $i 次失败: $($_.Exception.Message)"
+              Start-Sleep -Seconds 8
+            }
+          }
+
       - name: 🔨 构建 Tauri 应用
         shell: bash
         run: |
