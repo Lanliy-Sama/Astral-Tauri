@@ -22,7 +22,13 @@ function push(snack) {
 
 function dismiss(id) {
   const idx = state.queue.findIndex((s) => s.id === id);
-  if (idx >= 0) state.queue.splice(idx, 1);
+  if (idx < 0 || state.queue[idx].closing) return;
+  /* 退场动画：先标 closing（SnackbarHost 播 200ms 下滑淡出）再移除 */
+  state.queue[idx].closing = true;
+  setTimeout(() => {
+    const i = state.queue.findIndex((s) => s.id === id);
+    if (i >= 0) state.queue.splice(i, 1);
+  }, 200);
 }
 
 export function getSnackbars() {

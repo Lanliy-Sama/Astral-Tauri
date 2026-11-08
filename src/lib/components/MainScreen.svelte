@@ -76,6 +76,38 @@
 
   const routeStack = $derived(getStack());
 
+  /* 切页入场动画：IndexedStack 瞬切生硬（顿挫感），新可见页轻位移+淡入；
+   * WAAPI 驱动（不动 DOM 结构/页面状态），首帧与 prefers-reduced-motion 跳过 */
+  let pageEls = [];
+  let firstPagePaint = true;
+  $effect(() => {
+    const el = pageEls[safeIndex];
+    if (!el) return;
+    if (firstPagePaint) {
+      firstPagePaint = false;
+      return;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate(
+      [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 220, easing: 'cubic-bezier(0.05, 0.7, 0.1, 1)' }
+    );
+  });
+
+  /* 最小化/失焦暂停拓扑同步（isInBackground），重新聚焦恢复 —— 此前只有
+   * minimize 单向置 true、无恢复路径：最小化过一次后拓扑同步与连线动画
+   * 永久停止（真 bug）。托盘/窗口恢复均会触发 focus。 */
+  $effect(() => {
+    const onFocus = () => sm.uiState.setBackground(false);
+    const onBlur = () => sm.uiState.setBackground(true);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
+    };
+  });
+
   /* Escape 键返回（对应 Android 返回键） */
   function onKeydown(e) {
     if (e.key === 'Escape' && routeStack.length > 0) {
@@ -158,7 +190,7 @@
       {/if}
       <div class="content" ontouchstart={onTouchStart} ontouchend={onTouchEnd}>
         {#each pages as Page, index (index)}
-          <div class="stack-page {index === safeIndex ? '' : 'hidden'}">
+          <div class="stack-page {index === safeIndex ? '' : 'hidden'}" bind:this={pageEls[index]}>
             <Page />
           </div>
         {/each}
@@ -182,7 +214,7 @@
 
   <!-- 子页面路由栈（覆盖整个壳，同 Flutter 根 Navigator push） -->
   {#each routeStack as entry (entry.id)}
-    <div class="route-overlay">
+    <div class="route-overlay" class:route-out={entry.closing}>
       <svelte:component this={entry.component} {...entry.props} />
     </div>
   {/each}
@@ -232,12 +264,20 @@
     inset: 0;
     z-index: 500;
     background: var(--md-surface);
-    /* MaterialPageRoute + Windows ZoomPageTransitionsBuilder：2.4 调优 ——
-     * 缩放幅度收敛（0.88→1）+ emphasized-decelerate，入场更柔和流畅 */
-    animation: route-in 320ms cubic-bezier(0.05, 0.7, 0.1, 1);
+    /* MaterialPageRoute：入场缩放再收敛（0.94→1）+ emphasized-decelerate，
+     * 幅度更小更优雅；pop 时反向轻缩放淡出（PageRouter 标 closing 延迟卸载） */
+    animation: route-in 300ms cubic-bezier(0.05, 0.7, 0.1, 1);
+  }
+  .route-overlay.route-out {
+    animation: route-out 190ms cubic-bezier(0.3, 0, 0.8, 0.15) forwards;
+    pointer-events: none;
   }
   @keyframes route-in {
-    from { opacity: 0; transform: scale(0.88); }
+    from { opacity: 0; transform: scale(0.94); }
     to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes route-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.96); }
   }
 </style>

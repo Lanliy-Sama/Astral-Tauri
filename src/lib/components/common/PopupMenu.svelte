@@ -30,6 +30,25 @@
     };
   }
 
+  /* 滞后卸载：open→false 后播 160ms 退出动画再移除（与 IconMenu/Dialog 同法） */
+  let visible = $state(false);
+  let cycle = $state(0);
+  const closing = $derived(!open && visible);
+
+  $effect(() => {
+    if (open) {
+      if (!visible) cycle += 1;
+      visible = true;
+      return;
+    }
+    if (visible) {
+      const t = setTimeout(() => {
+        visible = false;
+      }, 160);
+      return () => clearTimeout(t);
+    }
+  });
+
   $effect(() => {
     if (open && menuEl) {
       menuWidth = menuEl.offsetWidth;
@@ -57,9 +76,11 @@
   onblur={close}
 />
 
-{#if open}
+{#if visible}
+  {#key cycle}
   <div
     class="md-menu"
+    class:closing
     use:portalToBody
     bind:this={menuEl}
     style={alignEnd ? `right:${x}px; top:${y}px` : `left:${x}px; top:${y}px`}
@@ -79,4 +100,5 @@
       </div>
     {/each}
   </div>
+  {/key}
 {/if}
