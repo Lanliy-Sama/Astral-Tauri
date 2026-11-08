@@ -83,6 +83,35 @@
     }
   }
 
+  /* 移动端/窄窗左右滑动切页（对应原版 PageView 手势） */
+  const bottomNavMode = $derived(!(sm.uiState.isDesktop && !isSmallWindow));
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchTarget = null;
+
+  function onTouchStart(e) {
+    if (!bottomNavMode) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchTarget = e.target;
+  }
+  function onTouchEnd(e) {
+    if (!bottomNavMode || touchTarget === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchTarget = null;
+    if (Math.abs(dx) < 80 || Math.abs(dy) > 60) return;
+    /* 起点/终点落在交互控件（输入框/开关/滑块）上时不切页 */
+    for (const el of [touchTarget, e.target]) {
+      if (el && typeof el.closest === 'function' && el.closest('input, textarea, button, [role="slider"], [role="button"]')) return;
+    }
+    const dir = dx < 0 ? 1 : -1;
+    const next = safeIndex + dir;
+    if (next >= 0 && next < navigationItems.length) {
+      sm.uiState.selectedIndex = next;
+    }
+  }
+
   /* 托盘「隐藏托盘」确认流程（对应原版 trayHide，Tauri 模式） */
   let trayHideOpen = $state(false);
 
@@ -127,7 +156,7 @@
           {navigationItems[safeIndex]?.label || ''}
         </div>
       {/if}
-      <div class="content">
+      <div class="content" ontouchstart={onTouchStart} ontouchend={onTouchEnd}>
         {#each pages as Page, index (index)}
           <div class="stack-page {index === safeIndex ? '' : 'hidden'}">
             <Page />
