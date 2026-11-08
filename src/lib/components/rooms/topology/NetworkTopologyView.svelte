@@ -272,11 +272,21 @@
 
   const shouldAnimate = $derived(!reduceUpdates && !isInBackground);
 
-  /* 坐标持久化：结构变化时已有节点沿用旧坐标（existingPositions） */
+  /* 坐标持久化：结构变化时已有节点沿用旧坐标（existingPositions）；
+   * 节点拖动落位写回后 bump layoutVersion 触发重建 */
   const existingPositions = new Map();
-  const model = $derived(
-    buildGraphModel(syncedNodes, sm.networkConfigState.ipv4, existingPositions, shouldAnimate)
-  );
+  let layoutVersion = $state(0);
+  const model = $derived.by(() => {
+    void layoutVersion;
+    return buildGraphModel(syncedNodes, sm.networkConfigState.ipv4, existingPositions, shouldAnimate);
+  });
+
+  function onNodeDragEnd(id, dx, dy) {
+    const n = model.nodes.find((x) => x.id === id);
+    if (!n) return;
+    existingPositions.set(id, { x: n.x + dx / zoom, y: n.y + dy / zoom });
+    layoutVersion += 1;
+  }
   $effect(() => {
     existingPositions.clear();
     for (const n of model.nodes) existingPositions.set(n.id, { x: n.x, y: n.y });
@@ -470,14 +480,17 @@
 
     <!-- 连线：bezier，primary@0.6，宽 2.5，label 'XXms'；粒子 stroke-dashoffset 动画（4s） -->
     <svg class="edges-svg" aria-hidden="true">
-      {#each edges as e (e.id)}
-        <path class="edge-line" d={e.path} />
-      {/each}
-      {#if shouldAnimate}
+      {/* 大 viewport（世界坐标 ±8000）：0x0 SVG 在 WebView2 不渲染溢出内容 */}
+      <g transform="translate(8000,8000)">
         {#each edges as e (e.id)}
-          <path class="edge-particles" d={e.path} pathLength="100" />
+          <path class="edge-line" d={e.path} />
         {/each}
-      {/if}
+        {#if shouldAnimate}
+          {#each edges as e (e.id)}
+            <path class="edge-particles" d={e.path} pathLength="100" />
+          {/each}
+        {/if}
+      </g>
     </svg>
     {#each edges as e (e.id)}
       <div class="edge-label" style="left:{e.midX}px; top:{e.midY}px">{e.label}</div>
@@ -485,7 +498,7 @@
 
     <!-- 节点卡：宽 dense(≥12) ? 186 : 220 -->
     {#each model.nodes as n (n.id)}
-      <TopologyNode node={n} denseMode={denseMode} onMeasure={handleMeasure} />
+      <TopologyNode node={n} denseMode={denseMode} onMeasure={handleMeasure} onDragEnd={onNodeDragEnd} />
     {/each}
   </div>
 
@@ -541,11 +554,10 @@
   }
   .edges-svg {
     position: absolute;
-    left: 0;
-    top: 0;
-    width: 0;
-    height: 0;
-    overflow: visible;
+    left: -8000px;
+    top: -8000px;
+    width: 16000px;
+    height: 16000px;
     pointer-events: none;
   }
   .edge-line {
