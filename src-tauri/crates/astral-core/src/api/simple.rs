@@ -533,13 +533,13 @@ pub fn create_server(
         flags.disable_relay_kcp = flag.disable_relay_kcp;
         flags.proxy_forward_by_system = flag.proxy_forward_by_system;
         flags.accept_dns = flag.accept_dns;
+        flags.mtu = flag.mtu;
 
         flags.private_mode = flag.private_mode;
         flags.enable_quic_proxy = flag.enable_quic_proxy;
         flags.disable_quic_input = flag.disable_quic_input;
         flags.disable_sym_hole_punching = flag.disable_sym_hole_punching;
         cfg.set_flags(flags);
-        cfg.set_mtu(flag.mtu);
 
         if flag.socks5_port > 0 {
             let portal = format!("socks5://127.0.0.1:{}", flag.socks5_port);
