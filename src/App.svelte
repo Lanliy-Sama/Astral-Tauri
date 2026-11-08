@@ -113,9 +113,11 @@
     if (!isTauri()) return;
     try {
       const deepLink = await import('@tauri-apps/plugin-deep-link');
-      /* 冷启动链接 */
+      /* 冷启动链接：getCurrent() 返回 URL[]（可多条），取首条再进 handleLink；
+       * 直接传数组会让 new URL(数组) 抛 TypeError → 冷启动导入必失败 */
       const initial = await deepLink.getCurrent();
-      if (initial) handleLink(initial);
+      const initialUrl = Array.isArray(initial) ? initial[0] : initial;
+      if (initialUrl) handleLink(initialUrl);
       /* 运行中链接 */
       await deepLink.onDeepLink((event) => {
         const url = Array.isArray(event?.urls) ? event.urls[0] : event?.url;
