@@ -65,7 +65,14 @@
         "type": "downloadBootstrapper"
       },
       "nsis": {
-        "installMode": "perMachine"
+        "installMode": "perMachine",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "resources/installer/header.bmp",
+        "sidebarImage": "resources/installer/sidebar.bmp",
+        "languages": [
+          "SimpChinese"
+        ],
+        "displayLanguageSelector": false
       }
     },
     "linux": {
