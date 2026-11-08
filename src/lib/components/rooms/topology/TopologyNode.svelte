@@ -8,7 +8,7 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import { latencyColor } from '$lib/utils/Display.svelte';
 
-  let { node, denseMode = false, onMeasure = () => {}, onDragEnd = () => {} } = $props();
+  let { node, denseMode = false, onMeasure = () => {}, onDragMove = () => {}, onDragEnd = () => {} } = $props();
 
   /* 节点拖动：指针拖动期间内部偏移渲染（不触发画布 pan），松手回调世界坐标增量 */
   let dragDx = $state(0);
@@ -27,6 +27,7 @@
     if (!nodeDragging || !dragStart) return;
     dragDx = dragStart.dx + (e.clientX - dragStart.x);
     dragDy = dragStart.dy + (e.clientY - dragStart.y);
+    onDragMove(node.id, dragDx, dragDy);
   }
   function onPointerUp() {
     if (!nodeDragging) return;
