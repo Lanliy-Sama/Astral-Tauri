@@ -263,6 +263,7 @@ class ServiceManager {
     this.firewallState = new FirewallState();
     this.vpnState = new VpnState();
     this.appSettingsState = new AppSettingsState();
+    this.latencyHistory = $state({}); /* 曲线图数据源：peerKey -> [ms...] */
     this.serverStatusState = new ServerStatusState();
 
     /* 连接管理 */
@@ -1406,6 +1407,16 @@ class ServiceManager {
       }
       try {
         this.connectionState.netStatus = await rust.getNetworkStatus();
+        /* 按节点采样延迟历史（曲线图数据源，保留 120 点） */
+        const nodes = this.connectionState.netStatus?.nodes || [];
+        for (const n of nodes) {
+          if (n.latency_ms == null) continue;
+          const key = String(n.peer_id ?? n.hostname ?? n.ipv4);
+          const hist = this.latencyHistory[key] || [];
+          hist.push(n.latency_ms);
+          if (hist.length > 120) hist.shift();
+          this.latencyHistory[key] = hist;
+        }
       } catch {
         /* 忽略 */
       }
