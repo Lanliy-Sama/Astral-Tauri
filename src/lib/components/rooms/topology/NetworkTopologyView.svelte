@@ -480,7 +480,7 @@
 
     <!-- 连线：bezier，primary@0.6，宽 2.5，label 'XXms'；粒子 stroke-dashoffset 动画（4s） -->
     <svg class="edges-svg" aria-hidden="true">
-      {/* 大 viewport（世界坐标 ±8000）：0x0 SVG 在 WebView2 不渲染溢出内容 */}
+      <!-- 大 viewport（世界坐标 ±8000）：0x0 SVG 在 WebView2 不渲染溢出内容 -->
       <g transform="translate(8000,8000)">
         {#each edges as e (e.id)}
           <path class="edge-line" d={e.path} />
