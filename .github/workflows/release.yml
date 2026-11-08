@@ -85,12 +85,18 @@ jobs:
         run: |
           set -e
           ls -R dist
+          # android artifact 保留 universal/release/ 目录结构，dist/* 会把目录本身喂给
+          # gh release upload，报 "read dist/universal: is a directory"。
+          # 先拍平成纯文件列表再上传。
+          FLAT="$RUNNER_TEMP/flat"
+          mkdir -p "$FLAT"
+          find dist -type f -exec cp {} "$FLAT/" \;
+          ls -l "$FLAT"
           if gh release view "v$VER" --repo "${{ github.repository }}" > /dev/null 2>&1; then
-            gh release upload "v$VER" dist/* --repo "${{ github.repository }}" --clobber
+            gh release upload "v$VER" "$FLAT"/* --repo "${{ github.repository }}" --clobber
           else
-            gh release create "v$VER" dist/* \
+            gh release create "v$VER" "$FLAT"/* \
               --repo "${{ github.repository }}" \
               --title "Astral v$VER" \
               --generate-notes
           fi
-
