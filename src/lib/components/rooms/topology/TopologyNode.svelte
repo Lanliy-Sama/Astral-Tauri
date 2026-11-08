@@ -8,9 +8,19 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import { latencyColor } from '$lib/utils/Display.svelte';
 
-  let { node, denseMode = false, onMeasure = () => {}, onDragMove = () => {}, onDragEnd = () => {} } = $props();
+  let {
+    node,
+    denseMode = false,
+    zoom = 1,
+    onMeasure = () => {},
+    onDragMove = () => {},
+    onDragEnd = () => {},
+  } = $props();
 
-  /* 节点拖动：指针拖动期间内部偏移渲染（不触发画布 pan），松手回调世界坐标增量 */
+  /* 节点拖动：指针拖动期间内部偏移渲染（不触发画布 pan），松手回调世界坐标增量。
+   * dragDx/Dy 是屏幕像素增量；节点 transform 在世界坐标内渲染 —— 必须除以 zoom，
+   * 否则与连线端点（dx/zoom）及松手落位（n.x+dx/zoom）坐标系不一致：
+   * zoom≠1 时拖动中连线逐渐错位、松手瞬间跳跃。 */
   let dragDx = $state(0);
   let dragDy = $state(0);
   let nodeDragging = $state(false);
@@ -67,7 +77,7 @@
   class="node-card"
   class:node-dragging={nodeDragging}
   bind:this={rootEl}
-  style="left:{node.x}px; top:{node.y}px; width:{nodeWidth}px; transform: translate({dragDx}px, {dragDy}px)"
+  style="left:{node.x}px; top:{node.y}px; width:{nodeWidth}px; transform: translate({dragDx / zoom}px, {dragDy / zoom}px)"
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}

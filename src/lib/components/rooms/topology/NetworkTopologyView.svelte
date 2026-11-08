@@ -515,7 +515,7 @@
 
     <!-- 节点卡：宽 dense(≥12) ? 186 : 220 -->
     {#each model.nodes as n (n.id)}
-      <TopologyNode node={n} denseMode={denseMode} onMeasure={handleMeasure} onDragMove={onNodeDragMove} onDragEnd={onNodeDragEnd} />
+      <TopologyNode node={n} denseMode={denseMode} {zoom} onMeasure={handleMeasure} onDragMove={onNodeDragMove} onDragEnd={onNodeDragEnd} />
     {/each}
   </div>
 
