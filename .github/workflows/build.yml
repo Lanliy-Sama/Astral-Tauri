@@ -132,32 +132,28 @@ jobs:
         run: |
           $dest = Join-Path $env:LOCALAPPDATA "tauri"
           $makensis = Join-Path $dest "NSIS\makensis.exe"
-          if (Test-Path $makensis) { Write-Host "NSIS 已缓存，跳过下载"; exit 0 }
-          $sources = @(
-            @{ url = "https://ghfast.top/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = $null },
-            @{ url = "https://gh-proxy.com/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = $null },
-            @{ url = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = "${{ secrets.GITHUB_TOKEN }}" }
+          if (Test-Path $makensis) { Write-Host "NSIS cached, skip"; exit 0 }
+          $urls = @(
+            "https://ghfast.top/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
+            "https://gh-proxy.com/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
+            "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"
           )
-          $done = $false
-          foreach ($src in $sources) {
-            if ($done) { break }
+          $ok = $false
+          foreach ($u in $urls) {
+            if ($ok) { break }
             for ($i = 1; $i -le 2; $i++) {
               try {
-                Write-Host "下载 NSIS: $($src.url.Substring(0, [Math]::Min(60, $src.url.Length)))... 第 $i 次"
-                $hdr = @{ "User-Agent" = "astral" }
-                if ($src.token) { $hdr["Authorization"] = "Bearer $($src.token)" }
-                Invoke-WebRequest -Uri $src.url -OutFile "$dest\nsis.zip" -Headers $hdr -ErrorAction Stop -MaximumRedirection 8
+                Write-Host "Downloading NSIS from $u (attempt $i)"
+                Invoke-WebRequest -Uri $u -OutFile "$dest\nsis.zip" -UserAgent astral -ErrorAction Stop
                 Expand-Archive "$dest\nsis.zip" -DestinationPath $dest -Force
                 Remove-Item "$dest\nsis.zip" -ErrorAction SilentlyContinue
-                if (Test-Path $makensis) { Write-Host "NSIS 预热完成"; $done = $true; break }
-                Write-Host "解压后未找到 makensis"
+                if (Test-Path $makensis) { Write-Host "NSIS preheat OK"; $ok = $true; break }
               } catch {
-                Write-Host "失败: $($_.Exception.Message)"
+                Write-Host "Failed: $($_.Exception.Message)"
                 Start-Sleep -Seconds 5
               }
             }
           }
-          if (-not (Test-Path $makensis)) { Write-Host "##[warning]NSIS 预热失败，构建可能再次遇到 504" }
 
           }
 
