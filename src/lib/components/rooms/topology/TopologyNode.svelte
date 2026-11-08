@@ -8,7 +8,33 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import { latencyColor } from '$lib/utils/Display.svelte';
 
-  let { node, denseMode = false, onMeasure = () => {} } = $props();
+  let { node, denseMode = false, onMeasure = () => {}, onDragEnd = () => {} } = $props();
+
+  /* 节点拖动：指针拖动期间内部偏移渲染（不触发画布 pan），松手回调世界坐标增量 */
+  let dragDx = $state(0);
+  let dragDy = $state(0);
+  let nodeDragging = $state(false);
+  let dragStart = null;
+
+  function onPointerDown(e) {
+    if (e.button !== 0) return;
+    e.stopPropagation(); /* 不触发画布平移 */
+    nodeDragging = true;
+    dragStart = { x: e.clientX, y: e.clientY, dx: dragDx, dy: dragDy };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (!nodeDragging || !dragStart) return;
+    dragDx = dragStart.dx + (e.clientX - dragStart.x);
+    dragDy = dragStart.dy + (e.clientY - dragStart.y);
+  }
+  function onPointerUp() {
+    if (!nodeDragging) return;
+    nodeDragging = false;
+    if (dragDx || dragDy) onDragEnd(node.id, dragDx, dragDy);
+    dragDx = 0;
+    dragDy = 0;
+  }
 
   let rootEl = $state(null);
 
@@ -38,8 +64,13 @@
 
 <div
   class="node-card"
+  class:node-dragging={nodeDragging}
   bind:this={rootEl}
-  style="left:{node.x}px; top:{node.y}px; width:{nodeWidth}px"
+  style="left:{node.x}px; top:{node.y}px; width:{nodeWidth}px; transform: translate({dragDx}px, {dragDy}px)"
+  onpointerdown={onPointerDown}
+  onpointermove={onPointerMove}
+  onpointerup={onPointerUp}
+  onpointercancel={onPointerUp}
 >
   <!-- 头部：图标 18 + 6 + 名(bold 13, ellipsis) -->
   <div class="node-head" style="background:{theme.bg}; color:{theme.fg}">
@@ -90,6 +121,12 @@
     position: absolute;
     display: flex;
     flex-direction: column;
+    cursor: grab;
+    touch-action: none;
+  }
+  .node-card.node-dragging {
+    cursor: grabbing;
+    z-index: 5;
   }
   .node-head {
     display: flex;
