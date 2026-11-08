@@ -281,9 +281,15 @@
     return buildGraphModel(syncedNodes, sm.networkConfigState.ipv4, existingPositions, shouldAnimate);
   });
 
+  let dragOffsets = $state({}); /* nodeId -> {dx, dy} screen px，拖动期间实时驱动连线 */
+  function onNodeDragMove(id, dx, dy) {
+    dragOffsets = { ...dragOffsets, [id]: { dx, dy } };
+  }
   function onNodeDragEnd(id, dx, dy) {
     const n = model.nodes.find((x) => x.id === id);
-    if (!n) return;
+    dragOffsets = { ...dragOffsets, [id]: undefined };
+    delete dragOffsets[id];
+    if (!n) { layoutVersion += 1; return; }
     existingPositions.set(id, { x: n.x + dx / zoom, y: n.y + dy / zoom });
     layoutVersion += 1;
   }
@@ -343,10 +349,13 @@
       if (!src || !tgt) continue;
       const srcH = nodeHeights[c.sourceId] ?? 84;
       const tgtH = nodeHeights[c.targetId] ?? 84;
-      const x1 = src.x + nodeWidth + 2;
-      const y1 = src.y + srcH / 2;
-      const x2 = tgt.x - 2;
-      const y2 = tgt.y + tgtH / 2;
+      const _sd = dragOffsets[c.sourceId]; const _td = dragOffsets[c.targetId];
+      const _sx = _sd ? _sd.dx / zoom : 0; const _sy = _sd ? _sd.dy / zoom : 0;
+      const _tx = _td ? _td.dx / zoom : 0; const _ty = _td ? _td.dy / zoom : 0;
+      const x1 = src.x + _sx + nodeWidth + 2;
+      const y1 = src.y + _sy + srcH / 2;
+      const x2 = tgt.x + _tx - 2;
+      const y2 = tgt.y + _ty + tgtH / 2;
       const dx = Math.max(40, (x2 - x1) / 2);
       const c1x = x1 + dx;
       const c2x = x2 - dx;
@@ -498,7 +507,7 @@
 
     <!-- 节点卡：宽 dense(≥12) ? 186 : 220 -->
     {#each model.nodes as n (n.id)}
-      <TopologyNode node={n} denseMode={denseMode} onMeasure={handleMeasure} onDragEnd={onNodeDragEnd} />
+      <TopologyNode node={n} denseMode={denseMode} onMeasure={handleMeasure} onDragMove={onNodeDragMove} onDragEnd={onNodeDragEnd} />
     {/each}
   </div>
 
