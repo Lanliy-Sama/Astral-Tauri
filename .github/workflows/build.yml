@@ -131,32 +131,34 @@ jobs:
         shell: pwsh
         run: |
           $dest = Join-Path $env:LOCALAPPDATA "tauri"
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
           $makensis = Join-Path $dest "NSIS\makensis.exe"
           if (Test-Path $makensis) { Write-Host "NSIS 已缓存，跳过下载"; exit 0 }
-          # 走 API 通道（token 认证）解析资产下载 URL——release 直连被限流 504
-          $apiUrl = "https://api.github.com/repos/tauri-apps/binary-releases/releases/tags/nsis-3.13"
-          $rel = Invoke-RestMethod -Uri $apiUrl -Headers @{
-            Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"
-            Accept = "application/vnd.github+json"
-            "User-Agent" = "astral"
-          }
-          $assetUrl = ($rel.assets | Where-Object { $_.name -eq "nsis-3.13.zip" }).url
-          for ($i = 1; $i -le 5; $i++) {
-            try {
-              Write-Host "下载 NSIS 第 $i 次尝试（API 通道）..."
-              Invoke-WebRequest -Uri $assetUrl -OutFile "$dest\nsis.zip" -Headers @{
-                Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"
-                Accept = "application/octet-stream"
-                "User-Agent" = "astral"
-              } -ErrorAction Stop -MaximumRedirection 8
-              Expand-Archive "$dest\nsis.zip" -DestinationPath $dest -Force
-              Remove-Item "$dest\nsis.zip" -ErrorAction SilentlyContinue
-              if (Test-Path $makensis) { Write-Host "NSIS 预热完成"; break }
-            } catch {
-              Write-Host "第 $i 次失败: $($_.Exception.Message)"
-              Start-Sleep -Seconds 8
+          $sources = @(
+            @{ url = "https://ghfast.top/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = $null },
+            @{ url = "https://gh-proxy.com/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = $null },
+            @{ url = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"; token = "${{ secrets.GITHUB_TOKEN }}" }
+          )
+          $done = $false
+          foreach ($src in $sources) {
+            if ($done) { break }
+            for ($i = 1; $i -le 2; $i++) {
+              try {
+                Write-Host "下载 NSIS: $($src.url.Substring(0, [Math]::Min(60, $src.url.Length)))... 第 $i 次"
+                $hdr = @{ "User-Agent" = "astral" }
+                if ($src.token) { $hdr["Authorization"] = "Bearer $($src.token)" }
+                Invoke-WebRequest -Uri $src.url -OutFile "$dest\nsis.zip" -Headers $hdr -ErrorAction Stop -MaximumRedirection 8
+                Expand-Archive "$dest\nsis.zip" -DestinationPath $dest -Force
+                Remove-Item "$dest\nsis.zip" -ErrorAction SilentlyContinue
+                if (Test-Path $makensis) { Write-Host "NSIS 预热完成"; $done = $true; break }
+                Write-Host "解压后未找到 makensis"
+              } catch {
+                Write-Host "失败: $($_.Exception.Message)"
+                Start-Sleep -Seconds 5
+              }
             }
+          }
+          if (-not (Test-Path $makensis)) { Write-Host "##[warning]NSIS 预热失败，构建可能再次遇到 504" }
+
           }
 
       - name: 🔨 构建 Tauri 应用
