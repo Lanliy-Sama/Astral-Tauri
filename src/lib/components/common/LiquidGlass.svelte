@@ -921,5 +921,26 @@ html.liquid-glass .mini-card {
     linear-gradient(to left, rgb(72 138 255 / 0.14), transparent 36%);
 }
 
+/* ---- 字体衬底 chip 玻璃化 ----
+ * 浮动标签/下拉标签骑在输入框 1px 边框线上，chip 的存在意义是遮住那段
+ * 边框 —— 不能全透（边框会从文字中间穿过），降为半透明衬底：
+ * 自定义背景图透过来不再是一块实色补丁。 ---- */
+html.liquid-glass .md-text-field.float-label .tf-label.floated {
+  background: color-mix(in srgb, var(--md-surface) 60%, transparent);
+}
+html.liquid-glass .md-dropdown .dd-label.dd-label {
+  background: color-mix(in srgb, var(--md-surface) 60%, transparent);
+}
+html.liquid-glass .rf-label {
+  background: color-mix(in srgb, var(--md-surface-container-low) 60%, transparent);
+}
+/* 快捷网络配置行背景（30% surface 补丁）→ 全透，仅留 1px 分组线 */
+html.liquid-glass .switch-row {
+  background: transparent;
+}
+/* 拓扑连线延迟标签（88% surface 补丁）→ 45% 透 */
+html.liquid-glass .edge-label {
+  background: color-mix(in srgb, var(--md-surface) 45%, transparent);
+}
 </style>
 
