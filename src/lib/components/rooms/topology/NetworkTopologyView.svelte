@@ -359,11 +359,19 @@
       const dx = Math.max(40, (x2 - x1) / 2);
       const c1x = x1 + dx;
       const c2x = x2 - dx;
+      /* 近水平边（同高/近平，|dy|<24）加固定下垂弓：y1==y2 时控制点与端点
+       * 共线，曲线必然退化为水平直线（中继链同行 hop→target 段最明显）。
+       * 中点下垂 24px → 控制点偏移 32（三次贝塞尔中点 = 0.75×控制偏移）；
+       * 高度差大的边曲线自然明显，不加弓。 */
+      const dy = y2 - y1;
+      const nearLevel = Math.abs(dy) < 24;
+      const c1y = nearLevel ? y1 + 32 : y1;
+      const c2y = nearLevel ? y2 + 32 : y2;
       list.push({
         ...c,
-        path: `M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`,
+        path: `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`,
         midX: (x1 + 3 * c1x + 3 * c2x + x2) / 8,
-        midY: (y1 + y2) / 2,
+        midY: (y1 + 3 * c1y + 3 * c2y + y2) / 8,
       });
     }
     return list;
