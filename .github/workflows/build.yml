@@ -134,11 +134,22 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           $makensis = Join-Path $dest "NSIS\makensis.exe"
           if (Test-Path $makensis) { Write-Host "NSIS 已缓存，跳过下载"; exit 0 }
-          $url = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip"
-          for ($i = 1; $i -le 6; $i++) {
+          # 走 API 通道（token 认证）解析资产下载 URL——release 直连被限流 504
+          $apiUrl = "https://api.github.com/repos/tauri-apps/binary-releases/releases/tags/nsis-3.13"
+          $rel = Invoke-RestMethod -Uri $apiUrl -Headers @{
+            Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "astral"
+          }
+          $assetUrl = ($rel.assets | Where-Object { $_.name -eq "nsis-3.13.zip" }).url
+          for ($i = 1; $i -le 5; $i++) {
             try {
-              Write-Host "下载 NSIS 第 $i 次尝试..."
-              Invoke-WebRequest -Uri $url -OutFile "$dest\nsis.zip" -UserAgent astral -ErrorAction Stop
+              Write-Host "下载 NSIS 第 $i 次尝试（API 通道）..."
+              Invoke-WebRequest -Uri $assetUrl -OutFile "$dest\nsis.zip" -Headers @{
+                Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+                Accept = "application/octet-stream"
+                "User-Agent" = "astral"
+              } -ErrorAction Stop -MaximumRedirection 8
               Expand-Archive "$dest\nsis.zip" -DestinationPath $dest -Force
               Remove-Item "$dest\nsis.zip" -ErrorAction SilentlyContinue
               if (Test-Path $makensis) { Write-Host "NSIS 预热完成"; break }
