@@ -539,6 +539,7 @@ pub fn create_server(
         flags.disable_quic_input = flag.disable_quic_input;
         flags.disable_sym_hole_punching = flag.disable_sym_hole_punching;
         cfg.set_flags(flags);
+        cfg.set_mtu(flag.mtu);
 
         if flag.socks5_port > 0 {
             let portal = format!("socks5://127.0.0.1:{}", flag.socks5_port);
