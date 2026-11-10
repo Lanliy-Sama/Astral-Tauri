@@ -371,6 +371,9 @@ fn bgm_response(dir: Option<&std::path::Path>, id: &str, range: Option<&str>) ->
         .header("Accept-Ranges", "bytes")
         .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     let Some((path, ext)) = dir.and_then(|d| bgm_find(d, id)) else {
+        astral_core::api::simple::cmd_log(&format!(
+            "bgm: 404 id={id} range={range:?} dir={dir:?}"
+        ));
         return builder
             .status(http::StatusCode::NOT_FOUND)
             .header("Content-Type", "text/plain")
@@ -378,9 +381,15 @@ fn bgm_response(dir: Option<&std::path::Path>, id: &str, range: Option<&str>) ->
             .unwrap();
     };
     let Ok(bytes) = std::fs::read(&path) else {
+        astral_core::api::simple::cmd_log(&format!("bgm: read failed path={path:?}"));
         return builder.status(500).body(Vec::new()).unwrap();
     };
     builder = builder.header("Content-Type", bgm_mime(&ext));
+    astral_core::api::simple::cmd_log(&format!(
+        "bgm: 200 id={id} ext={ext} range={range:?} len={} ct={}",
+        bytes.len(),
+        bgm_mime(&ext)
+    ));
 
     // Range: bytes=a-b（Chromium media 管线标准行为；b 可缺省 = 到末尾）
     if let Some(range) = range {
