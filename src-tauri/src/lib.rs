@@ -386,10 +386,13 @@ fn bgm_response(dir: Option<&std::path::Path>, id: &str, range: Option<&str>) ->
     if let Some(range) = range {
         if let Some(spec) = range.strip_prefix("bytes=") {
             let mut parts = spec.splitn(2, '-');
-            let start: u64 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let start: u64 = parts
+                .next()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
             let end: u64 = parts
                 .next()
-                .and_then(|s| s.parse().ok())
+                .and_then(|s| s.parse::<u64>().ok())
                 .map(|e| e.min(bytes.len() as u64 - 1))
                 .unwrap_or(bytes.len() as u64 - 1);
             if start <= end && (start as usize) < bytes.len() {
