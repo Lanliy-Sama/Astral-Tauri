@@ -263,7 +263,8 @@ pub fn handle_event(mut events: EventBusSubscriber) -> tokio::task::JoinHandle<(
 
 /// 当前实例（存在且未停止）。
 async fn current_instance() -> Option<Arc<NativeCoreInstance>> {
-    let id = *INSTANCE_ID.read().await?;
+    let id = *INSTANCE_ID.read().await;
+    let id = id?;
     let instance = MANAGER.instance(id)?;
     if instance.state() == CoreInstanceState::Stopped {
         return None;
