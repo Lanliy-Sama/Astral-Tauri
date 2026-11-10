@@ -13,8 +13,10 @@
   import SnackbarHost from './common/SnackbarHost.svelte';
   import UpdateDialogs from './common/update/UpdateDialogs.svelte';
   import Dialog from './common/Dialog.svelte';
+  import BgmVolumeCapsule from './common/BgmVolumeCapsule.svelte';
   import { getStack, popPage } from '../router/PageRouter.svelte';
   import { sm } from '../services/ServiceManager.svelte';
+  import { bgmAdjustVolume } from '../services/BgmPlayer.svelte';
   import { t } from '../i18n/I18n.svelte';
   import { isTauri, isAndroid } from '../utils/Platform.svelte';
 
@@ -108,10 +110,25 @@
     };
   });
 
-  /* Escape 键返回（对应 Android 返回键） */
+  /* Escape 键返回（对应 Android 返回键）；
+   * Ctrl+↑/↓ 背景音乐音量（灵动岛胶囊反馈，文本输入时不劫持） */
   function onKeydown(e) {
     if (e.key === 'Escape' && routeStack.length > 0) {
       popPage();
+      return;
+    }
+    if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      if (!sm.bgmState.enabled) return;
+      const t = e.target;
+      if (
+        t &&
+        typeof t.closest === 'function' &&
+        t.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
+      }
+      bgmAdjustVolume(e.key === 'ArrowUp' ? 5 : -5);
+      e.preventDefault();
     }
   }
 
@@ -202,6 +219,8 @@
   {/if}
   <SnackbarHost />
   <UpdateDialogs />
+  <!-- 灵动岛音量胶囊：Ctrl+↑/↓ 调背景音乐音量时弹出 -->
+  <BgmVolumeCapsule />
 
   <!-- 托盘隐藏确认（Tauri 模式） -->
   <Dialog bind:open={trayHideOpen} title={t('tray_hide_title')} dismissible={false}>

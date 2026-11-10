@@ -22,6 +22,8 @@ const TABLES = [
   /* 大体积应用资产（自定义背景等）独立成表：
    * 避免塞进 all_settings 单行 JSON —— 那样每次设置写入都要整体重写数 MB 文本 */
   'app_assets',
+  /* 背景音乐歌单（trackId/名称/扩展名/顺序；文件本体在 bgm/ 目录） */
+  'bgm_playlist',
 ];
 
 let sqlDb = null;

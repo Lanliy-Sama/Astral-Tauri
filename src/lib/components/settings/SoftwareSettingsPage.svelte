@@ -13,6 +13,9 @@
   import { t } from '$lib/i18n/I18n.svelte';
   import { isAndroid, isTauri } from '$lib/utils/Platform.svelte';
   import { snackError, snackSuccess, snackInfo } from '$lib/components/common/SnackbarStore.svelte';
+  import { pushPage } from '$lib/router/PageRouter.svelte';
+  import BgmPlaylistPage from './BgmPlaylistPage.svelte';
+  import { bgApplyVolume, bgmPause } from '$lib/services/BgmPlayer.svelte';
 
   const retryOptions = [1, 2, 3, 5, 10].map((n) => ({ value: n, label: `${n} 次` }));
 
@@ -390,6 +393,16 @@
     await sm.updateCustomBackground(null);
     snackInfo(t('bg_cleared'), t('bg_cleared_msg'));
   }
+
+  /* ---------- 背景音乐 ---------- */
+  function onBgmEnabled(v) {
+    sm.updateBgmEnabled(v);
+    if (!v) bgmPause();
+  }
+  function onBgmVolume(v) {
+    sm.updateBgmVolume(v);
+    bgApplyVolume(v);
+  }
 </script>
 
 <SubPage title={t('software_settings')}>
@@ -519,6 +532,63 @@
 
     <div class="gap-16"></div>
 
+    <!-- 背景音乐：本地音频循环播放（歌单/拖拽排序/Ctrl+↑↓ 音量/灵动岛胶囊） -->
+    <SettingsCard>
+      <div class="md-list-tile two-line no-cursor">
+        <span class="tile-leading"><Icon name="music_note" size={24} color="var(--md-on-surface-variant)" /></span>
+        <div class="tile-content">
+          <div class="tile-title">背景音乐</div>
+          <div class="tile-subtitle">播放本地音频作为软件背景音乐（歌单内点当前曲目播放/暂停）</div>
+        </div>
+      </div>
+      <div class="md-divider"></div>
+
+      <div
+        class="md-switch-list-tile"
+        onclick={(e) => switchTileClick(e, sm.bgmState.enabled, onBgmEnabled)}
+      >
+        <div class="tile-content">
+          <div class="tile-title">启用背景音乐</div>
+          <div class="tile-subtitle">按歌单顺序循环播放</div>
+        </div>
+        <Switch value={sm.bgmState.enabled} onChange={onBgmEnabled} />
+      </div>
+
+      <div class="md-list-tile two-line no-cursor">
+        <div class="tile-content">
+          <div class="tile-title">音量</div>
+          <div class="tile-subtitle">主界面按 Ctrl+↑ / Ctrl+↓ 调节（顶部胶囊显示）</div>
+        </div>
+        <span class="tile-trailing bgm-vol-wrap">
+          <input
+            class="bgm-vol"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={sm.bgmState.volume}
+            oninput={(e) => onBgmVolume(Number(e.target.value))}
+          />
+          <span class="bgm-vol-num">{sm.bgmState.volume}</span>
+        </span>
+      </div>
+
+      <div class="md-list-tile two-line" onclick={() => pushPage(BgmPlaylistPage)}>
+        <span class="tile-leading"><Icon name="queue_music" size={24} color="var(--md-primary)" /></span>
+        <div class="tile-content">
+          <div class="tile-title">打开歌单</div>
+          <div class="tile-subtitle">
+            {sm.bgmState.tracks.length
+              ? `已导入 ${sm.bgmState.tracks.length} 首，拖拽可调整顺序`
+              : '导入本地音乐并管理播放顺序'}
+          </div>
+        </div>
+        <span class="tile-trailing"><Icon name="chevron_right" size={24} /></span>
+      </div>
+    </SettingsCard>
+
+    <div class="gap-16"></div>
+
     <SettingsCard>
       <div class="md-list-tile two-line no-cursor">
         <span class="tile-leading"><Icon name="sync" size={24} color="var(--md-on-surface-variant)" /></span>
@@ -635,5 +705,39 @@
     border-radius: 8px;
     border: 1px solid var(--md-outline-variant);
     background: var(--md-surface-container-low);
+  }
+
+  /* ---- 背景音乐音量滑条 ---- */
+  .bgm-vol-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 190px;
+  }
+  .bgm-vol {
+    flex: 1 1 0;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--md-surface-container-highest);
+    outline: none;
+    cursor: pointer;
+  }
+  .bgm-vol::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--md-primary);
+    border: none;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  }
+  .bgm-vol-num {
+    min-width: 30px;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--md-on-surface);
+    font-variant-numeric: tabular-nums;
   }
 </style>

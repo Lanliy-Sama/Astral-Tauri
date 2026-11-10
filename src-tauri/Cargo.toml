@@ -23,6 +23,8 @@ serde_json = "1.0"
 # 自定义背景：分块 base64 解码（流式写盘）+ astralbg:// 协议响应类型
 base64 = "0.22"
 http = "1"
+# 背景音乐文件 uuid 命名（bgm_write_begin 生成）
+uuid = { version = "1.0", features = ["v4"] }
 
 # 网络核心：直接复用原 Flutter 版的 rust/ crate（已移除 flutter_rust_bridge 绑定）
 astral-core = { path = "crates/astral-core" }

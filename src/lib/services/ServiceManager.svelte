@@ -194,6 +194,17 @@ export class AppSettingsState {
   logs = $state([]);
 }
 
+/* ============ BgmState（背景音乐） ============ */
+export class BgmState {
+  enabled = $state(false);
+  volume = $state(60);       // 0-100，持久化
+  tracks = $state([]);       // [{ id, trackId, name, ext, sortOrder }]（bgm_playlist 表）
+  trackId = $state(null);    // 当前选中/播放的曲目 uuid（文件 bgm/<uuid>.<ext>）
+  playing = $state(false);
+  volumePulse = $state(0);   // 快捷键调整音量时自增（主屏灵动岛胶囊的显示触发器）
+  volumeDelta = $state(1);   // 最近一次音量调整方向（1 上升 / -1 下降）
+}
+
 /* ============ ServerStatusState ============ */
 export class ServerStatusState {
   serverStatuses = $state({});
@@ -266,6 +277,7 @@ class ServiceManager {
     this.appSettingsState = new AppSettingsState();
     this.latencyHistory = $state({}); /* 曲线图数据源：peerKey -> [ms...] */
     this.serverStatusState = new ServerStatusState();
+    this.bgmState = new BgmState();
 
     /* 连接管理 */
     this._retryCount = 0;
@@ -298,6 +310,7 @@ class ServiceManager {
       this._initNetworkConfig(),
       this._initAppSettings(),
       this._initFirewall(),
+      this._initBgm(),
     ];
     await Promise.allSettled(tasks);
 
@@ -903,6 +916,72 @@ class ServiceManager {
   async updateLiquidGlass(v) {
     this.appSettingsState.liquidGlass = v;
     await this._persistSettings({ liquidGlass: v });
+  }
+
+  /* ---------- 背景音乐（BGM） ----------
+   * 音频文件本体经 bgm_write_* 命令落在 app_data_dir/bgm/<uuid>.<ext>，
+   * 由 astralbgm:// 协议回放；歌单元数据（名称/顺序）在 bgm_playlist 表，
+   * 开关/音量/当前曲目在 all_settings。播放逻辑见 BgmPlayer.svelte。 */
+  async _initBgm() {
+    const s = await this._getSettings();
+    this.bgmState.enabled = s.bgmEnabled === true;
+    this.bgmState.volume = Math.min(100, Math.max(0, Math.round(Number(s.bgmVolume ?? 60))));
+    await this.refreshBgmTracks();
+    const trackId = s.bgmTrackId ?? null;
+    if (trackId && this.bgmState.tracks.some((t) => t.trackId === trackId)) {
+      this.bgmState.trackId = trackId;
+    }
+  }
+
+  async refreshBgmTracks() {
+    const rows = await db.listAll('bgm_playlist');
+    rows.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    this.bgmState.tracks = rows;
+    // 当前曲目被删除时清空选中
+    if (this.bgmState.trackId != null && !rows.some((t) => t.trackId === this.bgmState.trackId)) {
+      this.bgmState.trackId = null;
+      this.bgmState.playing = false;
+    }
+  }
+
+  async addBgmTrack(meta) {
+    await db.putRow('bgm_playlist', { ...meta, id: null, sortOrder: this.bgmState.tracks.length });
+    await this.refreshBgmTracks();
+  }
+
+  async removeBgmTrack(row) {
+    await db.deleteRow('bgm_playlist', row.id);
+    if (isTauri()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('bgm_delete', { id: row.trackId });
+      } catch (e) {
+        console.warn('删除音乐文件失败:', e);
+      }
+    }
+    await this.refreshBgmTracks();
+  }
+
+  async reorderBgmTracks(ordered) {
+    for (let i = 0; i < ordered.length; i++) {
+      await db.putRow('bgm_playlist', { ...ordered[i], sortOrder: i });
+    }
+    await this.refreshBgmTracks();
+  }
+
+  async updateBgmEnabled(v) {
+    this.bgmState.enabled = v;
+    await this._persistSettings({ bgmEnabled: v });
+  }
+
+  async updateBgmVolume(v) {
+    const n = Math.min(100, Math.max(0, Math.round(Number(v) || 0)));
+    this.bgmState.volume = n;
+    await this._persistSettings({ bgmVolume: n });
+  }
+
+  async persistBgmTrackId(trackId) {
+    await this._persistSettings({ bgmTrackId: trackId });
   }
 
   /* ---------- 自定义背景（v2.6） ----------

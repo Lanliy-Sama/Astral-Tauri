@@ -300,6 +300,163 @@ fn clear_custom_background(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/* ============================================================
+ * 背景音乐（BGM）：歌单音频文件 + astralbgm:// 自定义协议
+ * ------------------------------------------------------------
+ * 与自定义背景同一套分块写入模式：前端按 1MB 分块 base64 经 IPC
+ * 流式写入 app_data_dir/bgm/<uuid>.<ext>；播放由前端 <audio> 直接
+ * 引用 astralbgm:// 协议 URL（磁盘直读，重启即恢复）。
+ * 歌单元数据（名称/顺序）存 SQLite bgm_playlist 表，文件本体只认 uuid。
+ * ============================================================ */
+
+/// 背景音乐支持的扩展名（WebView 可解码的音频容器）
+const BGM_EXTS: &[&str] = &[
+    "mp3", "mp4", "m4a", "aac", "flac", "wav", "ogg", "oga", "opus", "weba", "webm",
+];
+
+/// 背景音乐写入会话（分块追加中）
+pub struct BgmWriteState(pub std::sync::Mutex<Option<BgmWriteSession>>);
+
+struct BgmWriteSession {
+    id: String,
+    ext: String,
+    file: std::fs::File,
+    tmp: std::path::PathBuf,
+}
+
+/// 背景音乐目录（app_data_dir/bgm，确保存在）
+fn bgm_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位应用数据目录: {e}"))?
+        .join("bgm");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建背景音乐目录失败: {e}"))?;
+    Ok(dir)
+}
+
+/// 扩展名 → Content-Type（astralbgm 协议响应头）
+fn bgm_mime(ext: &str) -> &'static str {
+    match ext {
+        "mp3" => "audio/mpeg",
+        "mp4" | "m4a" | "aac" => "audio/mp4",
+        "flac" => "audio/flac",
+        "wav" => "audio/wav",
+        "ogg" | "oga" => "audio/ogg",
+        "opus" => "audio/ogg",
+        "weba" | "webm" => "audio/webm",
+        _ => "application/octet-stream",
+    }
+}
+
+/// 按 uuid 前缀定位音乐文件（忽略扩展名）
+fn bgm_find(dir: &std::path::Path, id: &str) -> Option<(std::path::PathBuf, String)> {
+    if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
+        return None;
+    }
+    let entries = std::fs::read_dir(dir).ok()?;
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if let Some(ext) = name.strip_prefix(&format!("{id}.")) {
+            return Some((e.path(), ext.to_ascii_lowercase()));
+        }
+    }
+    None
+}
+
+/// astralbgm:// 协议响应（磁盘直读；缺失 → 404）
+fn bgm_response(dir: Option<&std::path::Path>, id: &str) -> http::Response<Vec<u8>> {
+    let mut builder = http::Response::builder()
+        .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    match dir.and_then(|d| bgm_find(d, id)) {
+        Some((path, ext)) => match std::fs::read(&path) {
+            Ok(bytes) => builder
+                .header("Content-Type", bgm_mime(&ext))
+                .body(bytes)
+                .unwrap(),
+            Err(_) => builder.status(500).body(Vec::new()).unwrap(),
+        },
+        None => builder
+            .status(http::StatusCode::NOT_FOUND)
+            .header("Content-Type", "text/plain")
+            .body(Vec::new())
+            .unwrap(),
+    }
+}
+
+/// 开始一次音乐文件写入（ext 为小写扩展名；打断未完成的旧会话），返回生成的 uuid
+#[tauri::command]
+fn bgm_write_begin(app: tauri::AppHandle, ext: String) -> Result<String, String> {
+    let ext = ext.to_ascii_lowercase();
+    if !BGM_EXTS.contains(&ext.as_str()) {
+        return Err(format!("不支持的音频格式: .{ext}"));
+    }
+    let dir = bgm_dir(&app)?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let tmp = dir.join(format!("{id}.tmp"));
+    let bgm_state = app.state::<BgmWriteState>();
+    let mut guard = bgm_state.0.lock().map_err(|e| e.to_string())?;
+    *guard = None; // 丢弃未完成的旧会话（句柄关闭）
+    let file = std::fs::File::create(&tmp).map_err(|e| format!("创建临时文件失败: {e}"))?;
+    *guard = Some(BgmWriteSession { id: id.clone(), ext, file, tmp });
+    Ok(id)
+}
+
+/// 追加一块 base64 数据（前端按 1MB 分块）
+#[tauri::command]
+fn bgm_write_append(app: tauri::AppHandle, id: String, b64: String) -> Result<(), String> {
+    use std::io::Write;
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64.as_bytes())
+        .map_err(|e| format!("base64 解码失败: {e}"))?;
+    let bgm_state = app.state::<BgmWriteState>();
+    let mut guard = bgm_state.0.lock().map_err(|e| e.to_string())?;
+    let session = guard.as_mut().ok_or("音乐写入会话未开始")?;
+    if session.id != id {
+        return Err("音乐写入会话不匹配".to_string());
+    }
+    session
+        .file
+        .write_all(&bytes)
+        .map_err(|e| format!("写入音乐数据失败: {e}"))?;
+    Ok(())
+}
+
+/// 结束写入：落盘为 bgm/<id>.<ext>，返回 { id, ext, version }
+#[tauri::command]
+fn bgm_write_end(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
+    let bgm_state = app.state::<BgmWriteState>();
+    let mut guard = bgm_state.0.lock().map_err(|e| e.to_string())?;
+    let session = guard.take().ok_or("音乐写入会话未开始")?;
+    if session.id != id {
+        return Err("音乐写入会话不匹配".to_string());
+    }
+    let BgmWriteSession { id, ext, file, tmp } = session;
+    drop(file); // 关闭句柄后再改名
+    let final_path = bgm_dir(&app)?.join(format!("{id}.{ext}"));
+    std::fs::rename(&tmp, &final_path).map_err(|e| format!("音乐文件落盘失败: {e}"))?;
+    let version = std::fs::metadata(&final_path)
+        .and_then(|m| m.modified())
+        .map(|t| {
+            t.duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        })
+        .unwrap_or(0);
+    Ok(serde_json::json!({ "id": id, "ext": ext, "version": version.to_string() }))
+}
+
+/// 删除音乐文件（按 uuid 前缀匹配任意扩展名）
+#[tauri::command]
+fn bgm_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let dir = bgm_dir(&app)?;
+    if let Some((path, _)) = bgm_find(&dir, &id) {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -316,12 +473,26 @@ pub fn run() {
         .plugin(tauri_plugin_vpn_service::init())
         .manage(CloseMinimizeState(std::sync::Mutex::new(true)))
         .manage(BgWriteState(std::sync::Mutex::new(None)))
+        .manage(BgmWriteState(std::sync::Mutex::new(None)))
         /* 自定义背景协议：astralbg://localhost/bg → 磁盘上的当前背景文件。
          * 异步 + 独立线程读盘：百 MB 级 GIF 也不阻塞主线程/渲染。 */
         .register_asynchronous_uri_scheme_protocol("astralbg", |ctx, _request, responder| {
             let dir = ctx.app_handle().path().app_data_dir().ok();
             std::thread::spawn(move || {
                 responder.respond(bg_response(dir.as_deref()));
+            });
+        })
+        /* 背景音乐协议：astralbgm://localhost/<uuid> → 磁盘 bgm/<uuid>.<ext>。
+         * 异步 + 独立线程读盘，不阻塞主线程/渲染。 */
+        .register_asynchronous_uri_scheme_protocol("astralbgm", |ctx, request, responder| {
+            let dir = ctx.app_handle().path().app_data_dir().ok();
+            let id = request
+                .uri()
+                .path()
+                .trim_start_matches('/')
+                .to_string();
+            std::thread::spawn(move || {
+                responder.respond(bgm_response(dir.as_deref(), &id));
             });
         })
         .invoke_handler(tauri::generate_handler![
@@ -357,6 +528,10 @@ pub fn run() {
             bg_write_end,
             custom_background_info,
             clear_custom_background,
+            bgm_write_begin,
+            bgm_write_append,
+            bgm_write_end,
+            bgm_delete,
         ])
         .setup(|app| {
             // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
