@@ -1,0 +1,15 @@
+# Android 16KB 内存页对齐：2024+ 部分新机型（Android 15+/16 时代）
+# 内核为 16KB-only 页，4KB 对齐的动态库在这些设备上 dlopen 直接失败
+# —— 表现为应用启动即闪退。16KB 对齐对 4KB 页设备完全向后兼容。
+# 仅作用于 Android 目标（MSVC/GNU 桌面链接器不受影响）。
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.i686-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
