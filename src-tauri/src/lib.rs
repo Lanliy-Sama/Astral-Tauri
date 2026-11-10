@@ -528,9 +528,15 @@ pub fn run() {
             });
         })
         /* 背景音乐协议：astralbgm://localhost/<uuid> → 磁盘 bgm/<uuid>.<ext>。
-         * 异步 + 独立线程读盘，不阻塞主线程/渲染；支持 Range（媒体管线必需）。 */
+         * 异步 + 独立线程读盘，不阻塞主线程/渲染；支持 Range（媒体管线必需）。
+         * 注意：文件在 app_data_dir/bgm/ 子目录（与 astralbg 根目录不同）。 */
         .register_asynchronous_uri_scheme_protocol("astralbgm", |ctx, request, responder| {
-            let dir = ctx.app_handle().path().app_data_dir().ok();
+            let dir = ctx
+                .app_handle()
+                .path()
+                .app_data_dir()
+                .ok()
+                .map(|p| p.join("bgm"));
             let id = request
                 .uri()
                 .path()
