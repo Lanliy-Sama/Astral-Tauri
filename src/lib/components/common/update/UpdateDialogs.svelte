@@ -11,7 +11,7 @@
   import Progress from '../Progress.svelte';
   import { sm } from '../../../services/ServiceManager.svelte';
   import { openExternal } from '../../../rust/Api.svelte';
-  import { isAndroid, isWindows, isTauri } from '../../../utils/Platform.svelte';
+  import { isAndroid, isWindows, isLinux, isTauri } from '../../../utils/Platform.svelte';
   import { snackError } from '../SnackbarStore.svelte';
 
   /* ---------- 自动检查结果对话框 ---------- */
@@ -42,14 +42,17 @@
   let dlError = $state(null);
   let dlFileName = $state('');
 
-  function platformFileName() {
-    if (isAndroid()) return 'astral-arm64-v8a.apk';
-    if (isWindows()) return 'astral-windows-x64-setup.exe';
+  /* 本仓库产物为版本化命名：Astral_{版本}_{平台} */
+  function platformFileName(version) {
+    const v = String(version || '').replace(/^v/, '');
+    if (isAndroid()) return `Astral_${v}_arm64.apk`;
+    if (isWindows()) return `Astral_${v}_x64-setup.exe`;
+    if (isLinux()) return `Astral_${v}_amd64.AppImage`;
     return '';
   }
 
   async function handleDownload(releaseInfo) {
-    const fileName = platformFileName();
+    const fileName = platformFileName(releaseInfo?.tag_name);
     if (!fileName) {
       snackError('下载失败', '未找到当前平台的安装包');
       return;

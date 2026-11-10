@@ -234,14 +234,15 @@ export class ServerStatusState {
 }
 
 /* ============ 常量 ============ */
+/* 更新源：本仓库（Astral-Tauri fork 自行发布 Release） */
 const ANDROID_PACKAGE = 'com.kevin.astral';
-const GITHUB_OWNER = 'ldoubil';
-const GITHUB_REPO = 'astral';
+const GITHUB_OWNER = 'Lanliy-Sama';
+const GITHUB_REPO = 'Astral-Tauri';
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
 const RELEASE_PAGE = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 const NET_DISK_URL = 'https://astral.fan/quick-start/download-install/';
 const MIRRORS = ['https://gh.xmly.dev/', 'https://gh-proxy.org/', 'https://ghfast.top/'];
-const SPEED_TEST_URL = 'https://github.com/ldoubil/astral';
+const SPEED_TEST_URL = 'https://github.com/Lanliy-Sama/Astral-Tauri';
 
 /* ============ 应用版本 ============ */
 const APP_VERSION = '2.9.60';

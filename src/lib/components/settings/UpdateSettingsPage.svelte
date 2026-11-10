@@ -16,13 +16,13 @@
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import { openExternal } from '$lib/rust/Api.svelte';
   import { snackError } from '$lib/components/common/SnackbarStore.svelte';
-  import { isAndroid, isWindows, isTauri } from '$lib/utils/Platform.svelte';
+  import { isAndroid, isWindows, isLinux, isTauri } from '$lib/utils/Platform.svelte';
   import HistoryVersionsPage from './HistoryVersionsPage.svelte';
 
   /* GitHubProxySelector 常量 */
   const MIRRORS = ['https://gh.xmly.dev/', 'https://gh-proxy.org/', 'https://ghfast.top/'];
   const NET_DISK_URL = 'https://astral.fan/quick-start/download-install/';
-  const RELEASES_PAGE = 'https://github.com/ldoubil/astral/releases';
+  const RELEASES_PAGE = 'https://github.com/Lanliy-Sama/Astral-Tauri/releases';
 
   /* SwitchListTile 整行可点；点 Switch 本体时避免与 tile 冒泡双触发 */
   function switchTileClick(e, current, update) {
@@ -73,9 +73,12 @@
   }
 
   /* ============ 下载（<a> 触发，UpdateDownloader 等价） ============ */
-  function platformFileName() {
-    if (isAndroid()) return 'astral-arm64-v8a.apk';
-    if (isWindows()) return 'astral-windows-x64-setup.exe';
+  /* 本仓库产物为版本化命名：Astral_{版本}_{平台} */
+  function platformFileName(version) {
+    const v = String(version || '').replace(/^v/, '');
+    if (isAndroid()) return `Astral_${v}_arm64.apk`;
+    if (isWindows()) return `Astral_${v}_x64-setup.exe`;
+    if (isLinux()) return `Astral_${v}_amd64.AppImage`;
     return '';
   }
 
@@ -89,7 +92,7 @@
   }
 
   async function triggerDownload(releaseInfo) {
-    const fileName = platformFileName();
+    const fileName = platformFileName(releaseInfo?.tag_name);
     if (!fileName) {
       snackError('下载失败', '当前平台暂不支持内置下载安装');
       return;
@@ -161,7 +164,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
     try {
-      await fetch(prefix + 'ldoubil/astral', {
+      await fetch(prefix + 'Lanliy-Sama/Astral-Tauri', {
         method: 'HEAD',
         signal: controller.signal,
         mode: 'no-cors',
