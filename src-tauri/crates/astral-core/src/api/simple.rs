@@ -274,9 +274,43 @@ async fn current_instance() -> Option<Arc<NativeCoreInstance>> {
 
 /// 装配当前实例的运行快照（官方 management 层实现，与 2.6 时代
 /// NetworkInstance::get_running_info 同构）。
+/// 2.7 的 peer_route_pairs 不保证含本机节点（旧版含）—— 拓扑图以本机
+/// 为根、成员列表固定显示本机卡，缺失则在此统一注入，所有消费方生效。
 async fn fetch_running_info() -> Option<NetworkInstanceRunningInfo> {
     let instance = current_instance().await?;
-    network_instance_running_info(instance.as_ref()).await.ok()
+    let mut info = network_instance_running_info(instance.as_ref()).await.ok()?;
+    if let Some(my) = info.my_node_info.as_ref() {
+        let my_peer_id = my.peer_id;
+        if !info
+            .peer_route_pairs
+            .iter()
+            .any(|p| p.route.as_ref().map_or(false, |r| r.peer_id == my_peer_id))
+        {
+            let mut local_route = Route::default();
+            local_route.peer_id = my.peer_id;
+            local_route.ipv4_addr = my.virtual_ipv4.clone();
+            local_route.next_hop_peer_id = my.peer_id;
+            local_route.cost = 0;
+            local_route.path_latency = 0;
+            local_route.hostname = my.hostname.clone();
+            local_route.inst_id = "local".to_string();
+            local_route.version = my.version.clone();
+            local_route.stun_info = my.stun_info.clone();
+            let local_peer = info
+                .peers
+                .iter()
+                .find(|p| p.peer_id == my_peer_id)
+                .cloned();
+            info.peer_route_pairs.insert(
+                0,
+                PeerRoutePair {
+                    route: Some(local_route),
+                    peer: local_peer,
+                },
+            );
+        }
+    }
+    Some(info)
 }
 
 // 返回EasyTier的版本号
@@ -640,41 +674,12 @@ pub fn close_server() {
     });
 }
 
-// 获取节点路由对（含本地节点，供状态映射消费）
+// 获取节点路由对（本机兜底注入已在 fetch_running_info 统一处理）
 pub async fn get_peer_route_pairs() -> Result<Vec<PeerRoutePair>, String> {
     let info = fetch_running_info()
         .await
         .ok_or_else(|| "没有运行中的网络实例".to_string())?;
-
-    let mut pairs = info.peer_route_pairs;
-    // 确保本地节点在结果里（拓扑图以本地点为根）
-    if let Some(my) = &info.my_node_info {
-        let my_peer_id = my.peer_id;
-        if !pairs
-            .iter()
-            .any(|p| p.route.as_ref().map_or(false, |r| r.peer_id == my_peer_id))
-        {
-            let mut local_route = Route::default();
-            local_route.peer_id = my.peer_id;
-            local_route.ipv4_addr = my.virtual_ipv4.clone();
-            local_route.next_hop_peer_id = my.peer_id;
-            local_route.cost = 0;
-            local_route.path_latency = 0;
-            local_route.hostname = my.hostname.clone();
-            local_route.inst_id = "local".to_string();
-            local_route.version = my.version.clone();
-            local_route.stun_info = my.stun_info.clone();
-            let local_peer = info.peers.iter().find(|p| p.peer_id == my_peer_id).cloned();
-            pairs.insert(
-                0,
-                PeerRoutePair {
-                    route: Some(local_route),
-                    peer: local_peer,
-                },
-            );
-        }
-    }
-    Ok(pairs)
+    Ok(info.peer_route_pairs)
 }
 
 // 获取网络状态信息
