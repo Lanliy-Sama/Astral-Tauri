@@ -25,7 +25,10 @@ rand = "0.8"
 surge-ping = "0.8"
 uuid = { version = "1.0", features = ["v4"] }
 
-easytier = { git = "https://github.com/EasyTier/EasyTier.git", rev = "8e1d0791421e95dd73533db07463b3afa08495ae", features = ["wireguard", "websocket", "quic", "tun", "smoltcp", "socks5", "kcp", "faketcp", "magic-dns", "zstd"] }
+# EasyTier main（2.7）：实例层重构为 InstanceManager/CoreInstance，
+# management feature 一并解锁 management-rpc/web-client（状态装配依赖）。
+easytier = { git = "https://github.com/EasyTier/EasyTier.git", branch = "main", default-features = false, features = ["wireguard", "websocket", "quic", "tun", "smoltcp", "socks5", "kcp", "faketcp", "magic-dns", "zstd", "management"] }
+easytier-core = { git = "https://github.com/EasyTier/EasyTier.git", branch = "main", default-features = false }
 elevated-command = "1.1.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]

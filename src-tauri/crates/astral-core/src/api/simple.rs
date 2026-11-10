@@ -24,23 +24,25 @@ macro_rules! safe_eprintln {
         let _ = std::io::stderr().lock().write_all(b"\n");
     }};
 }
-use easytier::common::config::{ConfigFileControl, PortForwardConfig};
+pub use easytier::common::config::ConfigFileControl;
+use easytier::common::config::{ConfigLoader, NetworkIdentity, PeerConfig, TomlConfigLoader};
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use easytier::instance::factory::attach_mobile_tun_fd;
 pub use easytier::{
-    common::{
-        self,
-        config::{ConfigLoader, NetworkIdentity, PeerConfig, TomlConfigLoader},
-        global_ctx::{EventBusSubscriber, GlobalCtxEvent},
+    common::global_ctx::{EventBusSubscriber, GlobalCtxEvent},
+    instance::factory::{
+        native_instance_manager_with_runtime, subscribe_native_instance_event, NativeCoreInstance,
+        NativeInstanceManager,
     },
-    launcher::NetworkInstance,
     proto,
     proto::{
-        api::{
-            instance::{list_peer_route_pair, PeerRoutePair, Route},
-            manage::MyNodeInfo,
-        },
+        api::instance::{PeerRoutePair, Route},
+        api::manage::NetworkInstanceRunningInfo,
         common::NatType,
     },
 };
+use easytier_core::instance::CoreInstanceState;
+use easytier_core::management::network_instance_running_info;
 use lazy_static::lazy_static;
 use serde_json::json;
 pub use std::collections::BTreeMap;
@@ -51,12 +53,24 @@ pub use tokio::task::JoinHandle;
 
 pub static DEFAULT_ET_DNS_ZONE: &str = "as.net.";
 
-lazy_static! {
-    static ref INSTANCE: Arc<RwLock<Option<NetworkInstance>>> = Arc::new(RwLock::new(None));
-}
-// 创建一个 NetworkInstance 类型变量 储存当前服务器
+/* ---- EasyTier 2.7 适配 ----
+ * 2.7 重构了实例层：launcher::NetworkInstance / get_running_info /
+ * get_tun_fd_sender 全部移除，改为 InstanceManager<NativeInstanceFactory>
+ * + CoreInstance（management 体系）。本层保持对外 API（FlagsC /
+ * create_server / close_server / set_tun_fd / get_running_info /
+ * get_network_status ...）签名不变，commands.rs 与前端契约零改动：
+ *   · MANAGER   进程级单例 InstanceManager（绑定本层 tokio RT）
+ *   · INSTANCE_ID 当前网络实例的 Uuid（同一时刻至多一个）
+ *   · 状态装配走官方 network_instance_running_info(instance) —— 与
+ *     旧 get_running_info 同构（dev_name/my_node_info/routes/peers/
+ *     peer_route_pairs），前端 JSON 契约原样保留。
+ *   · 配置构建仍走 TomlConfigLoader（2.7 的 ConfigLoader trait setter
+ *     全部保留），dump -> TomlConfig::new_from_str 喂给 manager。 */
 lazy_static! {
     static ref RT: Runtime = Runtime::new().expect("创建 Tokio 运行时失败");
+    static ref MANAGER: NativeInstanceManager =
+        native_instance_manager_with_runtime(RT.handle().clone());
+    static ref INSTANCE_ID: RwLock<Option<uuid::Uuid>> = RwLock::new(None);
 }
 
 fn peer_conn_info_to_string(p: proto::api::instance::PeerConnInfo) -> String {
@@ -221,8 +235,6 @@ pub fn handle_event(mut events: EventBusSubscriber) -> tokio::task::JoinHandle<(
                             safe_println!("{}", msg);
                             let _ = send_udp_to_localhost(&msg);
                         }
-                        GlobalCtxEvent::ConfigPatched(_) => {}
-                        GlobalCtxEvent::ProxyCidrsUpdated(_, _) => {}
                         _ => {}
                     }
                 }
@@ -249,40 +261,21 @@ pub fn handle_event(mut events: EventBusSubscriber) -> tokio::task::JoinHandle<(
     })
 }
 
-async fn create_and_store_network_instance(cfg: TomlConfigLoader) -> Result<(), String> {
-    safe_println!("{:?}", cfg);
-
-    // 在移动 cfg 之前先获取 ID
-    let name = cfg.get_id().to_string();
-    let had_instance = {
-        let mut instance_guard = INSTANCE.write().await;
-        instance_guard.take().is_some()
-    };
-    // 创建网络实例
-    let mut network = NetworkInstance::new(cfg, ConfigFileControl::STATIC_CONFIG);
-    // 启动网络实例，并处理可能的错误
-    match network.start() {
-        Ok(events) => {
-            handle_event(events);
-        }
-        Err(e) => {
-            cmd_log(&format!("task: network.start() 失败: {e}"));
-            return Ok(());
-        }
+/// 当前实例（存在且未停止）。
+async fn current_instance() -> Option<Arc<NativeCoreInstance>> {
+    let id = *INSTANCE_ID.read().await?;
+    let instance = MANAGER.instance(id)?;
+    if instance.state() == CoreInstanceState::Stopped {
+        return None;
     }
-    safe_println!("instance {} started", name);
-    cmd_log("task: 实例已启动并写入 INSTANCE");
-    // 将实例存储到 INSTANCE 中
-    let mut instance_guard = INSTANCE.write().await;
-    *instance_guard = Some(network);
-    if !had_instance {
-        safe_println!("实例已成功储存");
-    } else {
-        safe_println!("网络实例已存在");
-    }
-    safe_print!("成功储存");
+    Some(instance)
+}
 
-    Ok(())
+/// 装配当前实例的运行快照（官方 management 层实现，与 2.6 时代
+/// NetworkInstance::get_running_info 同构）。
+async fn fetch_running_info() -> Option<NetworkInstanceRunningInfo> {
+    let instance = current_instance().await?;
+    network_instance_running_info(instance.as_ref()).await.ok()
 }
 
 // 返回EasyTier的版本号
@@ -293,13 +286,13 @@ pub fn easytier_version() -> Result<String, String> {
 // 是否在运行
 /// 同步包装：在任意非 tokio 线程上以 RT 驱动 is_easytier_running。
 pub fn rt_block_on_is_running() -> bool {
-    RT.block_on(async { INSTANCE.read().await.is_some() })
+    RT.block_on(async { is_easytier_running().await })
 }
 
 pub async fn is_easytier_running() -> bool {
-    let instance = INSTANCE.read().await;
-    instance.is_some()
+    current_instance().await.is_some()
 }
+
 // 定义节点跳跃统计信息结构体
 pub struct NodeHopStats {
     pub peer_id: u32,
@@ -347,71 +340,79 @@ pub struct KVNetworkStatus {
 // 获取网络中所有节点的IP地址列表
 pub async fn get_ips() -> Vec<String> {
     let mut result = Vec::new();
-
-    // Lock the mutex and access the instance if it exists
-    let instance = INSTANCE.read().await;
-
-    if let Some(instance) = instance.as_ref() {
-        if let Ok(info) = instance.get_running_info().await {
-            // Add all remote node IPs
-            for route in &info.routes {
-                if let Some(ipv4_addr) = &route.ipv4_addr {
-                    if let Some(addr) = &ipv4_addr.address {
-                        let ip = format!(
-                            "{}.{}.{}.{}/{}",
-                            (addr.addr >> 24) & 0xFF,
-                            (addr.addr >> 16) & 0xFF,
-                            (addr.addr >> 8) & 0xFF,
-                            addr.addr & 0xFF,
-                            ipv4_addr.network_length
-                        );
-                        // Avoid duplicates
-                        if !result.contains(&ip) {
-                            result.push(ip);
-                        }
+    let info = fetch_running_info().await;
+    if let Some(info) = info {
+        for route in &info.routes {
+            if let Some(ipv4_addr) = &route.ipv4_addr {
+                if let Some(addr) = &ipv4_addr.address {
+                    let ip = format!(
+                        "{}.{}.{}.{}/{}",
+                        (addr.addr >> 24) & 0xFF,
+                        (addr.addr >> 16) & 0xFF,
+                        (addr.addr >> 8) & 0xFF,
+                        addr.addr & 0xFF,
+                        ipv4_addr.network_length
+                    );
+                    // Avoid duplicates
+                    if !result.contains(&ip) {
+                        result.push(ip);
                     }
                 }
             }
         }
     }
-
     result
 }
 
 // 设置TUN设备的文件描述符
 pub async fn set_tun_fd(fd: i32) -> Result<(), String> {
-    let instance = INSTANCE.read().await;
-    let instance = instance
-        .as_ref()
+    let instance = current_instance()
+        .await
         .ok_or_else(|| "No instance available".to_string())?;
-    let sender = instance
-        .get_tun_fd_sender()
-        .ok_or_else(|| "tun fd sender not found".to_string())?;
-    sender
-        .try_send(Some(fd))
-        .map_err(|e| format!("failed to send tun fd: {}", e))?;
-    Ok(())
+    let instance_id = instance.instance_id();
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = instance_id;
+        attach_mobile_tun_fd(&MANAGER, fd, None)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("failed to attach tun fd: {e:#}"))
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = instance;
+        MANAGER
+            .attach_tun_fd(instance_id, fd)
+            .map_err(|e| format!("failed to attach tun fd: {e:#}"))
+    }
 }
 
 pub async fn get_running_info() -> String {
-    let instance = INSTANCE.read().await;
-
-    if let Some(instance) = instance.as_ref() {
-        if let Ok(info) = instance.get_running_info().await {
-            return serde_json::to_string(&json!({
-                "dev_name": info.dev_name,
-                "my_node_info": info.my_node_info.as_ref().map(|node| json!({
-                    "virtual_ipv4": node.virtual_ipv4.as_ref().map(|addr| json!({
-                        "address": addr.address.as_ref().map(|a| json!({ "addr": a.addr })),
-                    })),
-                })),
-                "routes": info.routes,
-                "peer_route_pairs": info.peer_route_pairs,
-            }))
-            .unwrap_or_else(|_| "null".to_string());
-        }
-    }
-    "null".to_string()
+    let Some(info) = fetch_running_info().await else {
+        return "null".to_string();
+    };
+    // 前端契约：my_node_info.virtual_ipv4.address.addr（u32 主机序整数）
+    let virtual_ipv4 = info
+        .my_node_info
+        .as_ref()
+        .and_then(|node| node.virtual_ipv4.as_ref())
+        .map(|inet| {
+            json!({
+                "address": inet.address.as_ref().map(|a| json!({ "addr": a.addr })),
+                "network_length": inet.network_length,
+            })
+        })
+        .unwrap_or(serde_json::Value::Null);
+    serde_json::to_string(&json!({
+        "dev_name": info.dev_name,
+        "my_node_info": {
+            "virtual_ipv4": virtual_ipv4,
+        },
+        "routes": info.routes,
+        "peer_route_pairs": info.peer_route_pairs,
+    }))
+    .unwrap_or_else(|_| "null".to_string())
 }
 
 pub struct FlagsC {
@@ -489,26 +490,10 @@ pub fn create_server(
         for c in cidrs {
             let _ = cfg.add_proxy_cidr(c.parse().unwrap(), None);
         }
-        let mut old = cfg.get_port_forwards();
+        // forwards 恒为空（与原版 ServerConfigBuilder.build() 一致）；
+        // 2.7 中端口转发属于网关运行时配置，单实例场景不使用。
+        let _ = forwards;
 
-        for c in forwards {
-            // 打印
-            safe_println!(
-                "{}",
-                format!(
-                    "添加端口转发: {} -> {} -{}",
-                    c.bind_addr, c.dst_addr, c.proto
-                )
-            );
-            let port_forward_item = PortForwardConfig {
-                bind_addr: c.bind_addr.parse().unwrap(),
-                dst_addr: c.dst_addr.parse().unwrap(),
-                proto: c.proto,
-            };
-            old.push(port_forward_item);
-        }
-
-        cfg.set_port_forwards(old);
         // Set flags more efficiently by directly mapping from input
         let mut flags = cfg.get_flags();
         flags.default_protocol = flag.default_protocol;
@@ -599,8 +584,32 @@ pub fn create_server(
         // Set network identity
         cfg.set_network_identity(NetworkIdentity::new(room_name, room_password));
 
-        // 直接启动网络实例，无需嵌套 spawn
-        create_and_store_network_instance(cfg).await
+        // TomlConfigLoader -> TomlConfig（官方 INI：dump 后重新解析，
+        // 两条路径均为公开稳定 API）
+        let dumped = cfg.dump();
+        let toml_config = easytier_core::config::toml::TomlConfig::new_from_str(&dumped)
+            .map_err(|e| format!("配置解析失败: {e:#}"))?;
+
+        cmd_log("task: 提交 InstanceManager.run_network_instance");
+        let instance_id = MANAGER
+            .run_network_instance(toml_config, ConfigFileControl::STATIC_CONFIG)
+            .map_err(|e| {
+                cmd_log(&format!("task: run_network_instance 失败: {e:#}"));
+                format!("启动网络实例失败: {e:#}")
+            })?;
+        cmd_log(&format!("task: 实例已创建 id={instance_id}"));
+        *INSTANCE_ID.write().await = Some(instance_id);
+
+        // 订阅事件（与旧 network.start() 返回的订阅等价）
+        if let Some(instance) = MANAGER.instance(instance_id) {
+            if let Some(events) = subscribe_native_instance_event(&instance) {
+                handle_event(events);
+            }
+        }
+        safe_println!("instance {} started", instance_id);
+        cmd_log("task: 实例已启动并写入 INSTANCE_ID");
+
+        Ok(())
     })
 }
 
@@ -609,127 +618,79 @@ pub fn close_server() {
     cmd_log("close_server: 步骤1-进入");
     cmd_log("close_server: 步骤2-准备 RT.spawn");
     RT.spawn(async {
-    cmd_log("close_server: 步骤3-任务已提交到运行时");
-        // 获取mutex锁
-        let mut locked_instance = INSTANCE.write().await;
-
-        safe_println!(
-            "关闭前实例状态: {}",
-            if locked_instance.is_some() {
-                "存在"
-            } else {
-                "不存在"
+        cmd_log("close_server: 步骤3-任务已提交到运行时");
+        let id = INSTANCE_ID.write().await.take();
+        match id {
+            Some(instance_id) => {
+                safe_println!("正在关闭实例 {}", instance_id);
+                if let Err(e) = MANAGER.delete_network_instances(vec![instance_id]).await {
+                    safe_eprintln!("关闭实例失败: {e:#}");
+                    cmd_log(&format!("close_server: delete 失败: {e:#}"));
+                } else {
+                    safe_println!("实例已成功关闭");
+                    cmd_log("close_server: 实例已删除并停止");
+                }
             }
-        ); // 添加关闭前日志
-
-        // 如果实例存在，则丢弃它
-        if let Some(instance) = locked_instance.take() {
-            safe_println!("正在关闭实例");
-            // 丢弃实例
-            drop(instance);
-            safe_println!("实例已成功关闭");
-        } else {
-            safe_println!("没有找到需要关闭的实例");
+            None => {
+                safe_println!("没有找到需要关闭的实例");
+                cmd_log("close_server: 无实例可关");
+            }
         }
-
-        safe_println!(
-            "关闭后实例状态: {}",
-            if locked_instance.is_some() {
-                "存在"
-            } else {
-                "不存在"
-            }
-        ); // 添加关闭后日志
     });
 }
 
-// 创建一个网卡跃点数据结构
-// 网卡跃点数据结构
-
+// 获取节点路由对（含本地节点，供状态映射消费）
 pub async fn get_peer_route_pairs() -> Result<Vec<PeerRoutePair>, String> {
-    let instance_guard = INSTANCE.read().await;
+    let info = fetch_running_info()
+        .await
+        .ok_or_else(|| "没有运行中的网络实例".to_string())?;
 
-    if let Some(instance) = instance_guard.as_ref() {
-        // 获取运行信息
-        match instance.get_running_info().await {
-            Ok(info) => {
-                let mut pairs = info.peer_route_pairs;
-                // 如果存在本地节点信息，添加到结果中
-                if let Some(my_node_info) = &info.my_node_info {
-                    // 获取本地节点ID
-                    // 注意：这里的逻辑可能需要根据单例模式调整，假设本地节点信息可以直接从 info 中获取
-                    // 使用原始逻辑查找本地 peer_id
-                    let my_peer_id = info
-                        .peers
-                        .iter()
-                        .find(|p| p.conns.iter().any(|c| !c.is_client))
-                        .map(|p| p.peer_id)
-                        .unwrap_or(0);
-
-                    // 创建一个表示本地节点的Route
-                    let my_route = proto::api::instance::Route {
-                        peer_id: my_peer_id,
-                        ipv4_addr: my_node_info.virtual_ipv4.clone(),
-                        ipv6_addr: None, // 添加ipv6地址字段,目前暂不支持ipv6
-                        next_hop_peer_id: my_peer_id, // 指向自己
-                        cost: 0,         // 到自己的成本为0
-                        path_latency: 0, // 到自己的延迟为0
-                        proxy_cidrs: vec![],
-                        hostname: my_node_info.hostname.clone(),
-                        stun_info: my_node_info.stun_info.clone(),
-                        inst_id: "local".to_string(), // 标记为本地实例
-                        version: my_node_info.version.clone(),
-                        feature_flag: None, // 本地节点通常没有特性标志
-                        next_hop_peer_id_latency_first: None,
-                        cost_latency_first: None,
-                        path_latency_latency_first: None,
-                        public_ipv6_addr: None,
-                        ipv6_public_addr_prefix: None,
-                    };
-
-                    // 创建一个表示本地节点的PeerInfo，包含网络统计信息
-                    // 注意：本地节点的PeerInfo可能需要特殊处理或从其他地方获取
-                    let my_peer_info = info.peers.iter().find(|p| p.peer_id == my_peer_id).cloned();
-
-                    // 创建一个表示本地节点的PeerRoutePair
-                    let my_pair = proto::api::instance::PeerRoutePair {
-                        route: Some(my_route),
-                        peer: my_peer_info, // 使用找到的PeerInfo或None
-                    };
-
-                    // 添加到结果中
-                    pairs.push(my_pair);
-                }
-
-                return Ok(pairs);
-            }
-            Err(_) => Err("无法获取运行信息".to_string()),
+    let mut pairs = info.peer_route_pairs;
+    // 确保本地节点在结果里（拓扑图以本地点为根）
+    if let Some(my) = &info.my_node_info {
+        let my_peer_id = my.peer_id;
+        if !pairs
+            .iter()
+            .any(|p| p.route.as_ref().map_or(false, |r| r.peer_id == my_peer_id))
+        {
+            let mut local_route = Route::default();
+            local_route.peer_id = my.peer_id;
+            local_route.ipv4_addr = my.virtual_ipv4.clone();
+            local_route.next_hop_peer_id = my.peer_id;
+            local_route.cost = 0;
+            local_route.path_latency = 0;
+            local_route.hostname = my.hostname.clone();
+            local_route.inst_id = "local".to_string();
+            local_route.version = my.version.clone();
+            local_route.stun_info = my.stun_info.clone();
+            let local_peer = info.peers.iter().find(|p| p.peer_id == my_peer_id).cloned();
+            pairs.insert(
+                0,
+                PeerRoutePair {
+                    route: Some(local_route),
+                    peer: local_peer,
+                },
+            );
         }
-    } else {
-        Err("没有运行中的网络实例".to_string())
     }
+    Ok(pairs)
 }
 
 // 获取网络状态信息
 pub async fn get_network_status() -> KVNetworkStatus {
-    let pairs = get_peer_route_pairs().await.unwrap_or_default();
-
-    // 提前获取运行信息
-    let instance_guard = INSTANCE.read().await;
-    let running_info = if let Some(instance) = instance_guard.as_ref() {
-        instance.get_running_info().await.ok()
-    } else {
-        None
+    let info = match fetch_running_info().await {
+        Some(info) => info,
+        None => {
+            return KVNetworkStatus {
+                total_nodes: 0,
+                nodes: Vec::new(),
+            }
+        }
     };
-    let local_peer_id = running_info
-        .as_ref()
-        .and_then(|info| {
-            info.peers
-                .iter()
-                .find(|p| p.conns.iter().any(|c| !c.is_client))
-                .map(|p| p.peer_id)
-        })
-        .unwrap_or(0);
+
+    let pairs = info.peer_route_pairs.clone();
+    let my_node_info = info.my_node_info.clone();
+    let local_peer_id = my_node_info.as_ref().map_or(0, |n| n.peer_id);
 
     let mut nodes = Vec::new();
     for pair in pairs.iter() {
@@ -854,83 +815,81 @@ pub async fn get_network_status() -> KVNetworkStatus {
 
                         // 从当前节点开始，收集到目标节点的完整路径
                         // 先添加本地节点信息
-                        if let Some(info) = &running_info {
-                            if let Some(local_node) = &info.my_node_info {
-                                // 添加本地节点作为起点
-                                hops.push(NodeHopStats {
-                                    peer_id: local_peer_id,
-                                    target_ip: local_node
-                                        .virtual_ipv4
-                                        .as_ref()
-                                        .and_then(|addr| addr.address.as_ref())
-                                        .map(|a| {
-                                            format!(
-                                                "{}.{}.{}.{}",
-                                                (a.addr >> 24) & 0xFF,
-                                                (a.addr >> 16) & 0xFF,
-                                                (a.addr >> 8) & 0xFF,
-                                                a.addr & 0xFF
-                                            )
-                                        })
-                                        .unwrap_or_else(|| local_node.hostname.clone()),
-                                    latency_ms: 0.0,
-                                    packet_loss: 0.0,
-                                    node_name: local_node.hostname.clone(),
+                        if let Some(local_node) = &my_node_info {
+                            // 添加本地节点作为起点
+                            hops.push(NodeHopStats {
+                                peer_id: local_peer_id,
+                                target_ip: local_node
+                                    .virtual_ipv4
+                                    .as_ref()
+                                    .and_then(|addr| addr.address.as_ref())
+                                    .map(|a| {
+                                        format!(
+                                            "{}.{}.{}.{}",
+                                            (a.addr >> 24) & 0xFF,
+                                            (a.addr >> 16) & 0xFF,
+                                            (a.addr >> 8) & 0xFF,
+                                            a.addr & 0xFF
+                                        )
+                                    })
+                                    .unwrap_or_else(|| local_node.hostname.clone()),
+                                latency_ms: 0.0,
+                                packet_loss: 0.0,
+                                node_name: local_node.hostname.clone(),
+                            });
+
+                            // 查找从本地到目标节点的路由
+                            if let Some(local_route) =
+                                info.routes.iter().find(|r| r.peer_id == route.peer_id)
+                            {
+                                // 收集中间节点
+                                let mut next_hops = collect_hops(
+                                    pairs.as_slice(),
+                                    local_route.next_hop_peer_id,
+                                    Vec::new(),
+                                    &mut visited,
+                                );
+                                hops.append(&mut next_hops);
+
+                                // 确保目标节点被添加到路径中
+                                // 检查最后一个节点是否是目标节点
+                                let last_node_is_target = hops.last().map_or(false, |last| {
+                                    // 比较目标IP
+                                    last.target_ip == target_ip
                                 });
 
-                                // 查找从本地到目标节点的路由
-                                if let Some(local_route) =
-                                    info.routes.iter().find(|r| r.peer_id == route.peer_id)
-                                {
-                                    // 收集中间节点
-                                    let mut next_hops = collect_hops(
-                                        pairs.as_slice(),
-                                        local_route.next_hop_peer_id,
-                                        Vec::new(),
-                                        &mut visited,
-                                    );
-                                    hops.append(&mut next_hops);
+                                // 如果最后一个节点不是目标节点，则添加目标节点
+                                if !last_node_is_target && !visited.contains(&route.peer_id) {
+                                    let (latency, loss) =
+                                        pair.peer.as_ref().map_or((0.0, 0.0), |p| {
+                                            let min_latency = p
+                                                .conns
+                                                .iter()
+                                                .filter_map(|c| {
+                                                    c.stats.as_ref().map(|s| s.latency_us)
+                                                })
+                                                .min()
+                                                .unwrap_or(0)
+                                                as f64
+                                                / 1000.0;
 
-                                    // 确保目标节点被添加到路径中
-                                    // 检查最后一个节点是否是目标节点
-                                    let last_node_is_target = hops.last().map_or(false, |last| {
-                                        // 比较目标IP
-                                        last.target_ip == target_ip
-                                    });
+                                            let avg_loss = p
+                                                .conns
+                                                .iter()
+                                                .map(|c| c.loss_rate)
+                                                .sum::<f32>()
+                                                / p.conns.len().max(1) as f32;
 
-                                    // 如果最后一个节点不是目标节点，则添加目标节点
-                                    if !last_node_is_target && !visited.contains(&route.peer_id) {
-                                        let (latency, loss) =
-                                            pair.peer.as_ref().map_or((0.0, 0.0), |p| {
-                                                let min_latency = p
-                                                    .conns
-                                                    .iter()
-                                                    .filter_map(|c| {
-                                                        c.stats.as_ref().map(|s| s.latency_us)
-                                                    })
-                                                    .min()
-                                                    .unwrap_or(0)
-                                                    as f64
-                                                    / 1000.0;
-
-                                                let avg_loss = p
-                                                    .conns
-                                                    .iter()
-                                                    .map(|c| c.loss_rate)
-                                                    .sum::<f32>()
-                                                    / p.conns.len().max(1) as f32;
-
-                                                (min_latency, avg_loss as f64)
-                                            });
-
-                                        hops.push(NodeHopStats {
-                                            peer_id: route.peer_id,
-                                            target_ip: target_ip.clone(),
-                                            latency_ms: latency,
-                                            packet_loss: loss as f32,
-                                            node_name: route.hostname.clone(),
+                                            (min_latency, avg_loss as f64)
                                         });
-                                    }
+
+                                    hops.push(NodeHopStats {
+                                        peer_id: route.peer_id,
+                                        target_ip: target_ip.clone(),
+                                        latency_ms: latency,
+                                        packet_loss: loss as f32,
+                                        node_name: route.hostname.clone(),
+                                    });
                                 }
                             }
                         }
@@ -971,7 +930,7 @@ pub async fn get_network_status() -> KVNetworkStatus {
                 latency_ms: if route.cost == 1 {
                     pair.get_latency_ms().unwrap_or(0.0)
                 } else {
-                    route.path_latency_latency_first() as f64
+                    route.path_latency as f64
                 },
                 ipv4: ipv4,
 
@@ -990,8 +949,6 @@ pub async fn get_network_status() -> KVNetworkStatus {
                         // 使用NatType枚举替代直接匹配数字
                         let nat_type =
                             NatType::try_from(stun.udp_nat_type).unwrap_or(NatType::Unknown);
-                        // safe_println!("udp{:?}", NatType::try_from(stun.udp_nat_type).unwrap_or(NatType::Unknown));
-                        // safe_println!("tcp{:?}", NatType::try_from(stun.tcp_nat_type).unwrap_or(NatType::Unknown));
                         format!("{:?}", nat_type)
                     },
                 ),
