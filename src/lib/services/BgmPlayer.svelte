@@ -31,6 +31,13 @@
     audioEl.addEventListener('play', () => {
       sm.bgmState.playing = true;
     });
+    // 音源加载失败 → 应用日志页可见（诊断 astralbgm 协议问题用）
+    audioEl.addEventListener('error', () => {
+      const err = audioEl?.error;
+      sm.pushLog(
+        `[bgm] 音源加载失败 code=${err?.code ?? '?'} ${err?.message ?? ''} src=${audioEl?.src ?? ''}`
+      );
+    });
     return audioEl;
   }
 
@@ -68,6 +75,9 @@
       sm.bgmState.playing = true;
     } catch (e) {
       sm.bgmState.playing = false;
+      const name = e?.name ?? '?';
+      const msg = e?.message ?? String(e);
+      sm.pushLog(`[bgm] play() 失败 ${name}: ${msg}`);
       console.warn('背景音乐播放失败:', e);
     }
   }

@@ -364,24 +364,57 @@ fn bgm_find(dir: &std::path::Path, id: &str) -> Option<(std::path::PathBuf, Stri
     None
 }
 
-/// astralbgm:// 协议响应（磁盘直读；缺失 → 404）
-fn bgm_response(dir: Option<&std::path::Path>, id: &str) -> http::Response<Vec<u8>> {
+/// astralbgm:// 协议响应（磁盘直读；支持 Range 请求——Chromium 的
+/// <audio> 对网络源坚持分段加载，200 全量会拒播；缺失 → 404）
+fn bgm_response(dir: Option<&std::path::Path>, id: &str, range: Option<&str>) -> http::Response<Vec<u8>> {
     let mut builder = http::Response::builder()
+        .header("Accept-Ranges", "bytes")
         .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    match dir.and_then(|d| bgm_find(d, id)) {
-        Some((path, ext)) => match std::fs::read(&path) {
-            Ok(bytes) => builder
-                .header("Content-Type", bgm_mime(&ext))
-                .body(bytes)
-                .unwrap(),
-            Err(_) => builder.status(500).body(Vec::new()).unwrap(),
-        },
-        None => builder
+    let Some((path, ext)) = dir.and_then(|d| bgm_find(d, id)) else {
+        return builder
             .status(http::StatusCode::NOT_FOUND)
             .header("Content-Type", "text/plain")
             .body(Vec::new())
-            .unwrap(),
+            .unwrap();
+    };
+    let Ok(bytes) = std::fs::read(&path) else {
+        return builder.status(500).body(Vec::new()).unwrap();
+    };
+    builder = builder.header("Content-Type", bgm_mime(&ext));
+
+    // Range: bytes=a-b（Chromium media 管线标准行为；b 可缺省 = 到末尾）
+    if let Some(range) = range {
+        if let Some(spec) = range.strip_prefix("bytes=") {
+            let mut parts = spec.splitn(2, '-');
+            let start: u64 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let end: u64 = parts
+                .next()
+                .and_then(|s| s.parse().ok())
+                .map(|e| e.min(bytes.len() as u64 - 1))
+                .unwrap_or(bytes.len() as u64 - 1);
+            if start <= end && (start as usize) < bytes.len() {
+                let slice = bytes[start as usize..=(end as usize)].to_vec();
+                return builder
+                    .status(http::StatusCode::PARTIAL_CONTENT)
+                    .header(
+                        "Content-Range",
+                        format!("bytes {}-{}/{}", start, end, bytes.len()),
+                    )
+                    .header("Content-Length", slice.len().to_string())
+                    .body(slice)
+                    .unwrap();
+            }
+            return builder
+                .status(http::StatusCode::RANGE_NOT_SATISFIABLE)
+                .header("Content-Range", format!("bytes */{}", bytes.len()))
+                .body(Vec::new())
+                .unwrap();
+        }
     }
+    builder
+        .header("Content-Length", bytes.len().to_string())
+        .body(bytes)
+        .unwrap()
 }
 
 /// 开始一次音乐文件写入（ext 为小写扩展名；打断未完成的旧会话），返回生成的 uuid
@@ -483,7 +516,7 @@ pub fn run() {
             });
         })
         /* 背景音乐协议：astralbgm://localhost/<uuid> → 磁盘 bgm/<uuid>.<ext>。
-         * 异步 + 独立线程读盘，不阻塞主线程/渲染。 */
+         * 异步 + 独立线程读盘，不阻塞主线程/渲染；支持 Range（媒体管线必需）。 */
         .register_asynchronous_uri_scheme_protocol("astralbgm", |ctx, request, responder| {
             let dir = ctx.app_handle().path().app_data_dir().ok();
             let id = request
@@ -491,8 +524,13 @@ pub fn run() {
                 .path()
                 .trim_start_matches('/')
                 .to_string();
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
             std::thread::spawn(move || {
-                responder.respond(bgm_response(dir.as_deref(), &id));
+                responder.respond(bgm_response(dir.as_deref(), &id, range.as_deref()));
             });
         })
         .invoke_handler(tauri::generate_handler![
