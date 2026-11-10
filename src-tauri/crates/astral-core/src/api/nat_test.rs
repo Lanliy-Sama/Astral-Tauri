@@ -1,4 +1,5 @@
 use easytier::proto::common::NatType as EasyNatType;
+use std::net::ToSocketAddrs;
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 
@@ -201,7 +202,7 @@ async fn stun_exchange(
 ) -> Result<Vec<u8>, String> {
     let addr: std::net::SocketAddr = target
         .parse()
-        .or_else(|| {
+        .or_else(|_| {
             let mut picked = None;
             if let Ok(addrs) = target.to_socket_addrs() {
                 for a in addrs {
