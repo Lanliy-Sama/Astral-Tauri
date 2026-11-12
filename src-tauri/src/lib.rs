@@ -590,6 +590,25 @@ pub fn run() {
             bgm_delete,
         ])
         .setup(|app| {
+            // panic 钩子：release GUI 无 stderr，panic 信息落 %TEMP%\astral-panic.log。
+            // panic = "abort" 时 hook 先于进程终止执行，任何崩溃现场必留痕。
+            {
+                let default_hook = std::panic::take_hook();
+                std::panic::set_hook(std::boxed::Box::new(move |info| {
+                    let path = std::env::temp_dir().join("astral-panic.log");
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                        use std::io::Write as _;
+                        let _ = writeln!(
+                            f,
+                            "[{:?}] {}",
+                            std::time::SystemTime::now(),
+                            info.to_string().replace('\n', " | ")
+                        );
+                    }
+                    default_hook(info);
+                }));
+            }
+
             // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
             astral_core::api::simple::preinit_runtime();
 
