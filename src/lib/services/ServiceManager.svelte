@@ -256,7 +256,10 @@ const MIRRORS = ['https://gh.xmly.dev/', 'https://gh-proxy.org/', 'https://ghfas
 const SPEED_TEST_URL = 'https://github.com/Lanliy-Sama/Astral-Tauri';
 
 /* ============ 应用版本 ============ */
-const APP_VERSION = '2.9.60';
+/* 浏览器预览兜底常量；Tauri 模式下 _initVersion 从应用元数据读真实
+ * 构建版本（release.yml 的 version 覆盖会写入 exe），关于卡与更新
+ * 检查随之显示正确版本。 */
+const APP_VERSION_FALLBACK = '2.9.60';
 
 class ServiceManager {
   constructor() {
@@ -289,7 +292,7 @@ class ServiceManager {
     this._configBuilder = null;
     this._androidTunAttaching = false;
 
-    this.appVersion = APP_VERSION;
+    this.appVersion = APP_VERSION_FALLBACK;
     this.initialized = false;
   }
 
@@ -311,6 +314,7 @@ class ServiceManager {
       this._initAppSettings(),
       this._initFirewall(),
       this._initBgm(),
+      this._initVersion(),
     ];
     await Promise.allSettled(tasks);
 
@@ -984,6 +988,21 @@ class ServiceManager {
     await this._persistSettings({ bgmTrackId: trackId });
   }
 
+  /* ---------- 应用版本 ---------- */
+  /* Tauri 模式下从应用元数据读取真实构建版本——release.yml 的
+   * version 覆盖会写进 exe，关于卡与更新检查随之显示正确版本
+   * （此前硬编码 2.9.60 导致正式包也显示旧版本号）。 */
+  async _initVersion() {
+    if (!isTauri()) return;
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      const v = await getVersion();
+      if (v) this.appVersion = v;
+    } catch (e) {
+      console.warn('读取应用版本失败:', e);
+    }
+  }
+
   /* ---------- 自定义背景（v2.6） ----------
    * Tauri 端由磁盘文件 + astralbg:// 协议承载（写入/清除由
    * SoftwareSettingsPage 调用 bg_write_* / clear_custom_background 命令完成）；
@@ -1585,7 +1604,7 @@ class ServiceManager {
         return { kind: 'failed', error: '无法获取最新版本信息' };
       }
       const latest = (release.tag_name || '').replace(/^v/, '');
-      const current = APP_VERSION;
+      const current = this.appVersion;
       const shouldUpdate = this._versionGreaterThan(latest, current);
       await this.updateLatestVersion(shouldUpdate ? latest : null);
       return {
