@@ -25,10 +25,11 @@ rand = "0.8"
 surge-ping = "0.8"
 uuid = { version = "1.0", features = ["v4"] }
 
-# EasyTier main（2.7）：实例层重构为 InstanceManager/CoreInstance，
-# management feature 一并解锁 management-rpc/web-client（状态装配依赖）。
-easytier = { git = "https://github.com/EasyTier/EasyTier.git", branch = "main", default-features = false, features = ["wireguard", "websocket", "quic", "tun", "smoltcp", "socks5", "kcp", "faketcp", "magic-dns", "zstd", "management"] }
-easytier-core = { git = "https://github.com/EasyTier/EasyTier.git", branch = "main", default-features = false }
+# EasyTier 内核：使用本仓 Easytier 分支的 vendored fork（上游 main @ 3b32aaff
+# 锁定 rev，仅含构建闭包 crate，消除 branch=main 浮动解析）。实例层
+# InstanceManager/CoreInstance + management feature 用法不变。
+easytier = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier", default-features = false, features = ["wireguard", "websocket", "quic", "tun", "smoltcp", "socks5", "kcp", "faketcp", "magic-dns", "zstd", "management"] }
+easytier-core = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier", default-features = false }
 # 锁 rust-i18n 全家桶到上游 lock 的自洽组合（4.2.2/4.2.2/4.2.2）：
 # 全新解析会混选出 rust-i18n-macro 4.0.0 + rust-i18n-support 4.2.4，
 # 而宏期望的 load_locales/I18nConfig 在 4.2.x support 里被挪到

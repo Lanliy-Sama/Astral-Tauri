@@ -64,7 +64,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          key: cranelift-v3
+          key: etfork-v1
 
       - name: 📦 安装 Linux 系统依赖
         if: matrix.platform == 'ubuntu-22.04'
@@ -220,7 +220,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          key: android-cranelift-v3
+          key: android-etfork-v1
 
       - name: 📦 安装 protoc（需新版支持 proto3 optional）
         run: |

@@ -45,3 +45,10 @@ lto = false
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Cranelift 兼容补丁：serde_json ≥1.0.147 的浮点格式化后端 zmij 内部使用
+# SSE2/NEON intrinsic（_mm_mulhi_epu16 等），rustc_codegen_cranelift 会把其中
+# 多个编译成运行时陷阱（issue #171）——连接房间首次解析 JSON 数字即
+# panic=abort 静默退出。重定向到 Easytier 分支里打补丁的标量版 zmij fork。
+[patch.crates-io]
+zmij = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier" }
