@@ -1,0 +1,25 @@
+# [Astral fork] Vendored from crates.io zmij 1.0.23 (dtolnay, MIT).
+# src/lib.rs carries the Cranelift-compatibility patch (scalar-only build).
+# Version kept at 1.0.23 so it satisfies serde_json's `zmij ^1.0` requirement.
+
+[package]
+name = "zmij"
+version = "1.0.23"
+edition = "2021"
+rust-version = "1.71"
+authors = ["David Tolnay <dtolnay@gmail.com>"]
+build = "build.rs"
+description = "A double-to-string conversion algorithm based on Schubfach and xjb (Astral scalar-only fork)"
+license = "MIT"
+repository = "https://github.com/dtolnay/zmij"
+
+[lib]
+name = "zmij"
+path = "src/lib.rs"
+
+[dependencies.no-panic]
+version = "0.1.36"
+optional = true
+
+[features]
+default = []
