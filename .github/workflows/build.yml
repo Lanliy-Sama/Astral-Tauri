@@ -55,8 +55,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: 🦀 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: 🦀 安装 Rust（nightly + Cranelift 后端）
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustc-codegen-cranelift-preview
 
       - name: 💾 缓存 Rust 构建
         uses: Swatinem/rust-cache@v2
@@ -207,10 +209,11 @@ jobs:
           SYSROOT="$ANDROID_HOME/ndk/$NDK_VER/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
           echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--sysroot=$SYSROOT --target=aarch64-linux-android24" >> $GITHUB_ENV
 
-      - name: 🦀 安装 Rust 与 Android 交叉编译目标
-        uses: dtolnay/rust-toolchain@stable
+      - name: 🦀 安装 Rust 与 Android 交叉编译目标（nightly + Cranelift 后端）
+        uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          components: rustc-codegen-cranelift-preview
 
       - name: 💾 缓存 Rust 构建
         uses: Swatinem/rust-cache@v2

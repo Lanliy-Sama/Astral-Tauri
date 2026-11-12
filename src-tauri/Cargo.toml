@@ -38,8 +38,10 @@ tauri-runtime-wry = "3.0.0-alpha.6"
 tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
 
 [profile.release]
+# Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；
+# opt-level = 3 = Speed（Cranelift 后端会映射到自己的优化档位）
 codegen-units = 1
-lto = true
-opt-level = "s"
+lto = false
+opt-level = 3
 panic = "abort"
 strip = true
