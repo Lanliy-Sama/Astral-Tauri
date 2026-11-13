@@ -181,9 +181,6 @@ html.liquid-glass .md-tonal-btn::before,
 html.liquid-glass .md-elevated-btn::before,
 html.liquid-glass .md-outlined-btn::before,
 html.liquid-glass .md-menu::before,
-html.liquid-glass .list-user-card,
-html.liquid-glass .all-card,
-html.liquid-glass .mini-card,
 html.liquid-glass .md-dialog::before {
   content: '';
   position: absolute;
