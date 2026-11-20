@@ -140,7 +140,10 @@ html.liquid-glass .md-tonal-btn,
 html.liquid-glass .md-elevated-btn,
 html.liquid-glass .md-outlined-btn,
 html.liquid-glass .md-menu,
-html.liquid-glass .md-dialog {
+html.liquid-glass .md-dialog,
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card {
   --lg-edge: 18px; /* 边缘折射带宽度（各组件按尺寸覆盖） */
   --lg-blur: 9px; /* 中心磨砂半径 */
   --lg-spec-r: 110px; /* 镜面高光半径 */
@@ -181,7 +184,10 @@ html.liquid-glass .md-tonal-btn::before,
 html.liquid-glass .md-elevated-btn::before,
 html.liquid-glass .md-outlined-btn::before,
 html.liquid-glass .md-menu::before,
-html.liquid-glass .md-dialog::before {
+html.liquid-glass .md-dialog::before,
+html.liquid-glass .list-user-card::before,
+html.liquid-glass .all-card::before,
+html.liquid-glass .mini-card::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -236,7 +242,10 @@ html.liquid-glass .md-tonal-btn::after,
 html.liquid-glass .md-elevated-btn::after,
 html.liquid-glass .md-outlined-btn::after,
 html.liquid-glass .md-menu::after,
-html.liquid-glass .md-dialog::after {
+html.liquid-glass .md-dialog::after,
+html.liquid-glass .list-user-card::after,
+html.liquid-glass .all-card::after,
+html.liquid-glass .mini-card::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -336,6 +345,9 @@ html.liquid-glass .md-menu {
 html.liquid-glass .lg-glass:hover,
 html.liquid-glass .lg-glass.lg-hover,
 html.liquid-glass .md-card:hover,
+html.liquid-glass .list-user-card:hover,
+html.liquid-glass .all-card:hover,
+html.liquid-glass .mini-card:hover,
 html.liquid-glass .home-box:not(.borderless):hover,
 html.liquid-glass .md-fab:hover,
 html.liquid-glass .md-filled-btn:hover,
@@ -890,9 +902,40 @@ html.liquid-glass .sheet-body .opt.selected:active {
 }
   }
 
-/* 成员卡（list-user-card/all-card/mini-card）不进玻璃体系：
- * backdrop-filter 在本机 WebView2 不渲染 + 半透明 tint 在壁纸上
- * 不可见（两轮验证）——保持组件自带的实色 M3 卡片。 */
+/* ---- 成员卡：玻璃参数（小卡窄边带 + 较实的 tint 保证壁纸上可读） ----
+ * list-user-card 单行 ~40px：edge 10px 才留得出中心区；all/mini ~90-140px。
+ * tint 取 surface-container 64-78%：比悬浮面板轻、比全透实——成员卡信息
+ * 密度高（名字+徽章+延迟+IP），全透在壁纸上不可读（2.9.61 两轮验证；
+ * 当时"不可见"的真根因是 ::before 逃逸 + 中心 backdrop-filter 不渲染，
+ * tint 只是同案帮凶）。本体无实色背景：ListUserCard 自身透明，
+ * all/mini 的实色被基座 background:transparent 特异性覆盖。 */
+html.liquid-glass .list-user-card {
+  --lg-edge: 10px;
+  --lg-blur: 14px;
+  --lg-spec-r: 120px;
+  --lg-bright: 1.06;
+  --lg-tint:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--md-surface-container-low) 72%, rgb(255 255 255 / 0.5)),
+      color-mix(in srgb, var(--md-surface-container-low) 78%, rgb(255 255 255 / 0.3)) 55%,
+      color-mix(in srgb, var(--md-surface-container-low) 70%, rgb(255 255 255 / 0.4))
+    );
+}
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card {
+  --lg-edge: 12px;
+  --lg-blur: 14px;
+  --lg-spec-r: 130px;
+  --lg-bright: 1.06;
+  --lg-tint:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--md-surface-container-low) 66%, rgb(255 255 255 / 0.5)),
+      color-mix(in srgb, var(--md-surface-container-low) 74%, rgb(255 255 255 / 0.3)) 55%,
+      color-mix(in srgb, var(--md-surface-container-low) 64%, rgb(255 255 255 / 0.4))
+    );
+}
 
 /* ---- 字体衬底 chip 隐形化（背景逐像素同图伪装） ----
  * 浮动标签/下拉标签骑在输入框 1px 边框线上，chip 的存在意义是遮住那段
