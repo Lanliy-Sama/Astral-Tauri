@@ -909,32 +909,18 @@ html.liquid-glass .sheet-body .opt.selected:active {
  * 当时"不可见"的真根因是 ::before 逃逸 + 中心 backdrop-filter 不渲染，
  * tint 只是同案帮凶）。本体无实色背景：ListUserCard 自身透明，
  * all/mini 的实色被基座 background:transparent 特异性覆盖。 */
-html.liquid-glass .list-user-card {
+html.liquid-glass .list-user-card,
+html.liquid-glass .all-card,
+html.liquid-glass .mini-card {
   --lg-edge: 10px;
   --lg-blur: 14px;
   --lg-spec-r: 120px;
   --lg-bright: 1.06;
-  --lg-tint:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--md-surface-container-low) 72%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-surface-container-low) 78%, rgb(255 255 255 / 0.3)) 55%,
-      color-mix(in srgb, var(--md-surface-container-low) 70%, rgb(255 255 255 / 0.4))
-    );
-}
-html.liquid-glass .all-card,
-html.liquid-glass .mini-card {
-  --lg-edge: 12px;
-  --lg-blur: 14px;
-  --lg-spec-r: 130px;
-  --lg-bright: 1.06;
-  --lg-tint:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--md-surface-container-low) 66%, rgb(255 255 255 / 0.5)),
-      color-mix(in srgb, var(--md-surface-container-low) 74%, rgb(255 255 255 / 0.3)) 55%,
-      color-mix(in srgb, var(--md-surface-container-low) 64%, rgb(255 255 255 / 0.4))
-    );
+  /* 与主页卡片一致的全透中心：可见性由边缘折射带 + 光泽 + 文字承载
+   * （此前"不可见"的真根因是 ::before 选择器丢 ::before 后缀 + 逃逸，
+   * 与 tint 无关——玻璃观感对齐用户"完全透明"的既定偏好） */
+  --lg-tint: transparent;
+  --lg-rest: 0;
 }
 
 /* ---- 字体衬底 chip 隐形化（背景逐像素同图伪装） ----
