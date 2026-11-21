@@ -1,8 +1,10 @@
 <script>
   /** 灵动岛歌词胶囊 —— 开关（软件设置 → 系统音乐控制）启用后常驻顶部，
    *  实时显示 SMTC 系统播放（第三方播放器）的当前歌词行 + 歌名歌手。
-   *  进度插值：smtcState.position + rate * 自取数起经过时间，300ms 步进。 */
+   *  进度取 smtcVirtualPosition()（SMTC Position 停更时服务层本地外推），
+   *  300ms 步进选行。 */
   import { sm } from '../../services/ServiceManager.svelte';
+  import { smtcVirtualPosition } from '../../services/SmtcService.svelte';
   import { isTauri, isWindows } from '../../utils/Platform.svelte';
 
   let lineIdx = $state(-1);
@@ -24,7 +26,7 @@
       lineIdx = -1;
       return;
     }
-    const pos = s.position + ((performance.now() - s.fetchedAt) / 1000) * s.rate;
+    const pos = smtcVirtualPosition();
     let idx = -1;
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].t <= pos) idx = i;
