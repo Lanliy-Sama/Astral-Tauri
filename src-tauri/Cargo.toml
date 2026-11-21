@@ -42,7 +42,6 @@ reqwest = { version = "0.13.5", default-features = false, features = ["default-t
 aes = "0.8"
 num-bigint = "0.4"
 md-5 = "0.10"
-sha1 = "0.10"
 native-tls = "0.2"
 sha1 = "0.10"
 native-tls = "0.2"
