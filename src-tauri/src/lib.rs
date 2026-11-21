@@ -582,18 +582,8 @@ mod smtc {
             .map_err(|e| format!("读取媒体信息请求失败: {e}"))?
             .await
             .map_err(|e| format!("读取媒体信息未完成: {e}"))?;
-        let title = props
-            .Title()
-            .map(|h| h.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let artist = props
-            .Artist()
-            .map(|h| h.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let app_id = props
-            .AppId()
-            .map(|h| h.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let title = props.Title().map(|h| h.to_string_lossy()).unwrap_or_default();
+        let artist = props.Artist().map(|h| h.to_string_lossy()).unwrap_or_default();
         let status = session
             .GetPlaybackInfo()
             .and_then(|pi| pi.PlaybackStatus())
@@ -603,14 +593,19 @@ mod smtc {
         let (position, duration, rate) = session
             .GetTimelineProperties()
             .map(|t| {
+                // TimelineProperties 无 Duration/PlaybackRate（windows 0.52 生成）：
+                // 总时长 = EndTime - StartTime；倍速在 PlaybackInfo 上
                 let pos = t.Position().map(|ts| ts.Duration as f64 / 1e7).unwrap_or(0.0);
-                let dur = t
-                    .Duration()
-                    .and_then(|r| r.Value())
-                    .map(|ts| ts.Duration as f64 / 1e7)
-                    .unwrap_or(0.0);
-                let rate = t.PlaybackRate().and_then(|r| r.Value()).unwrap_or(1.0);
-                (pos, dur, rate)
+                let dur = (t.EndTime().map(|ts| ts.Duration as f64 / 1e7).unwrap_or(0.0)
+                    - t.StartTime().map(|ts| ts.Duration as f64 / 1e7).unwrap_or(0.0))
+                    .max(0.0);
+                let rate = session
+                    .GetPlaybackInfo()
+                    .ok()
+                    .and_then(|pi| pi.PlaybackRate().ok())
+                    .and_then(|r| r.Value().ok())
+                    .unwrap_or(1.0);
+                (pos, dur, if rate > 0.0 { rate } else { 1.0 })
             })
             .unwrap_or((0.0, 0.0, 1.0));
         Ok(serde_json::json!({
@@ -618,7 +613,6 @@ mod smtc {
             "hasSession": true,
             "title": title,
             "artist": artist,
-            "appId": app_id,
             "status": status,
             "positionSecs": position,
             "durationSecs": duration,
@@ -820,8 +814,31 @@ async fn smtc_fetch_lyrics(title: String, artist: String) -> Result<serde_json::
     }
 }
 
+/// 单实例保护（desktop）：互斥锁已存在 = 已有实例在运行 —— 唤醒其主窗口
+/// （SetEvent，通知线程 show+focus）后直接退出，杜绝双进程双托盘图标与
+/// EasyTier 端口互抢。
+#[cfg(desktop)]
+fn enforce_single_instance() {
+    use windows::core::w;
+    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::Win32::System::Threading::{CreateEventW, CreateMutexW, SetEvent};
+    unsafe {
+        let _ = CreateMutexW(None, true, w!("Global\\AstralSingleInstanceMutex"));
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            if let Ok(ev) = CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) {
+                let _ = SetEvent(ev);
+            }
+            std::process::exit(0);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 单实例保护必须在 Tauri 初始化之前（第二实例直接退出）
+    #[cfg(desktop)]
+    enforce_single_instance();
+
     let builder = tauri::Builder::default();
 
     // v3 桌面端必须显式选择运行时（mobile 由 mobile_entry_point 注册）
@@ -1007,6 +1024,30 @@ pub fn run() {
             // 系统托盘（对应原版 tray_manager：显示主界面 / 隐藏托盘 / 退出）
             #[cfg(desktop)]
             setup_tray(app)?;
+
+            // 单实例唤醒线程：第二实例 SetEvent → 显示+聚焦主窗口
+            #[cfg(desktop)]
+            {
+                use windows::core::w;
+                use windows::Win32::Foundation::WAIT_OBJECT_0;
+                use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
+                if let Ok(ev) = unsafe { CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) } {
+                    let handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        loop {
+                            let r = unsafe { WaitForSingleObject(ev, INFINITE) };
+                            if r != WAIT_OBJECT_0 {
+                                break;
+                            }
+                            if let Some(win) = handle.get_webview_window("main") {
+                                let _ = win.unminimize();
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+                    });
+                }
+            }
 
             // --autostart 参数：静默启动（隐藏窗口，对应 isAutostart/startupMinimize）
             let autostart = std::env::args().any(|a| a == "--autostart");
