@@ -1,34 +1,51 @@
 # 代码生成后端：Cranelift 替换 LLVM（nightly + rustc-codegen-cranelift-preview）
 # 按目标显式声明（RUSTFLAGS env 会覆盖 config，故不使用 [build] 段）
+#
+# 指令集基线（编译期写死 = 运行期硬要求，旧 CPU 直接 SIGILL）：
+# - x86_64：x86-64-v3 = AVX2 + FMA + BMI1/2 + LZCNT + MOVBE + POPCNT + F16C + RDRAND + AES
+# - aarch64：+lse（ARMv8.1 Large System Extensions，硬件级原子 cas/swp）
+# Cranelift 后端无体积/优化档位旋钮（上游 cg_clif 已移除 opt_level）；体积项
+# 在 Cargo.toml [profile.release]：strip=true + panic=abort + codegen-units=1
+
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-Zcodegen-backend=cranelift]
+rustflags = [
+    "-Zcodegen-backend=cranelift",
+    "-Ctarget-cpu=x86-64-v3",
+]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-Zcodegen-backend=cranelift]
+rustflags = [
+    "-Zcodegen-backend=cranelift",
+    "-Ctarget-cpu=x86-64-v3",
+]
 
 # Android 16KB 内存页对齐：2024+ 部分新机型（Android 15+/16 时代）
 # 内核为 16KB-only 页，4KB 对齐的动态库在这些设备上 dlopen 直接失败
 # —— 表现为应用启动即闪退。16KB 对齐对 4KB 页设备完全向后兼容。
 [target.aarch64-linux-android]
 rustflags = [
-    "-Zcodegen-backend=cranelift,
+    "-Zcodegen-backend=cranelift",
+    "-Ctarget-feature=+lse",
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
 ]
 
 [target.armv7-linux-androideabi]
+# ARMv7 没有 LSE（ARMv8.1+ 才引入），维持原基线
 rustflags = [
-    "-Zcodegen-backend=cranelift,
+    "-Zcodegen-backend=cranelift",
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
 ]
 
 [target.i686-linux-android]
+# 32 位 x86 不适用 x86-64-v3 基线
 rustflags = [
-    "-Zcodegen-backend=cranelift,
+    "-Zcodegen-backend=cranelift",
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
 ]
 
 [target.x86_64-linux-android]
 rustflags = [
-    "-Zcodegen-backend=cranelift,
+    "-Zcodegen-backend=cranelift",
+    "-Ctarget-cpu=x86-64-v3",
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
 ]
