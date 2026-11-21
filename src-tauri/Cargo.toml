@@ -40,7 +40,6 @@ tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
 # 音乐平台直连（网易云 / QQ / 酷狗）：扫码登录 + 搜索 + 播放地址 + 歌词
 reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "json", "blocking", "cookies"] }
 aes = "0.8"
-base64 = "0.22"
 num-bigint = "0.4"
 md-5 = "0.10"
 qrcode = "0.14"
