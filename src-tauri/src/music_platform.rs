@@ -1242,7 +1242,7 @@ mod qq {
         // 匿名 trait 导入（as _）不随 glob 传递，模块内显式补上
         use base64::Engine as _;
 
-    struct QqMqttChannel {
+    pub(super) struct QqMqttChannel {
         stream: native_tls::TlsStream<std::net::TcpStream>,
         read_buf: Vec<u8>,
         fragment: Option<Vec<u8>>,
@@ -1253,7 +1253,7 @@ mod qq {
 
     impl QqMqttChannel {
         /// TLS + WebSocket 升级 + MQTT CONNECT/SUBSCRIBE；reason 0x9c/0x9d 重定向同主机路径
-        fn connect(qr_id: &str) -> Result<QqMqttChannel, String> {
+        pub(super) fn connect(qr_id: &str) -> Result<QqMqttChannel, String> {
             use native_tls::TlsConnector;
             use std::io::{Read, Write};
 
@@ -1454,7 +1454,7 @@ mod qq {
         }
 
         /// 下一个登录事件：Some((type, payload)) / None = 超时
-        fn next(&mut self, deadline: std::time::Instant) -> Result<Option<(String, Vec<u8>)>, String> {
+        pub(super) fn next(&mut self, deadline: std::time::Instant) -> Result<Option<(String, Vec<u8>)>, String> {
             while std::time::Instant::now() < deadline {
                 let packet = self.next_packet_by_deadline(deadline)?;
                 let Some(packet) = packet else { return Ok(None) };
