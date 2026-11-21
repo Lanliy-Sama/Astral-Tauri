@@ -620,33 +620,59 @@ mod smtc {
         }))
     }
 
+    /// 广播式控制：多播放器并存时（网易云会注册多个会话/多播放器多会话），
+    /// 单点 TryPause 经常命中的是"非主播放器"的会话而被忽略 —— pause/play
+    /// 广播给全部会话（按各自状态过滤），切歌只发给正在播放的会话（避免
+    /// 多会话双跳）。
     pub async fn control(action: &str) -> Result<bool, String> {
         let m = manager().await?;
-        let Some(session) = pick_session(&m) else {
-            return Err("没有可用的媒体会话".into());
+        let sessions = m.GetSessions().map_err(|e| e.to_string())?;
+        let n = sessions.Size().map_err(|e| e.to_string())?;
+        let playing_status = |s: &GlobalSystemMediaTransportControlsSession| {
+            s.GetPlaybackInfo()
+                .ok()
+                .and_then(|pi| pi.PlaybackStatus().ok())
+                .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+                .unwrap_or(false)
         };
-        let playing = session
-            .GetPlaybackInfo()
-            .and_then(|pi| pi.PlaybackStatus())
-            .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
-            .unwrap_or(false);
-        let op = match action {
-            "play" => session.TryPlayAsync(),
-            "pause" => session.TryPauseAsync(),
-            "toggle" => {
-                if playing {
-                    session.TryPauseAsync()
-                } else {
-                    session.TryPlayAsync()
+        let has_playing = (0..n).any(|i| sessions.GetAt(i).map(|s| playing_status(&s)).unwrap_or(false));
+        let mut any_ok = false;
+        for i in 0..n {
+            let Ok(s) = sessions.GetAt(i) else { continue };
+            let playing = playing_status(&s);
+            let op = match action {
+                "pause" => {
+                    if playing { Some(s.TryPauseAsync()) } else { None }
+                }
+                "play" => {
+                    if !playing { Some(s.TryPlayAsync()) } else { None }
+                }
+                "toggle" => {
+                    if has_playing {
+                        if playing { Some(s.TryPauseAsync()) } else { None }
+                    } else if !playing {
+                        Some(s.TryPlayAsync())
+                    } else {
+                        None
+                    }
+                }
+                "next" => {
+                    if playing { Some(s.TrySkipNextAsync()) } else { None }
+                }
+                "prev" => {
+                    if playing { Some(s.TrySkipPreviousAsync()) } else { None }
+                }
+                _ => return Err(format!("未知的控制动作: {action}")),
+            };
+            if let Some(op) = op {
+                if let Ok(inner) = op {
+                    if inner.await.unwrap_or(false) {
+                        any_ok = true;
+                    }
                 }
             }
-            "next" => session.TrySkipNextAsync(),
-            "prev" => session.TrySkipPreviousAsync(),
-            _ => return Err(format!("未知的控制动作: {action}")),
-        };
-        op.map_err(|e| e.to_string())?
-            .await
-            .map_err(|e| e.to_string())
+        }
+        Ok(any_ok)
     }
 }
 
