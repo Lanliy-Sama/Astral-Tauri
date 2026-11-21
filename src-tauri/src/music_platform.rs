@@ -3,6 +3,8 @@
 //! 账号凭据只存本地（app_data/music_platform/），请求时按平台携带。
 
 use base64::Engine as _;
+// 自引用：命令层以 `music_platform::netease::…` 等全路径调用子模块
+use crate::music_platform;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -76,12 +78,12 @@ fn rsa_nopad_hex(data: &[u8], modulus_hex: &str) -> String {
 }
 
 fn md5_hex_lower(value: &str) -> String {
-    use md_5::{Digest, Md5};
+    use md5::{Digest, Md5};
     Md5::digest(value.as_bytes()).iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 fn md5_hex_upper(value: &[u8]) -> String {
-    use md_5::{Digest, Md5};
+    use md5::{Digest, Md5};
     Md5::digest(value).iter().map(|b| format!("{:02X}", b)).collect()
 }
 
@@ -99,21 +101,31 @@ fn urlencode(s: &str) -> String {
 
 /* ---------------- HTTP ---------------- */
 
-static CLIENTS: OnceLock<Mutex<HashMap<String, reqwest::blocking::Client>>> = OnceLock::new();
+static CLIENTS: OnceLock<HashMap<&'static str, &'static reqwest::blocking::Client>> = OnceLock::new();
 
-fn http(platform: &str) -> &'static reqwest::blocking::Client {
-    let map = CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
-    guard
-        .entry(platform.to_string())
-        .or_insert_with(|| {
-            reqwest::blocking::Client::builder()
-                .cookie_store(platform != "netease")
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .timeout(std::time::Duration::from_secs(20))
-                .build()
-                .unwrap_or_else(|_| reqwest::blocking::Client::new())
-        })
+/// 每平台一个长驻 blocking Client（'static：Box::leak 泄漏所有权）。
+/// netease 不开 cookie 罐（cookie 由账号持久化层显式携带），
+/// qq / kugou 开 cookie 罐承接登录会话。
+fn http(platform: &'static str) -> &'static reqwest::blocking::Client {
+    let map = CLIENTS.get_or_init(|| {
+        let mut m = HashMap::new();
+        for p in ["netease", "qq", "kugou", "common"] {
+            let client: &'static reqwest::blocking::Client = Box::leak(Box::new(
+                reqwest::blocking::Client::builder()
+                    .cookie_store(p != "netease")
+                    .connect_timeout(std::time::Duration::from_secs(10))
+                    .timeout(std::time::Duration::from_secs(20))
+                    .build()
+                    .unwrap_or_else(|_| reqwest::blocking::Client::new()),
+            ));
+            m.insert(p, client);
+        }
+        m
+    });
+    map.get(platform).copied().unwrap_or_else(|| {
+        // 未知平台名（理论不可达）：退回无 cookie 的公共 client
+        map["common"]
+    })
 }
 
 fn http_get_json(url: &str, referer: &str, cookie: &str) -> Result<Value, String> {
@@ -271,6 +283,19 @@ fn qr_svg(content: &str) -> Result<String, String> {
         .build())
 }
 
+pub fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+pub fn rand_digits(n: usize) -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    (0..n).map(|_| format!("{}", rng.gen_range(0..10))).collect()
+}
+
 
 /* ================= 网易云 ================= */
 
@@ -364,19 +389,6 @@ mod netease {
 
     fn get_json_auth(url: &str, account: Option<&Account>) -> Result<Value, String> {
         http_get_json(url, "https://music.163.com/", &cookie(account))
-    }
-
-    pub fn now_millis() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)
-    }
-
-    pub fn rand_digits(n: usize) -> String {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        (0..n).map(|_| format!("{}", rng.gen_range(0..10))).collect()
     }
 
     /* ---- 扫码登录（后台线程 + 轮询 801/802/800/803） ---- */
@@ -666,7 +678,7 @@ mod netease {
         ];
         for (stage, body) in attempts {
             let root = if stage == "v1" {
-                netease::eapi_post(
+                eapi_post(
                     "/api/song/enhance/player/url/v1",
                     serde_json::from_str(&body).unwrap_or(Value::Null),
                     account.as_ref(),
@@ -971,10 +983,13 @@ mod kugou {
                         1 => {}
                         2 => super::set_login("kugou", "scanned", "", "", ""),
                         4 => {
+                            let fallback = json!({});
                             let info = poll["data"]["userinfo"]
                                 .as_object()
                                 .or_else(|| poll["data"]["user_info"].as_object())
-                                .unwrap_or(poll["data"].as_object().unwrap_or(&json!({})));
+                                .unwrap_or_else(|| {
+                                    poll["data"].as_object().unwrap_or(fallback.as_object().unwrap())
+                                });
                             let user_id = info["userid"]
                                 .as_str()
                                 .or_else(|| poll["data"]["userid"].as_str())
@@ -1030,7 +1045,7 @@ mod kugou {
                 .collect()
         };
         // encryptToken：AES-CBC-PKCS5(key = md5(key16)，iv = 摘要末 16 字节) + RSA 128 字节块
-        use md_5::{Digest, Md5};
+        use md5::{Digest, Md5};
         let digest = Md5::digest(key.as_bytes());
         let hex_digest: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
         let key_bytes: Vec<u8> = hex_digest.as_bytes()[..16].to_vec();
@@ -1172,7 +1187,7 @@ mod kugou {
         let o = http_get_json(&info_url, "https://m.kugou.com/", "")?;
         if o["status"].as_i64() == Some(1) {
             let data = o.get("data").cloned().unwrap_or(o.clone());
-            for key in ("play_url", "url", "backup_url") {
+            for key in ["play_url", "url", "backup_url"] {
                 if let Some(url) = data[key].as_str().filter(|u| u.starts_with("http")) {
                     for part in url.split(",http") {
                         let candidate = if part.starts_with("http") {
@@ -1248,7 +1263,7 @@ pub mod lyrics_util {
         let (m, s) = tag.split_once(':')?;
         let m: i64 = m.trim().parse().ok()?;
         let s: f64 = s.trim().parse().ok()?;
-        if m < 0 || s < 0 {
+        if m < 0 || s < 0.0 {
             return None;
         }
         Some(m * 60_000 + (s * 1000.0) as i64)
@@ -1323,9 +1338,9 @@ fn tracks() -> &'static Mutex<HashMap<String, Value>> {
     TRACKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn registry_put(tracks: &[Value]) {
+fn registry_put(items: &[Value]) {
     let mut map = tracks().lock().unwrap_or_else(|e| e.into_inner());
-    for t in tracks {
+    for t in items {
         if let Some(key) = t["key"].as_str() {
             map.insert(key.to_string(), t.clone());
         }
@@ -1353,7 +1368,7 @@ fn platform_supported(platform: &str) -> bool {
 }
 
 #[tauri::command]
-fn music_login_start(platform: String, app: tauri::AppHandle) -> Result<(), String> {
+pub fn music_login_start(platform: String, app: tauri::AppHandle) -> Result<(), String> {
     if !platform_supported(&platform) {
         return Err(format!("{platform} 暂不支持"));
     }
@@ -1374,7 +1389,7 @@ fn super_login_session_bump() {
 }
 
 #[tauri::command]
-fn music_login_state() -> Value {
+pub fn music_login_state() -> Value {
     let guard = login().lock().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
         Some(s) => json!({
@@ -1386,7 +1401,7 @@ fn music_login_state() -> Value {
 }
 
 #[tauri::command]
-fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
+pub fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
     match platform.as_str() {
         "netease" => music_platform::netease::account(&app),
         "kugou" => music_platform::kugou::account(&app),
@@ -1396,13 +1411,13 @@ fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String
 }
 
 #[tauri::command]
-fn music_logout(platform: String, app: tauri::AppHandle) -> Result<(), String> {
+pub fn music_logout(platform: String, app: tauri::AppHandle) -> Result<(), String> {
     clear_account(&platform, &app);
     Ok(())
 }
 
 #[tauri::command]
-fn music_playlists(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
+pub fn music_playlists(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
     match platform.as_str() {
         "netease" => music_platform::netease::playlists(&app),
         "kugou" => Err("酷狗歌单浏览暂未开放".into()),
@@ -1411,7 +1426,7 @@ fn music_playlists(platform: String, app: tauri::AppHandle) -> Result<Value, Str
 }
 
 #[tauri::command]
-fn music_playlist_tracks(platform: String, id: String, app: tauri::AppHandle) -> Result<Value, String> {
+pub fn music_playlist_tracks(platform: String, id: String, app: tauri::AppHandle) -> Result<Value, String> {
     match platform.as_str() {
         "netease" => music_platform::netease::playlist_tracks(&app, &id),
         _ => Err("不支持的平台".into()),
@@ -1419,7 +1434,7 @@ fn music_playlist_tracks(platform: String, id: String, app: tauri::AppHandle) ->
 }
 
 #[tauri::command]
-fn music_search(platform: String, query: String) -> Result<Value, String> {
+pub fn music_search(platform: String, query: String) -> Result<Value, String> {
     match platform.as_str() {
         "netease" => music_platform::netease::search(&query),
         "qq" => music_platform::qq::search(&query),
@@ -1429,7 +1444,7 @@ fn music_search(platform: String, query: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> Result<Value, String> {
+pub fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> Result<Value, String> {
     let track = registry_get(&key).ok_or("曲目信息已过期，请重新搜索")?;
     match platform.as_str() {
         "netease" => {
@@ -1447,7 +1462,7 @@ fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> Resul
 }
 
 #[tauri::command]
-fn music_lyrics(platform: String, key: String) -> Result<Value, String> {
+pub fn music_lyrics(platform: String, key: String) -> Result<Value, String> {
     let track = registry_get(&key).ok_or("曲目信息已过期，请重新搜索")?;
     match platform.as_str() {
         "netease" => {
