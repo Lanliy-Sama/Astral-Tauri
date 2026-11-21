@@ -573,7 +573,7 @@ mod smtc {
     }
 
     pub fn current() -> Result<serde_json::Value, String> {
-        let m = manager().await?;
+        let m = manager()?;
         let Some(session) = pick_session(&m) else {
             return Ok(serde_json::json!({ "supported": true, "hasSession": false }));
         };
@@ -625,7 +625,7 @@ mod smtc {
     /// 广播给全部会话（按各自状态过滤），切歌只发给正在播放的会话（避免
     /// 多会话双跳）。
     pub fn control(action: &str) -> Result<bool, String> {
-        let m = manager().await?;
+        let m = manager()?;
         let sessions = m.GetSessions().map_err(|e| e.to_string())?;
         let n = sessions.Size().map_err(|e| e.to_string())?;
         let playing_status = |s: &GlobalSystemMediaTransportControlsSession| {
@@ -681,7 +681,7 @@ fn smtc_get_current() -> serde_json::Value {
     #[cfg(target_os = "windows")]
     {
         smtc_com_init();
-        match smtc::current().await {
+        match smtc::current() {
             Ok(v) => v,
             Err(e) => serde_json::json!({ "supported": true, "hasSession": false, "error": e }),
         }
@@ -697,7 +697,7 @@ fn smtc_control(action: String) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         smtc_com_init();
-        smtc::control(&action).await
+        smtc::control(&action)
     }
     #[cfg(not(target_os = "windows"))]
     {
