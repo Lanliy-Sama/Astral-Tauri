@@ -646,6 +646,7 @@
           />
         </div>
       </SettingsCard>
+    {/if}
 
     <div class="gap-16"></div>
 
