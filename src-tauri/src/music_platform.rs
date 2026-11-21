@@ -898,13 +898,14 @@ mod qq {
 
     /* ---- 扫码登录（App 通道：CreateQRCode → MQTT5/WS 事件 → Login 换票） ---- */
 
-    /// QQ g_tk：hash33（seed 5381，hash*33+code），取无符号 31 位
+    /// QQ g_tk：hash33（seed 5381，hash*33+code）——必须与 Kotlin Int（32 位
+    /// 环绕溢出）逐位一致，否则 musickey 长串下 g_tk 不同、鉴权全挂
     fn hash33(value: &str) -> i64 {
-        let mut hash: i64 = 5381;
+        let mut hash: i32 = 5381;
         for ch in value.chars() {
-            hash = hash.wrapping_mul(33).wrapping_add(ch as i64);
+            hash = hash.wrapping_mul(33).wrapping_add(ch as i32);
         }
-        hash & 0x7fff_ffff
+        (hash & 0x7fff_ffff) as i64
     }
 
     /// musicu.fcg 回包：req_0.code（根 code 非 0 时以根为准）
@@ -1386,7 +1387,6 @@ mod qq {
 
         /// 读一个 MQTT 包（deadline 前持续读），None = 超时
         fn next_packet_by_deadline(&mut self, deadline: std::time::Instant) -> Result<Option<Vec<u8>>, String> {
-            use std::io::Read;
             loop {
                 // 发 PINGREQ 保活
                 if self.last_ping.elapsed() >= self.ping_interval {
