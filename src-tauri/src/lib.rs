@@ -534,7 +534,7 @@ mod smtc {
     };
 
     async fn manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
-        GlobalSystemMediaTransportControlsSessionManager::RequestCurrentAsync()
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
             .map_err(|e| format!("SMTC 管理器请求失败: {e}"))?
             .await
             .map_err(|e| format!("SMTC 管理器未完成: {e}"))
@@ -558,7 +558,7 @@ mod smtc {
         for i in 0..n {
             let Ok(s) = sessions.GetAt(i) else { continue };
             let playing = s
-                .PlaybackInfo()
+                .GetPlaybackInfo()
                 .and_then(|pi| pi.PlaybackStatus())
                 .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
                 .unwrap_or(false);
@@ -578,8 +578,10 @@ mod smtc {
             return Ok(serde_json::json!({ "supported": true, "hasSession": false }));
         };
         let props = session
-            .MediaProperties()
-            .map_err(|e| format!("读取媒体信息失败: {e}"))?;
+            .TryGetMediaPropertiesAsync()
+            .map_err(|e| format!("读取媒体信息请求失败: {e}"))?
+            .await
+            .map_err(|e| format!("读取媒体信息未完成: {e}"))?;
         let title = props
             .Title()
             .map(|h| h.to_string_lossy().into_owned())
@@ -593,18 +595,23 @@ mod smtc {
             .map(|h| h.to_string_lossy().into_owned())
             .unwrap_or_default();
         let status = session
-            .PlaybackInfo()
+            .GetPlaybackInfo()
             .and_then(|pi| pi.PlaybackStatus())
             .map(status_str)
             .unwrap_or("other")
             .to_string();
         let (position, duration, rate) = session
             .GetTimelineProperties()
-            .map(|t| (
-                t.Position().Duration as f64 / 1e7,
-                t.Duration().Duration as f64 / 1e7,
-                t.PlaybackRate(),
-            ))
+            .map(|t| {
+                let pos = t.Position().map(|ts| ts.Duration as f64 / 1e7).unwrap_or(0.0);
+                let dur = t
+                    .Duration()
+                    .and_then(|r| r.Value())
+                    .map(|ts| ts.Duration as f64 / 1e7)
+                    .unwrap_or(0.0);
+                let rate = t.PlaybackRate().and_then(|r| r.Value()).unwrap_or(1.0);
+                (pos, dur, rate)
+            })
             .unwrap_or((0.0, 0.0, 1.0));
         Ok(serde_json::json!({
             "supported": true,
@@ -625,24 +632,27 @@ mod smtc {
             return Err("没有可用的媒体会话".into());
         };
         let playing = session
-            .PlaybackInfo()
+            .GetPlaybackInfo()
             .and_then(|pi| pi.PlaybackStatus())
             .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
             .unwrap_or(false);
-        match action {
-            "play" => session.TryPlayAsync().await.map_err(|e| e.to_string()),
-            "pause" => session.TryPauseAsync().await.map_err(|e| e.to_string()),
+        let op = match action {
+            "play" => session.TryPlayAsync(),
+            "pause" => session.TryPauseAsync(),
             "toggle" => {
                 if playing {
-                    session.TryPauseAsync().await.map_err(|e| e.to_string())
+                    session.TryPauseAsync()
                 } else {
-                    session.TryPlayAsync().await.map_err(|e| e.to_string())
+                    session.TryPlayAsync()
                 }
             }
-            "next" => session.TrySkipNextAsync().await.map_err(|e| e.to_string()),
-            "prev" => session.TrySkipPreviousAsync().await.map_err(|e| e.to_string()),
-            _ => Err(format!("未知的控制动作: {action}")),
-        }
+            "next" => session.TrySkipNextAsync(),
+            "prev" => session.TrySkipPreviousAsync(),
+            _ => return Err(format!("未知的控制动作: {action}")),
+        };
+        op.map_err(|e| e.to_string())?
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -720,6 +730,22 @@ fn parse_lrc(text: &str) -> Vec<serde_json::Value> {
     out
 }
 
+/// 查询串百分号编码（reqwest 0.13 的 RequestBuilder 已无 .query）
+#[cfg(target_os = "windows")]
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char);
+            }
+            b' ' => out.push_str("%20"),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
+
 /// 标题清洗：去 YouTube 热单常见的括号段（【】()（）[]），提升歌词匹配率
 #[cfg(target_os = "windows")]
 fn clean_title(title: &str) -> String {
@@ -757,20 +783,24 @@ async fn smtc_fetch_lyrics(title: String, artist: String) -> Result<serde_json::
                 continue;
             }
             let search = client
-                .get("https://music.163.com/api/search/get/web")
+                .get(format!(
+                    "https://music.163.com/api/search/get/web?s={}&type=1&offset=0&limit=3",
+                    url_encode(&q)
+                ))
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .header("Referer", "https://music.163.com")
-                .query(&[("s", q), ("type", "1"), ("offset", "0"), ("limit", "3")])
                 .send()
                 .await;
             let Ok(search) = search else { continue };
             let Ok(v) = search.json::<serde_json::Value>().await else { continue };
             let Some(id) = v["result"]["songs"][0]["id"].as_i64() else { continue };
             let lyric = client
-                .get("https://music.163.com/api/song/lyric")
+                .get(format!(
+                    "https://music.163.com/api/song/lyric?id={}&lv=1&tv=-1",
+                    id
+                ))
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .header("Referer", "https://music.163.com")
-                .query(&[("id", id.to_string()), ("lv", "1"), ("tv", "-1")])
                 .send()
                 .await;
             let Ok(lyric) = lyric else { continue };
