@@ -42,7 +42,9 @@ tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
 # 与 easytier 共用版本源；rustls 规避平台 TLS 差异）。
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.52.0", features = ["Media_Control", "Foundation", "Win32_System_Com"] }
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls-tls", "json"] }
+# 0.13 的 TLS 特性更名：rustls 走 __rustls 内部档，桌面用 default-tls
+# （Windows = schannel，Android = native-tls）即为最优选择
+reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "json"] }
 
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；
