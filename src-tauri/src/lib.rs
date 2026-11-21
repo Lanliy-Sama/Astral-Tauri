@@ -814,29 +814,29 @@ async fn smtc_fetch_lyrics(title: String, artist: String) -> Result<serde_json::
     }
 }
 
-/// 单实例保护（desktop）：互斥锁已存在 = 已有实例在运行 —— 唤醒其主窗口
-/// （SetEvent，通知线程 show+focus）后直接退出，杜绝双进程双托盘图标与
-/// EasyTier 端口互抢。
-#[cfg(desktop)]
+/// 单实例保护（Windows）：OpenMutexW 探测到已有实例 → SetEvent 唤醒其
+/// 主窗口（show+focus）后直接退出，杜绝双进程双托盘图标与 EasyTier
+/// 端口互抢。（windows 0.52 的 GetLastError 生成为 Result<()>，无法
+/// 取码，故用 OpenMutexW 探测而非 CreateMutexW + 错误码比对。）
+#[cfg(target_os = "windows")]
 fn enforce_single_instance() {
     use windows::core::w;
-    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
-    use windows::Win32::System::Threading::{CreateEventW, CreateMutexW, SetEvent};
+    use windows::Win32::System::Threading::{CreateEventW, CreateMutexW, OpenMutexW, SetEvent, SYNCHRONIZE};
     unsafe {
-        let _ = CreateMutexW(None, true, w!("Global\\AstralSingleInstanceMutex"));
-        if GetLastError() == ERROR_ALREADY_EXISTS {
+        if OpenMutexW(SYNCHRONIZE, false, w!("Global\\AstralSingleInstanceMutex")).is_ok() {
             if let Ok(ev) = CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) {
                 let _ = SetEvent(ev);
             }
             std::process::exit(0);
         }
+        let _ = CreateMutexW(None, true, w!("Global\\AstralSingleInstanceMutex"));
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 单实例保护必须在 Tauri 初始化之前（第二实例直接退出）
-    #[cfg(desktop)]
+    #[cfg(target_os = "windows")]
     enforce_single_instance();
 
     let builder = tauri::Builder::default();
@@ -1026,7 +1026,7 @@ pub fn run() {
             setup_tray(app)?;
 
             // 单实例唤醒线程：第二实例 SetEvent → 显示+聚焦主窗口
-            #[cfg(desktop)]
+            #[cfg(target_os = "windows")]
             {
                 use windows::core::w;
                 use windows::Win32::Foundation::WAIT_OBJECT_0;
