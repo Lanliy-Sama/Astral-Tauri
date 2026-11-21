@@ -533,10 +533,10 @@ mod smtc {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus,
     };
 
-    async fn manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
+    fn manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
         GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
             .map_err(|e| format!("SMTC 管理器请求失败: {e}"))?
-            .await
+            .get()
             .map_err(|e| format!("SMTC 管理器未完成: {e}"))
     }
 
@@ -572,7 +572,7 @@ mod smtc {
         first
     }
 
-    pub async fn current() -> Result<serde_json::Value, String> {
+    pub fn current() -> Result<serde_json::Value, String> {
         let m = manager().await?;
         let Some(session) = pick_session(&m) else {
             return Ok(serde_json::json!({ "supported": true, "hasSession": false }));
@@ -580,7 +580,7 @@ mod smtc {
         let props = session
             .TryGetMediaPropertiesAsync()
             .map_err(|e| format!("读取媒体信息请求失败: {e}"))?
-            .await
+            .get()
             .map_err(|e| format!("读取媒体信息未完成: {e}"))?;
         let title = props.Title().map(|h| h.to_string_lossy()).unwrap_or_default();
         let artist = props.Artist().map(|h| h.to_string_lossy()).unwrap_or_default();
@@ -624,7 +624,7 @@ mod smtc {
     /// 单点 TryPause 经常命中的是"非主播放器"的会话而被忽略 —— pause/play
     /// 广播给全部会话（按各自状态过滤），切歌只发给正在播放的会话（避免
     /// 多会话双跳）。
-    pub async fn control(action: &str) -> Result<bool, String> {
+    pub fn control(action: &str) -> Result<bool, String> {
         let m = manager().await?;
         let sessions = m.GetSessions().map_err(|e| e.to_string())?;
         let n = sessions.Size().map_err(|e| e.to_string())?;
@@ -666,7 +666,7 @@ mod smtc {
             };
             if let Some(op) = op {
                 if let Ok(inner) = op {
-                    if inner.await.unwrap_or(false) {
+                    if inner.get().unwrap_or(false) {
                         any_ok = true;
                     }
                 }
@@ -677,7 +677,7 @@ mod smtc {
 }
 
 #[tauri::command]
-async fn smtc_get_current() -> serde_json::Value {
+fn smtc_get_current() -> serde_json::Value {
     #[cfg(target_os = "windows")]
     {
         smtc_com_init();
@@ -693,7 +693,7 @@ async fn smtc_get_current() -> serde_json::Value {
 }
 
 #[tauri::command]
-async fn smtc_control(action: String) -> Result<bool, String> {
+fn smtc_control(action: String) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         smtc_com_init();
