@@ -821,10 +821,17 @@ async fn smtc_fetch_lyrics(title: String, artist: String) -> Result<serde_json::
 #[cfg(target_os = "windows")]
 fn enforce_single_instance() {
     use windows::core::w;
-    use windows::Win32::Storage::FileSystem::SYNCHRONIZE;
-    use windows::Win32::System::Threading::{CreateEventW, CreateMutexW, OpenMutexW, SetEvent};
+    use windows::Win32::System::Threading::{
+        CreateEventW, CreateMutexW, OpenMutexW, SetEvent, SYNCHRONIZATION_ACCESS_RIGHTS,
+    };
     unsafe {
-        if OpenMutexW(SYNCHRONIZE, false, w!("Global\\AstralSingleInstanceMutex")).is_ok() {
+        if OpenMutexW(
+            SYNCHRONIZATION_ACCESS_RIGHTS(0x00100000), // SYNCHRONIZE
+            false,
+            w!("Global\\AstralSingleInstanceMutex"),
+        )
+        .is_ok()
+        {
             if let Ok(ev) = CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) {
                 let _ = SetEvent(ev);
             }
