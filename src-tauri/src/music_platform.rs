@@ -1372,7 +1372,8 @@ mod qq {
                         return Err("QQ 登录通道订阅被拒".into());
                     }
                 }
-                tls.set_read_timeout(Some(std::time::Duration::from_secs(1))).map_err(|e| e.to_string())?;
+                // native-tls 的 TlsStream 本身不暴露 socket 超时，落在底层 TcpStream 上
+                tls.get_ref().set_read_timeout(Some(std::time::Duration::from_secs(1))).map_err(|e| e.to_string())?;
                 return Ok(QqMqttChannel {
                     stream: tls,
                     read_buf: Vec::new(),
@@ -1531,7 +1532,7 @@ mod qq {
     fn mqtt_push_varint(out: &mut Vec<u8>, v: usize) {
         let mut remaining = v;
         loop {
-            let mut digit = remaining % 128;
+            let mut digit = (remaining % 128) as u8;
             remaining /= 128;
             if remaining > 0 {
                 digit |= 0x80;
