@@ -42,8 +42,6 @@ reqwest = { version = "0.13.5", default-features = false, features = ["default-t
 aes = "0.8"
 num-bigint = "0.4"
 md-5 = "0.10"
-sha1 = "0.10"
-native-tls = "0.2"
 qrcode = "0.14"
 rand = "0.8"
 regex = "1"
@@ -55,6 +53,13 @@ windows = { version = "0.52.0", features = [
     "Win32_Storage_FileSystem",
     "Win32_Foundation",
 ] }
+
+# QQ 扫码 MQTT/WS 登录通道（桌面端专用）：native-tls 在非 Windows/macOS
+# 走 openssl-sys，Android 交叉编译无 OpenSSL sysroot，故按目标平台门控；
+# Android 上 QQ 登录入口会明确提示使用桌面版
+[target.'cfg(not(target_os = "android"))'.dependencies]
+native-tls = "0.2"
+sha1 = "0.10"
 
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；

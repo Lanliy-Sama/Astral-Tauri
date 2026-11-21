@@ -980,6 +980,13 @@ mod qq {
         });
     }
 
+    #[cfg(target_os = "android")]
+    fn qq_login_flow(_app: &tauri::AppHandle, _session: u64) -> Result<(), String> {
+        // Android 交叉编译无 OpenSSL sysroot（native-tls 不可用），MQTT 通道仅桌面端
+        Err("QQ 扫码登录请在桌面版使用".into())
+    }
+
+    #[cfg(not(target_os = "android"))]
     fn qq_login_flow(app: &tauri::AppHandle, session: u64) -> Result<(), String> {
         // 1) CreateQRCode：拿 qrcodeID + base64 PNG（param 里必须带 ct/cv，
         //    否则手机端授权页 104610 拒绝）
@@ -999,7 +1006,7 @@ mod qq {
         }
 
         // 2) MQTT5-over-WebSocket 事件通道（先订阅再亮码；mu.y.qq.com /ws/handshake）
-        let mut channel = QqMqttChannel::connect(&id).map_err(|e| format!("QQ 登录通道连接失败: {e}"))?;
+        let mut channel = qq_scan::QqMqttChannel::connect(&id).map_err(|e| format!("QQ 登录通道连接失败: {e}"))?;
         if super::login_session_id() != session {
             return Ok(()); // 已被新一轮登录取代
         }
@@ -1226,7 +1233,14 @@ mod qq {
         Err("QQ 音乐没有返回可播放的音频".into())
     }
 
-    /* ---- MQTT 5 over WebSocket（mu.y.qq.com，Sec-WebSocket-Protocol: mqtt） ---- */
+    /* ---- MQTT 5 over WebSocket（mu.y.qq.com，Sec-WebSocket-Protocol: mqtt） ----
+     * 仅桌面端：Android 交叉编译无 OpenSSL sysroot（native-tls 不可用） */
+
+    #[cfg(not(target_os = "android"))]
+    pub(super) mod qq_scan {
+        use super::*;
+        // 匿名 trait 导入（as _）不随 glob 传递，模块内显式补上
+        use base64::Engine as _;
 
     struct QqMqttChannel {
         stream: native_tls::TlsStream<std::net::TcpStream>,
@@ -1845,6 +1859,7 @@ mod qq {
             _ => Err("意外的 WebSocket 数据帧".into()),
         }
     }
+    } // qq_scan（仅桌面端）
 
 }
 
