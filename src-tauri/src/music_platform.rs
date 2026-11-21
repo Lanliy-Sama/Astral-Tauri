@@ -579,6 +579,9 @@ mod netease {
             .iter()
             .filter_map(|id| by_id.get(id).cloned())
             .collect();
+        // 关键：写注册表，否则歌单点歌时 music_play_url 查不到 key
+        // 报「曲目信息已过期」（实测 bug：搜索能放、歌单静默失败）
+        registry_put(&ordered);
         Ok(json!({ "tracks": ordered }))
     }
 
@@ -593,6 +596,7 @@ mod netease {
             if let Some(songs) = o["result"]["songs"].as_array() {
                 let tracks: Vec<Value> = songs.iter().filter_map(parse_track).collect();
                 if !tracks.is_empty() {
+                    registry_put(&tracks);
                     return Ok(json!({ "tracks": tracks }));
                 }
             }
@@ -654,6 +658,7 @@ mod netease {
                     .unwrap_or(t)
             })
             .collect();
+        registry_put(&tracks);
         Ok(json!({ "tracks": tracks }))
     }
 

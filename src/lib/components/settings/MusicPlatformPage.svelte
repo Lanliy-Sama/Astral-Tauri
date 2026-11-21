@@ -154,6 +154,8 @@
       // 歌词拉取由歌词胶囊监听 onlineTrack 变化完成
     } catch (e) {
       console.warn('在线播放失败:', e);
+      // 写入应用日志页，失败不再静默（设置 → 日志 可见）
+      sm.pushLog(`[在线音乐] ${track.title ?? ''} 播放失败：${String(e?.message || e)}`);
     }
   }
 
