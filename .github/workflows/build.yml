@@ -48,6 +48,9 @@ jobs:
     steps:
       - name: 🛠️ 检出代码
         uses: actions/checkout@v4
+        with:
+          # 全量历史：push 测试构建的 Alpha 版本号按 自上个 release 以来的提交数 递增
+          fetch-depth: 0
 
       - name: 🟢 安装 Node.js
         uses: actions/setup-node@v4
@@ -137,12 +140,31 @@ jobs:
 
       - name: 🔨 构建 Tauri 应用
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "push" ]; then
+            # push 测试构建：版本 = 下一个发布版 -AlphaN（N = 自上个 release 以来的提交数）
+            TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+            if [ -n "$TAG" ]; then
+              BASE="${TAG#v}"
+              ALPHA=$(git rev-list --count "$TAG..HEAD" 2>/dev/null || echo 0)
+            else
+              BASE="2.9.60"
+              ALPHA=$(git rev-list --count HEAD)
+            fi
+            MAJOR=$(echo "$BASE" | cut -d. -f1)
+            MINOR=$(echo "$BASE" | cut -d. -f2)
+            PATCH=$(echo "$BASE" | cut -d. -f3)
+            if [ "$ALPHA" -lt 1 ]; then ALPHA=1; fi
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))-Alpha$ALPHA"
+          fi
           if [ -n "$VERSION" ]; then
             echo "{\"version\":\"$VERSION\"}" > "$RUNNER_TEMP/version.json"
             CFG="--config $RUNNER_TEMP/version.json"
+            echo "构建版本: $VERSION"
           fi
           npx tauri build $CFG --bundles ${{ matrix.bundles }}
 
@@ -182,6 +204,9 @@ jobs:
     steps:
       - name: 🛠️ 检出代码
         uses: actions/checkout@v4
+        with:
+          # 全量历史：push 测试构建的 Alpha 版本号按 自上个 release 以来的提交数 递增
+          fetch-depth: 0
 
       - name: 🟢 安装 Node.js
         uses: actions/setup-node@v4
@@ -243,12 +268,31 @@ jobs:
 
       - name: 🔨 构建 APK（arm64-v8a）
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "push" ]; then
+            # push 测试构建：版本 = 下一个发布版 -AlphaN（N = 自上个 release 以来的提交数）
+            TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+            if [ -n "$TAG" ]; then
+              BASE="${TAG#v}"
+              ALPHA=$(git rev-list --count "$TAG..HEAD" 2>/dev/null || echo 0)
+            else
+              BASE="2.9.60"
+              ALPHA=$(git rev-list --count HEAD)
+            fi
+            MAJOR=$(echo "$BASE" | cut -d. -f1)
+            MINOR=$(echo "$BASE" | cut -d. -f2)
+            PATCH=$(echo "$BASE" | cut -d. -f3)
+            if [ "$ALPHA" -lt 1 ]; then ALPHA=1; fi
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))-Alpha$ALPHA"
+          fi
           if [ -n "$VERSION" ]; then
             echo "{\"version\":\"$VERSION\"}" > "$RUNNER_TEMP/version.json"
             CFG="--config $RUNNER_TEMP/version.json"
+            echo "构建版本: $VERSION"
           fi
           npx tauri android build --ci $CFG --apk --target aarch64
 

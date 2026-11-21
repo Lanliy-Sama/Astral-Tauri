@@ -1644,6 +1644,10 @@ class ServiceManager {
   }
 
   _versionGreaterThan(a, b) {
+    /* a = latest（发布版），b = current（可能是 Alpha 测试版）。
+     * numeric 不同按数字比；相等时仅当 latest 是正式版且 current 是
+     * prerelease（Alpha 等到了对应的正式发布）才提示更新——
+     * Alpha 测试版领先于已发布的正式版时不误报。 */
     const pa = a.split('-');
     const pb = b.split('-');
     const va = pa[0].split('.').map(Number);
@@ -1651,12 +1655,7 @@ class ServiceManager {
     for (let i = 0; i < 3; i++) {
       if ((va[i] || 0) !== (vb[i] || 0)) return (va[i] || 0) > (vb[i] || 0);
     }
-    const ra = pa.slice(1);
-    const rb = pb.slice(1);
-    if (ra.length === 0 && rb.length === 0) return false;
-    if (ra.length === 0) return true;
-    if (rb.length === 0) return false;
-    return false; // 简化：prerelease 段相等视为不更新
+    return pb.length > 1 && pa.length <= 1;
   }
 
   /* 下载加速（GitHubProxySelector） */
