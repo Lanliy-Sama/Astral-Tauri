@@ -14,11 +14,13 @@
   import UpdateDialogs from './common/update/UpdateDialogs.svelte';
   import Dialog from './common/Dialog.svelte';
   import BgmVolumeCapsule from './common/BgmVolumeCapsule.svelte';
+  import SmtcLyricCapsule from './common/SmtcLyricCapsule.svelte';
+  import { smtcStartPolling } from '../services/SmtcService.svelte';
   import { getStack, popPage } from '../router/PageRouter.svelte';
   import { sm } from '../services/ServiceManager.svelte';
   import { bgmAdjustVolume } from '../services/BgmPlayer.svelte';
   import { t } from '../i18n/I18n.svelte';
-  import { isTauri, isAndroid } from '../utils/Platform.svelte';
+  import { isTauri, isAndroid, isWindows } from '../utils/Platform.svelte';
 
   let windowWidth = $state(window.innerWidth);
   let windowHeight = $state(window.innerHeight);
@@ -55,6 +57,11 @@
     if (sm.uiState.selectedIndex >= navigationItems.length) {
       sm.uiState.selectedIndex = 0;
     }
+  });
+
+  /* SMTC 系统媒体会话轮询（仅 Windows）：歌词胶囊与系统音乐控制卡的数据源 */
+  $effect(() => {
+    if (isTauri() && isWindows()) smtcStartPolling();
   });
 
   /* 自动检查更新（启动 1 秒后，静默） */
@@ -221,6 +228,8 @@
   <UpdateDialogs />
   <!-- 灵动岛音量胶囊：Ctrl+↑/↓ 调背景音乐音量时弹出 -->
   <BgmVolumeCapsule />
+  <!-- 灵动岛歌词胶囊：SMTC 读取第三方播放，开关在 软件设置 → 系统音乐控制 -->
+  <SmtcLyricCapsule />
 
   <!-- 托盘隐藏确认（Tauri 模式） -->
   <Dialog bind:open={trayHideOpen} title={t('tray_hide_title')} dismissible={false}>

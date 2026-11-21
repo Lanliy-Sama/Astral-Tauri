@@ -5,9 +5,16 @@
    * 显示触发器：sm.bgmState.volumePulse 自增（BgmPlayer.bgmAdjustVolume）。
    */
   import { sm } from '../../services/ServiceManager.svelte';
+  import { isTauri, isWindows } from '../../utils/Platform.svelte';
 
   let visible = $state(false);
   let timer = 0;
+
+  /* 歌词胶囊启用且系统有播放会话时，音量胶囊下移避让（同在顶部居中） */
+  const lowered = $derived(
+    isTauri() && isWindows() &&
+    sm.appSettingsState.smtcLyricEnabled && sm.smtcState.available
+  );
 
   $effect(() => {
     void sm.bgmState.volumePulse;
@@ -19,7 +26,7 @@
   });
 </script>
 
-<div class="bgm-capsule" class:show={visible} aria-hidden={!visible}>
+<div class="bgm-capsule" class:show={visible} class:lowered={lowered} aria-hidden={!visible}>
   <span class="ms filled cap-icon">
     {sm.bgmState.volumeDelta >= 0 ? 'volume_up' : 'volume_down'}
   </span>
@@ -56,6 +63,9 @@
   .bgm-capsule.show {
     opacity: 1;
     transform: translate(-50%, 0);
+  }
+  .bgm-capsule.lowered {
+    top: 72px;
   }
   .cap-icon {
     font-size: 20px;

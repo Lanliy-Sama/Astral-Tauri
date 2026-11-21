@@ -502,6 +502,294 @@ fn bgm_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
+
+/* ============================================================
+ * SMTC（Windows 系统媒体传输控制）：读取/控制第三方播放器
+ * ------------------------------------------------------------
+ * GlobalSystemMediaTransportControlsSessionManager 枚举系统媒体
+ * 会话（网易云/QQ 音乐/Spotify/浏览器视频等）：smtc_get_current
+ * 提供"正在播放"信息（标题/歌手/应用/状态/时间轴），smtc_control
+ * 提供播放/暂停/上一首/下一首。SMTC 本身不含歌词 —— smtc_fetch_lyrics
+ * 按标题+歌手在网易云公共 API 匹配 LRC 并解析为 (时间, 歌词) 点，
+ * 前端按时间轴插值实时滚动显示（灵动岛歌词胶囊）。
+ * 非 Windows 平台返回不支持；前端仅 Windows 渲染该功能。
+ * ============================================================ */
+
+/// SMTC 线程的 COM 初始化（幂等）：WinRT 工厂需要 MTA；已在其它
+/// 模式初始化（RPC_E_CHANGED_MODE）时忽略 —— 界面对象均 agile。
+#[cfg(target_os = "windows")]
+fn smtc_com_init() {
+    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod smtc {
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSession,
+        GlobalSystemMediaTransportControlsSessionManager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+    };
+
+    async fn manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
+        GlobalSystemMediaTransportControlsSessionManager::RequestCurrentAsync()
+            .map_err(|e| format!("SMTC 管理器请求失败: {e}"))?
+            .await
+            .map_err(|e| format!("SMTC 管理器未完成: {e}"))
+    }
+
+    fn status_str(s: GlobalSystemMediaTransportControlsSessionPlaybackStatus) -> &'static str {
+        match s {
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing => "playing",
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused => "paused",
+            _ => "other",
+        }
+    }
+
+    /// 会话选择：优先正在播放的（多播放器并存时控制活跃的那个），否则第一个
+    fn pick_session(m: &GlobalSystemMediaTransportControlsSessionManager)
+        -> Option<GlobalSystemMediaTransportControlsSession>
+    {
+        let sessions = m.GetSessions().ok()?;
+        let n = sessions.Size().ok()?;
+        let mut first = None;
+        for i in 0..n {
+            let Ok(s) = sessions.GetAt(i) else { continue };
+            let playing = s
+                .PlaybackInfo()
+                .and_then(|pi| pi.PlaybackStatus())
+                .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+                .unwrap_or(false);
+            if playing {
+                return Some(s);
+            }
+            if first.is_none() {
+                first = Some(s);
+            }
+        }
+        first
+    }
+
+    pub async fn current() -> Result<serde_json::Value, String> {
+        let m = manager().await?;
+        let Some(session) = pick_session(&m) else {
+            return Ok(serde_json::json!({ "supported": true, "hasSession": false }));
+        };
+        let props = session
+            .MediaProperties()
+            .map_err(|e| format!("读取媒体信息失败: {e}"))?;
+        let title = props
+            .Title()
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let artist = props
+            .Artist()
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let app_id = props
+            .AppId()
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let status = session
+            .PlaybackInfo()
+            .and_then(|pi| pi.PlaybackStatus())
+            .map(status_str)
+            .unwrap_or("other")
+            .to_string();
+        let (position, duration, rate) = session
+            .GetTimelineProperties()
+            .map(|t| (
+                t.Position().Duration as f64 / 1e7,
+                t.Duration().Duration as f64 / 1e7,
+                t.PlaybackRate(),
+            ))
+            .unwrap_or((0.0, 0.0, 1.0));
+        Ok(serde_json::json!({
+            "supported": true,
+            "hasSession": true,
+            "title": title,
+            "artist": artist,
+            "appId": app_id,
+            "status": status,
+            "positionSecs": position,
+            "durationSecs": duration,
+            "rate": if rate > 0.0 { rate } else { 1.0 },
+        }))
+    }
+
+    pub async fn control(action: &str) -> Result<bool, String> {
+        let m = manager().await?;
+        let Some(session) = pick_session(&m) else {
+            return Err("没有可用的媒体会话".into());
+        };
+        let playing = session
+            .PlaybackInfo()
+            .and_then(|pi| pi.PlaybackStatus())
+            .map(|x| x == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+            .unwrap_or(false);
+        match action {
+            "play" => session.TryPlayAsync().await.map_err(|e| e.to_string()),
+            "pause" => session.TryPauseAsync().await.map_err(|e| e.to_string()),
+            "toggle" => {
+                if playing {
+                    session.TryPauseAsync().await.map_err(|e| e.to_string())
+                } else {
+                    session.TryPlayAsync().await.map_err(|e| e.to_string())
+                }
+            }
+            "next" => session.TrySkipNextAsync().await.map_err(|e| e.to_string()),
+            "prev" => session.TrySkipPreviousAsync().await.map_err(|e| e.to_string()),
+            _ => Err(format!("未知的控制动作: {action}")),
+        }
+    }
+}
+
+#[tauri::command]
+async fn smtc_get_current() -> serde_json::Value {
+    #[cfg(target_os = "windows")]
+    {
+        smtc_com_init();
+        match smtc::current().await {
+            Ok(v) => v,
+            Err(e) => serde_json::json!({ "supported": true, "hasSession": false, "error": e }),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        serde_json::json!({ "supported": false, "hasSession": false })
+    }
+}
+
+#[tauri::command]
+async fn smtc_control(action: String) -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        smtc_com_init();
+        smtc::control(&action).await
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = action;
+        Err("SMTC 仅支持 Windows".into())
+    }
+}
+
+/// LRC 时间标签解析：[mm:ss(.xx)]（支持一行多标签）；元数据标签自然被跳过
+#[cfg(target_os = "windows")]
+fn lrc_time(tag: &str) -> Option<f64> {
+    let (m, s) = tag.split_once(':')?;
+    let m: f64 = m.trim().parse().ok()?;
+    let s: f64 = s.trim().parse().ok()?;
+    if !m.is_finite() || !s.is_finite() || m < 0.0 || s < 0.0 {
+        return None;
+    }
+    Some(m * 60.0 + s)
+}
+
+#[cfg(target_os = "windows")]
+fn parse_lrc(text: &str) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let mut times = Vec::new();
+        let mut rest = line;
+        while rest.starts_with('[') {
+            let Some(end) = rest.find(']') else { break };
+            let tag = &rest[1..end];
+            if let Some(t) = lrc_time(tag) {
+                times.push(t);
+            }
+            rest = &rest[end + 1..];
+        }
+        let lyric = rest.trim();
+        if lyric.is_empty() {
+            continue;
+        }
+        for t in times {
+            out.push(serde_json::json!({ "t": t, "l": lyric }));
+        }
+    }
+    out.sort_by(|a, b| {
+        a["t"]
+            .as_f64()
+            .unwrap_or(0.0)
+            .partial_cmp(&b["t"].as_f64().unwrap_or(0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    out
+}
+
+/// 标题清洗：去 YouTube 热单常见的括号段（【】()（）[]），提升歌词匹配率
+#[cfg(target_os = "windows")]
+fn clean_title(title: &str) -> String {
+    let mut out = String::with_capacity(title.len());
+    let mut depth = 0u32;
+    for ch in title.chars() {
+        match ch {
+            '(' | '（' | '[' | '【' => depth += 1,
+            ')' | '）' | ']' | '】' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+#[tauri::command]
+async fn smtc_fetch_lyrics(title: String, artist: String) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "windows")]
+    {
+        smtc_com_init();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .map_err(|e| e.to_string())?;
+        let clean = clean_title(&title);
+        let queries = [
+            format!("{clean} {artist}"),
+            clean.clone(),
+            title.clone(),
+        ];
+        for q in queries {
+            let q = q.trim().to_string();
+            if q.is_empty() {
+                continue;
+            }
+            let search = client
+                .get("https://music.163.com/api/search/get/web")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Referer", "https://music.163.com")
+                .query(&[("s", q), ("type", "1"), ("offset", "0"), ("limit", "3")])
+                .send()
+                .await;
+            let Ok(search) = search else { continue };
+            let Ok(v) = search.json::<serde_json::Value>().await else { continue };
+            let Some(id) = v["result"]["songs"][0]["id"].as_i64() else { continue };
+            let lyric = client
+                .get("https://music.163.com/api/song/lyric")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Referer", "https://music.163.com")
+                .query(&[("id", id.to_string()), ("lv", "1"), ("tv", "-1")])
+                .send()
+                .await;
+            let Ok(lyric) = lyric else { continue };
+            let Ok(lv) = lyric.json::<serde_json::Value>().await else { continue };
+            let Some(lrc) = lv["lrc"]["lyric"].as_str() else { continue };
+            let lines = parse_lrc(lrc);
+            if !lines.is_empty() {
+                return Ok(serde_json::json!({ "found": true, "lines": lines }));
+            }
+        }
+        Ok(serde_json::json!({ "found": false, "lines": [] }))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (title, artist);
+        Ok(serde_json::json!({ "found": false, "lines": [] }))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -588,6 +876,9 @@ pub fn run() {
             bgm_write_append,
             bgm_write_end,
             bgm_delete,
+            smtc_get_current,
+            smtc_control,
+            smtc_fetch_lyrics,
         ])
         .setup(|app| {
             // panic 钩子：release GUI 无 stderr，panic 信息落 %TEMP%\astral-panic.log。

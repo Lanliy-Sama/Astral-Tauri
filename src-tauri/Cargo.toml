@@ -37,6 +37,13 @@ tauri-runtime-wry = "3.0.0-alpha.6"
 # Android VpnService 桥接（其他平台为返回「不支持」的空实现）
 tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
 
+# Windows 系统媒体会话（SMTC）：读取/控制第三方播放器（Media_Control）
+# + Foundation（TimeSpan）；歌词匹配走网易云公共 API（reqwest 0.13.5
+# 与 easytier 共用版本源；rustls 规避平台 TLS 差异）。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52.0", features = ["Media_Control", "Foundation", "Win32_System_Com"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-tls", "json"] }
+
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；
 # opt-level = 3 = Speed（Cranelift 后端会映射到自己的优化档位）
