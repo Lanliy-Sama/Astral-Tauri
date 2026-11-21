@@ -63,10 +63,11 @@ sha1 = "0.10"
 
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；
-# opt-level = 3 = Speed（Cranelift 后端会映射到自己的优化档位）
+# opt-level = "s" → cg_clif 映射 Cranelift opt_level=speed_and_size
+# （lib.rs: OptLevel::Size/SizeMin → speed_and_size；此前 3=Aggressive 不设任何档）
 codegen-units = 1
 lto = false
-opt-level = 3
+opt-level = "s"
 panic = "abort"
 strip = true
 
