@@ -37,22 +37,23 @@ tauri-runtime-wry = "3.0.0-alpha.6"
 # Android VpnService 桥接（其他平台为返回「不支持」的空实现）
 tauri-plugin-vpn-service = { path = "../vpn-service-plugin" }
 
-# Windows 系统媒体会话（SMTC）：读取/控制第三方播放器（Media_Control）
-# + Foundation（TimeSpan）；歌词匹配走网易云公共 API（reqwest 0.13.5
-# 与 easytier 共用版本源；rustls 规避平台 TLS 差异）。
+# 音乐平台直连（网易云 / QQ / 酷狗）：扫码登录 + 搜索 + 播放地址 + 歌词
+reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "json", "blocking", "cookies"] }
+aes = "0.8"
+base64 = "0.22"
+num-bigint = "0.4"
+md-5 = "0.10"
+qrcode = "0.14"
+rand = "0.8"
+regex = "1"
+
+# Windows 单实例互斥（修「关闭主界面后任务栏两个图标」）
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.52.0", features = [
-    "Media_Control",
-    "Foundation",
-    "Foundation_Collections",
-    "Win32_System_Com",
     "Win32_System_Threading",
     "Win32_Storage_FileSystem",
     "Win32_Foundation",
 ] }
-# 0.13 的 TLS 特性更名：rustls 走 __rustls 内部档，桌面用 default-tls
-# （Windows = schannel，Android = native-tls）即为最优选择
-reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "json"] }
 
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；

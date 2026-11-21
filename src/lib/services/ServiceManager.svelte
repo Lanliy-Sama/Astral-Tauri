@@ -191,7 +191,6 @@ export class AppSettingsState {
   liquidGlass = $state(false);
   /* 自定义背景（data URL，null = 默认纯色背景）：存独立 app_assets 表 */
   customBackground = $state(null);
-  smtcLyricEnabled = $state(false); // 灵动岛歌词胶囊（SMTC 读取第三方播放）
   logs = $state([]);
 }
 
@@ -204,21 +203,12 @@ export class BgmState {
   playing = $state(false);
   volumePulse = $state(0);   // 快捷键调整音量时自增（主屏灵动岛胶囊的显示触发器）
   volumeDelta = $state(1);   // 最近一次音量调整方向（1 上升 / -1 下降）
-}
-
-/* ============ SmtcState（Windows 系统媒体会话 SMTC） ============ */
-export class SmtcState {
-  supported = $state(false);  // tauri && Windows
-  available = $state(false);  // 有活跃媒体会话
-  title = $state('');
-  artist = $state('');
-  appId = $state('');
-  status = $state('');        // playing / paused / other
-  position = $state(0);       // 播放位置秒（前端按 rate 插值）
-  duration = $state(0);
-  rate = $state(1);
-  fetchedAt = $state(0);      // 取数时刻 performance.now()（插值基准）
-  lyricLines = $state(null);  // 当前曲目歌词 [{t,l}]（null = 未抓取/抓取中）
+  /* 在线音乐（平台直连） */
+  onlineQueue = $state([]);       // 在线播放队列 [{platform,key,title,artist}]
+  onlineIndex = $state(-1);
+  onlineTrack = $state(null);     // 当前在线播放的曲目
+  lyricCapsuleEnabled = $state(true); // 灵动岛歌词胶囊开关
+  lyricLines = $state(null);      // 当前曲目歌词 [{t,l}]（在线曲目从平台拉取）
   lyricFound = $state(false);
 }
 
@@ -298,7 +288,6 @@ class ServiceManager {
     this.latencyHistory = $state({}); /* 曲线图数据源：peerKey -> [ms...] */
     this.serverStatusState = new ServerStatusState();
     this.bgmState = new BgmState();
-    this.smtcState = new SmtcState();
 
     /* 连接管理 */
     this._retryCount = 0;
@@ -788,7 +777,9 @@ class ServiceManager {
     this.updateState.beta = s.beta === true;
     this.updateState.autoCheckUpdate = s.autoCheckUpdate !== false;
     this.updateState.downloadAccelerate = s.downloadAccelerate || 'auto';
-    this.updateState.latestVersion = s.latestVersion || null;
+    // 启动时不恢复持久化的"已知最新版"——更新弹窗只在本次检查真的
+    // 发现有更新时才出现（Alpha 测试版曾因此弹旧版的更新提示）。
+    this.updateState.latestVersion = null;
     this.windowState.closeMinimize = s.closeMinimize !== false;
     this.appSettingsState.enableConnectionNotification =
       s.enableConnectionNotification !== false;
@@ -797,7 +788,6 @@ class ServiceManager {
     this.appSettingsState.reduceAnimationUpdates =
       s.reduceAnimationUpdates === true;
     this.appSettingsState.liquidGlass = s.liquidGlass === true;
-    this.appSettingsState.smtcLyricEnabled = s.smtcLyricEnabled === true;
 
     /* 自定义背景（v2.6）：Tauri = 磁盘文件（astralbg:// 自定义协议服务，
      * SoftwareSettingsPage 分块写入）；兼容 v2.5 及更早存于 app_assets 的
@@ -941,10 +931,6 @@ class ServiceManager {
     await this._persistSettings({ liquidGlass: v });
   }
 
-  async updateSmtcLyricEnabled(v) {
-    this.appSettingsState.smtcLyricEnabled = v;
-    await this._persistSettings({ smtcLyricEnabled: v });
-  }
 
   /* ---------- 背景音乐（BGM） ----------
    * 音频文件本体经 bgm_write_* 命令落在 app_data_dir/bgm/<uuid>.<ext>，
@@ -953,6 +939,7 @@ class ServiceManager {
   async _initBgm() {
     const s = await this._getSettings();
     this.bgmState.enabled = s.bgmEnabled === true;
+    this.bgmState.lyricCapsuleEnabled = s.lyricCapsuleEnabled !== false;
     this.bgmState.volume = Math.min(100, Math.max(0, Math.round(Number(s.bgmVolume ?? 60))));
     await this.refreshBgmTracks();
     const trackId = s.bgmTrackId ?? null;
@@ -1006,6 +993,11 @@ class ServiceManager {
     const n = Math.min(100, Math.max(0, Math.round(Number(v) || 0)));
     this.bgmState.volume = n;
     await this._persistSettings({ bgmVolume: n });
+  }
+
+  async updateLyricCapsuleEnabled(v) {
+    this.bgmState.lyricCapsuleEnabled = v;
+    await this._persistSettings({ lyricCapsuleEnabled: v });
   }
 
   async persistBgmTrackId(trackId) {

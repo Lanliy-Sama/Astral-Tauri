@@ -5,16 +5,12 @@
    * 显示触发器：sm.bgmState.volumePulse 自增（BgmPlayer.bgmAdjustVolume）。
    */
   import { sm } from '../../services/ServiceManager.svelte';
-  import { isTauri, isWindows } from '../../utils/Platform.svelte';
 
   let visible = $state(false);
   let timer = 0;
 
-  /* 歌词胶囊启用且系统有播放会话时，音量胶囊下移避让（同在顶部居中） */
-  const lowered = $derived(
-    isTauri() && isWindows() &&
-    sm.appSettingsState.smtcLyricEnabled && sm.smtcState.available
-  );
+  /* 歌词胶囊启用时，音量胶囊下移避让（同在顶部居中） */
+  const lowered = $derived(sm.bgmState.lyricCapsuleEnabled);
 
   $effect(() => {
     void sm.bgmState.volumePulse;

@@ -16,8 +16,7 @@
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import BgmPlaylistPage from './BgmPlaylistPage.svelte';
   import { bgApplyVolume, bgmPause } from '$lib/services/BgmPlayer.svelte';
-  import { smtcControl } from '$lib/services/SmtcService.svelte';
-  import { isWindows } from '$lib/utils/Platform.svelte';
+  import MusicPlatformPage from './MusicPlatformPage.svelte';
 
   const retryOptions = [1, 2, 3, 5, 10].map((n) => ({ value: n, label: `${n} 次` }));
 
@@ -556,6 +555,21 @@
         <Switch value={sm.bgmState.enabled} onChange={onBgmEnabled} />
       </div>
 
+      <div
+        class="md-switch-list-tile"
+        onclick={(e) =>
+          switchTileClick(e, sm.bgmState.lyricCapsuleEnabled, sm.updateLyricCapsuleEnabled)}
+      >
+        <div class="tile-content">
+          <div class="tile-title">灵动岛歌词</div>
+          <div class="tile-subtitle">播放时顶部胶囊实时显示当前歌词</div>
+        </div>
+        <Switch
+          value={sm.bgmState.lyricCapsuleEnabled}
+          onChange={(v) => sm.updateLyricCapsuleEnabled(v)}
+        />
+      </div>
+
       <div class="md-list-tile two-line no-cursor">
         <div class="tile-content">
           <div class="tile-title">音量</div>
@@ -587,66 +601,17 @@
         </div>
         <span class="tile-trailing"><Icon name="chevron_right" size={24} /></span>
       </div>
+
+      <div class="md-list-tile two-line" onclick={() => pushPage(MusicPlatformPage)}>
+        <span class="tile-leading"><Icon name="album" size={24} color="var(--md-primary)" /></span>
+        <div class="tile-content">
+          <div class="tile-title">在线音乐</div>
+          <div class="tile-subtitle">扫码登录网易云 / QQ / 酷狗，搜索播放平台歌曲</div>
+        </div>
+        <span class="tile-trailing"><Icon name="chevron_right" size={24} /></span>
+      </div>
     </SettingsCard>
 
-    {#if isWindows() && isTauri()}
-      <div class="gap-16"></div>
-
-      <!-- 系统音乐控制（SMTC）：控制第三方播放器 + 灵动岛歌词开关 -->
-      <SettingsCard>
-        <div class="md-list-tile two-line no-cursor">
-          <span class="tile-leading"><Icon name="album" size={24} color="var(--md-on-surface-variant)" /></span>
-          <div class="tile-content">
-            <div class="tile-title">系统音乐控制</div>
-            <div class="tile-subtitle">通过系统 SMTC 协议读取并控制第三方播放器（网易云 / QQ 音乐 / Spotify / 浏览器视频等）</div>
-          </div>
-        </div>
-        <div class="md-divider"></div>
-
-        <div class="md-list-tile two-line no-cursor">
-          <span class="tile-leading"><Icon name="music_note" size={24} color="var(--md-primary)" /></span>
-          <div class="tile-content">
-            <div class="tile-title">
-              {sm.smtcState.available ? sm.smtcState.title || '未知曲目' : '没有正在播放的音乐'}
-            </div>
-            <div class="tile-subtitle">
-              {sm.smtcState.available
-                ? [sm.smtcState.artist, sm.smtcState.appId].filter(Boolean).join(' · ') || '　'
-                : '第三方播放器开始播放后自动显示'}
-            </div>
-          </div>
-          <span class="tile-trailing smtc-ctl">
-            <button class="md-btn md-tonal-btn smtc-btn" onclick={() => smtcControl('prev')}>
-              <Icon name="skip_previous" size={22} />
-            </button>
-            <button
-              class="md-btn md-tonal-btn smtc-btn"
-              onclick={() => smtcControl('toggle')}
-            >
-              <Icon name={sm.smtcState.status === 'playing' ? 'pause_circle' : 'play_circle'} size={22} />
-            </button>
-            <button class="md-btn md-tonal-btn smtc-btn" onclick={() => smtcControl('next')}>
-              <Icon name="skip_next" size={22} />
-            </button>
-          </span>
-        </div>
-
-        <div
-          class="md-switch-list-tile"
-          onclick={(e) =>
-            switchTileClick(e, sm.appSettingsState.smtcLyricEnabled, sm.updateSmtcLyricEnabled)}
-        >
-          <div class="tile-content">
-            <div class="tile-title">灵动岛歌词</div>
-            <div class="tile-subtitle">顶部胶囊实时显示当前歌曲歌词（按标题/歌手匹配网易云，跟随系统播放进度）</div>
-          </div>
-          <Switch
-            value={sm.appSettingsState.smtcLyricEnabled}
-            onChange={(v) => sm.updateSmtcLyricEnabled(v)}
-          />
-        </div>
-      </SettingsCard>
-    {/if}
 
     <div class="gap-16"></div>
 
@@ -802,15 +767,4 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ---- 系统音乐控制（SMTC） ---- */
-  .smtc-ctl {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .smtc-btn {
-    padding: 8px;
-    border-radius: 999px;
-    line-height: 0;
-  }
 </style>

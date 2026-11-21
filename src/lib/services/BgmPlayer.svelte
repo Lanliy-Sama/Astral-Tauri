@@ -1,22 +1,25 @@
 <script module>
-  /**
-   * 背景音乐播放器单例 —— <audio> 元素由本模块持有，跨页面持续播放。
-   * 音源：astralbgm:// 自定义协议（磁盘 bgm/<uuid>.<ext> 直读）。
-   * 状态寄存于 sm.bgmState（enabled/volume/tracks/trackId/playing/
-   * volumePulse/volumeDelta），本模块只负责播放控制与音量应用。
-   */
+  /** 背景音乐播放器单例 —— <audio> 元素由本模块持有，跨页面持续播放。
+   * 两个音源：本地歌单（astralbgm:// 自定义协议）+ 在线音乐平台
+   * （网易云 / QQ / 酷狗，music_play_url 解析直链）。歌词胶囊从
+   * bgmPosition() 取真实播放进度（audio.currentTime，天然同步）。 */
   import { sm } from './ServiceManager.svelte';
   import { isTauri } from '../utils/Platform.svelte';
 
   let audioEl = null;
   let loadedTrackId = null; // audio.src 当前对应的曲目
+  let loadedOnlineUrl = null; // audio.src 当前对应的在线直链
 
   function ensureAudio() {
     if (audioEl) return audioEl;
     audioEl = new Audio();
     audioEl.preload = 'auto';
-    // 播完自动切下一首（顺序循环）
+    // 播完自动切下一首（顺序循环：本地歌单 / 在线队列）
     audioEl.addEventListener('ended', () => {
+      if (sm.bgmState.onlineTrack) {
+        bgmPlayOnlineNext();
+        return;
+      }
       const tracks = sm.bgmState.tracks;
       if (!tracks.length) {
         sm.bgmState.playing = false;
@@ -58,6 +61,9 @@
 
   /** 播放/切换到指定曲目（歌单下标）。点击当前曲目请用 bgmToggle。 */
   export async function bgmPlayTrack(index) {
+    sm.bgmState.onlineTrack = null;
+    sm.bgmState.lyricLines = null;
+    sm.bgmState.lyricFound = false;
     const track = sm.bgmState.tracks[index];
     if (!track) return;
     sm.bgmState.trackId = track.trackId;
@@ -68,6 +74,7 @@
     if (loadedTrackId !== track.trackId) {
       a.src = url;
       loadedTrackId = track.trackId;
+      loadedOnlineUrl = null;
     }
     a.volume = sm.bgmState.volume / 100;
     try {
@@ -125,5 +132,75 @@
     if (next === sm.bgmState.volume) return; // 到顶/到底仍显示胶囊
     sm.updateBgmVolume(next).catch(() => {});
     bgApplyVolume(next);
+  }
+
+  /* ================= 在线音乐（平台直连） ================= */
+
+  /** 真实播放进度（秒）：歌词胶囊的数据源，audio.currentTime 天然同步 */
+  export function bgmPosition() {
+    return audioEl ? audioEl.currentTime : 0;
+  }
+
+  /** 播放在线曲目：music_play_url 解析平台直链 → <audio> 直接播放 */
+  export async function bgmPlayOnlineTrack(track) {
+    if (!isTauri()) return;
+    const { invoke } = await import('@tauri-apps/api/core');
+    const res = await invoke('music_play_url', { platform: track.platform, key: track.key });
+    const url = res?.url;
+    if (!url) throw new Error('没有可用的播放地址');
+    sm.bgmState.onlineTrack = track;
+    sm.bgmState.trackId = null;
+    const a = ensureAudio();
+    if (loadedOnlineUrl !== url) {
+      a.src = url;
+      loadedOnlineUrl = url;
+      loadedTrackId = null;
+    }
+    a.volume = sm.bgmState.volume / 100;
+    try {
+      await a.play();
+      sm.bgmState.playing = true;
+    } catch (e) {
+      sm.bgmState.playing = false;
+      sm.pushLog(`[bgm] 在线播放失败: ${e?.message ?? e}`);
+    }
+  }
+
+  /** 在线队列下一首（顺序循环） */
+  export async function bgmPlayOnlineNext() {
+    const queue = sm.bgmState.onlineQueue;
+    if (!queue.length) {
+      sm.bgmState.playing = false;
+      return;
+    }
+    const next = (sm.bgmState.onlineIndex + 1) % queue.length;
+    sm.bgmState.onlineIndex = next;
+    await bgmPlayOnlineTrack(queue[next]);
+  }
+
+  /** 在线播放/暂停切换 */
+  export function bgmOnlineToggle() {
+    const a = ensureAudio();
+    if (sm.bgmState.playing) {
+      a.pause();
+      return;
+    }
+    if (loadedOnlineUrl) {
+      a.volume = sm.bgmState.volume / 100;
+      a.play().catch(() => {});
+    } else if (sm.bgmState.onlineQueue.length) {
+      const idx = sm.bgmState.onlineIndex >= 0 ? sm.bgmState.onlineIndex : 0;
+      sm.bgmState.onlineIndex = idx;
+      bgmPlayOnlineTrack(sm.bgmState.onlineQueue[idx]);
+    }
+  }
+
+  /** 关闭在线播放（切回本地歌单模式时清状态） */
+  export function bgmStopOnline() {
+    sm.bgmState.onlineTrack = null;
+    sm.bgmState.lyricLines = null;
+    sm.bgmState.lyricFound = false;
+    sm.bgmState.playing = false;
+    if (audioEl) audioEl.pause();
   }
 </script>
