@@ -813,61 +813,80 @@ mod qq {
     pub fn song_url(media_mid: &str, song_mid: &str) -> Result<Value, String> {
         let guid: String = rand_digits(10);
         let media = if media_mid.is_empty() { song_mid.to_string() } else { media_mid.to_string() };
-        let payload = json!({
-            "comm": { "ct": 24, "cv": 0 },
-            "req_0": {
-                "module": "vkey.GetVkeyServer",
-                "method": "CgiGetVkey",
-                "param": {
-                    "guid": guid,
-                    "uin": "0",
-                    "filename": [format!("M500{media}.mp3")],
-                    "songmid": [song_mid],
-                    "songtype": [0],
+        // 免登录两通道：桌面（ct19/cv2201 + UrlGetVkey）优先，web（CgiGetVkey
+        // + loginflag/platform）兜底；filename 高→低三档，midurlinfo 里第一
+        // 个有 purl 的就是能拿到的最高档（实测桌面通道才给免费歌地址）
+        let files: [(&str, &str); 3] = [("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")];
+        let mut last_err = String::new();
+        for desktop in [true, false] {
+            let mut param = json!({
+                "guid": guid, "uin": "0", "ctx": 0,
+                "filename": files.iter().map(|(p, e)| format!("{p}{media}.{e}")).collect::<Vec<_>>(),
+                "songmid": [song_mid, song_mid, song_mid],
+                "songtype": [0, 0, 0],
+            });
+            let (module, method, ct, cv) = if desktop {
+                ("music.vkey.GetVkey", "UrlGetVkey", 19, 2201)
+            } else {
+                param["loginflag"] = json!(1);
+                param["platform"] = json!("20");
+                ("vkey.GetVkeyServer", "CgiGetVkey", 24, 0)
+            };
+            let payload = json!({
+                "comm": { "ct": ct, "cv": cv },
+                "req_0": { "module": module, "method": method, "param": param },
+            });
+            let resp = http("qq")
+                .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
+                .header("Content-Type", "application/json")
+                .header("Referer", REFERER)
+                .header("User-Agent", UA)
+                .body(payload.to_string())
+                .send()
+                .map_err(|e| e.to_string())?;
+            let root: Value = resp.json().map_err(|e| e.to_string())?;
+            if root["code"].as_i64() != Some(0) {
+                last_err = format!("QQ 音乐播放请求被拒绝（code {}）", root["code"].as_i64().unwrap_or(-1));
+                continue;
+            }
+            let data = &root["req_0"]["data"];
+            let hosts: Vec<String> = data["sip"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            for item in data["midurlinfo"].as_array().unwrap_or(&Vec::new()) {
+                if item["result"].as_i64().unwrap_or(0) != 0 {
+                    continue;
+                }
+                let purl = item["purl"].as_str().unwrap_or_default();
+                if purl.is_empty() {
+                    continue;
+                }
+                let mut candidates: Vec<String> = if purl.starts_with("https://") || purl.starts_with("http://") {
+                    vec![purl.to_string()]
+                } else {
+                    let mut hs: Vec<&String> = hosts.iter().collect();
+                    hs.sort_by_key(|h| if h.starts_with("https://") { 0 } else { 1 });
+                    let mut list: Vec<String> = hs
+                        .into_iter()
+                        .map(|h| format!("{}{}", h.trim_end_matches('/'), purl))
+                        .collect();
+                    list.push(format!("https://isure.stream.qqmusic.qq.com/{purl}"));
+                    list
+                };
+                candidates.retain(|c| c.ends_with(".mp3") || c.ends_with(".flac"));
+                if let Some(candidate) = candidates.into_iter().next() {
+                    let format = if candidate.ends_with(".flac") { "flac" } else { "mp3" };
+                    return Ok(json!({ "url": candidate, "trial": false, "format": format }));
                 }
             }
-        });
-        let resp = http("qq")
-            .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
-            .header("Content-Type", "application/json")
-            .header("Referer", REFERER)
-            .header("User-Agent", UA)
-            .body(payload.to_string())
-            .send()
-            .map_err(|e| e.to_string())?;
-        let root: Value = resp.json().map_err(|e| e.to_string())?;
-        if root["code"].as_i64() != Some(0) {
-            return Err("QQ 音乐播放请求被拒绝".into());
+            last_err = "QQ 音乐没有返回可播放的音频".into();
         }
-        let hosts: Vec<String> = root["data"]["sip"]
-            .as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
-            .unwrap_or_default();
-        for item in root["data"]["midurlinfo"].as_array().unwrap_or(&Vec::new()) {
-            let result = item["result"].as_i64().unwrap_or(0);
-            if result != 0 {
-                continue;
-            }
-            let purl = item["purl"].as_str().unwrap_or_default();
-            if purl.is_empty() {
-                continue;
-            }
-            let mut candidates: Vec<String> = if purl.starts_with("https://") || purl.starts_with("http://") {
-                vec![purl.to_string()]
-            } else {
-                let mut list: Vec<String> = hosts
-                    .iter()
-                    .map(|h| format!("{}{}", h.trim_end_matches('/'), purl))
-                    .collect();
-                list.push(format!("https://isure.stream.qqmusic.qq.com/{purl}"));
-                list
-            };
-            candidates.retain(|c| c.ends_with(".mp3") || c.ends_with(".flac"));
-            for candidate in candidates {
-                return Ok(json!({ "url": candidate, "trial": false, "format": "mp3" }));
-            }
-        }
-        Err("QQ 音乐没有返回可播放的音频（会员歌曲需要登录，登录功能后续开放）".into())
+        Err(if last_err.is_empty() {
+            "QQ 音乐没有返回可播放的音频（会员歌曲需要登录，登录功能后续开放）".into()
+        } else {
+            last_err
+        })
     }
 
 }
@@ -1159,7 +1178,9 @@ mod kugou {
                     .or_else(|| s["albumInfo"]["album_id"].as_str())
                     .unwrap_or_default()
                     .to_string();
-                let ms = s["timelen"].as_i64().unwrap_or(0);
+                // v3 搜索返回 duration（秒）；旧字段 timelen 直接当毫秒兜底
+                let sec = s["duration"].as_i64().unwrap_or(0);
+                let ms = if sec > 0 { sec * 1000 } else { s["timelen"].as_i64().unwrap_or(0) };
                 out.push(json!({
                     "key": format!("kugou:{hash}"),
                     "platform": "kugou",
@@ -1210,10 +1231,11 @@ mod kugou {
     }
 
     pub fn lyrics(hash: &str, duration_ms: i64) -> Result<Value, String> {
+        // 歌词搜索按秒容差匹配（实测 duration=269 命中晴天；传毫秒会落空）
         let search_url = format!(
             "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&hash={}&duration={}",
             urlencode(hash),
-            duration_ms
+            duration_ms / 1000
         );
         let search = http_get_json(&search_url, "https://m.kugou.com/", "")?;
         let candidate = search["candidates"]
