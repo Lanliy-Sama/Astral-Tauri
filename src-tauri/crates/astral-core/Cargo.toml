@@ -25,9 +25,9 @@ rand = "0.8"
 surge-ping = "0.8"
 uuid = { version = "1.0", features = ["v4"] }
 
-# EasyTier 内核：使用本仓 Easytier 分支的 vendored fork（上游 main @ 3b32aaff
-# 锁定 rev，仅含构建闭包 crate，消除 branch=main 浮动解析）。实例层
-# InstanceManager/CoreInstance + management feature 用法不变。
+# EasyTier 内核：使用本仓 Easytier 分支的 vendored fork（上游 main @ 45a6b6f176，
+# 2.7.1 线，随上游更新；仅含构建闭包 crate，消除 branch=main 浮动解析）。
+# 实例层 InstanceManager/CoreInstance + management feature 用法不变。
 easytier = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier", default-features = false, features = ["wireguard", "websocket", "quic", "tun", "smoltcp", "socks5", "kcp", "faketcp", "magic-dns", "zstd", "management"] }
 easytier-core = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier", default-features = false }
 # 锁 rust-i18n 全家桶到上游 lock 的自洽组合（4.2.2/4.2.2/4.2.2）：

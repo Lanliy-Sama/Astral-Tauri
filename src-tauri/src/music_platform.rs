@@ -1379,7 +1379,7 @@ pub fn music_login_start(platform: String, app: tauri::AppHandle) -> Result<(), 
     match platform.as_str() {
         "netease" => music_platform::netease::qr_start(app),
         "kugou" => music_platform::kugou::qr_start(app),
-        _ => Err("不支持的平台".into()),
+        _ => return Err("不支持的平台".into()),
     }
     Ok(())
 }
