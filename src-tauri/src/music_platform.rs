@@ -5,6 +5,7 @@
 use base64::Engine as _;
 // 自引用：命令层以 `music_platform::netease::…` 等全路径调用子模块
 use crate::music_platform;
+// QQ 扫码 MQTT 通道：native-tls（Windows 走 SChannel）+ sha1（WebSocket Accept 校验）
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -104,15 +105,15 @@ fn urlencode(s: &str) -> String {
 static CLIENTS: OnceLock<HashMap<&'static str, &'static reqwest::blocking::Client>> = OnceLock::new();
 
 /// 每平台一个长驻 blocking Client（'static：Box::leak 泄漏所有权）。
-/// netease 不开 cookie 罐（cookie 由账号持久化层显式携带），
-/// qq / kugou 开 cookie 罐承接登录会话。
+/// netease / qqlogin 不开 cookie 罐（登录凭据显式携带），qq / kugou / common 开
+/// cookie 罐承接会话；qqlogin 专供 QQ 扫码登录阶段（显式 Cookie 头不被罐干扰）。
 fn http(platform: &'static str) -> &'static reqwest::blocking::Client {
     let map = CLIENTS.get_or_init(|| {
         let mut m = HashMap::new();
-        for p in ["netease", "qq", "kugou", "common"] {
+        for p in ["netease", "qq", "kugou", "common", "qqlogin"] {
             let client: &'static reqwest::blocking::Client = Box::leak(Box::new(
                 reqwest::blocking::Client::builder()
-                    .cookie_store(p != "netease")
+                    .cookie_store(matches!(p, "qq" | "kugou" | "common"))
                     .connect_timeout(std::time::Duration::from_secs(10))
                     .timeout(std::time::Duration::from_secs(20))
                     .build()
@@ -816,6 +817,7 @@ mod qq {
     }
 
     pub fn song_url(media_mid: &str, song_mid: &str) -> Result<Value, String> {
+        // 游客通道（未登录或登录后由调用方 song_url_logged 优先）
         let guid: String = rand_digits(10);
         let media = if media_mid.is_empty() { song_mid.to_string() } else { media_mid.to_string() };
         // 免登录两通道：桌面（ct19/cv2201 + UrlGetVkey）优先，web（CgiGetVkey
@@ -888,10 +890,959 @@ mod qq {
             last_err = "QQ 音乐没有返回可播放的音频".into();
         }
         Err(if last_err.is_empty() {
-            "QQ 音乐没有返回可播放的音频（会员歌曲需要登录，登录功能后续开放）".into()
+            "QQ 音乐没有返回可播放的音频（会员歌曲需要登录）".into()
         } else {
             last_err
         })
+    }
+
+    /* ---- 扫码登录（App 通道：CreateQRCode → MQTT5/WS 事件 → Login 换票） ---- */
+
+    /// QQ g_tk：hash33（seed 5381，hash*33+code），取无符号 31 位
+    fn hash33(value: &str) -> i64 {
+        let mut hash: i64 = 5381;
+        for ch in value.chars() {
+            hash = hash.wrapping_mul(33).wrapping_add(ch as i64);
+        }
+        hash & 0x7fff_ffff
+    }
+
+    /// musicu.fcg 回包：req_0.code（根 code 非 0 时以根为准）
+    fn fcg_code(root: &Value) -> i64 {
+        let root_code = root["code"].as_i64().unwrap_or(0);
+        if root_code != 0 {
+            return root_code;
+        }
+        root["req_0"]["code"].as_i64().unwrap_or(-1)
+    }
+
+    /// GetLoginUserInfo 验证登录态；code==0 且昵称非空即有效
+    fn verify_session(uin: &str, key: &str, login_type: i64) -> Result<(i64, Value), String> {
+        let comm = json!({
+            "ct": 19, "cv": 2201,
+            "uin": uin, "authst": key,
+            "g_tk": hash33(key), "tmeLoginType": login_type,
+        });
+        let payload = json!({
+            "comm": comm,
+            "req_0": { "module": "music.UserInfo.userInfoServer",
+                       "method": "GetLoginUserInfo", "param": {} },
+        });
+        let resp = http("qqlogin")
+            .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
+            .header("Content-Type", "application/json")
+            .header("Referer", REFERER)
+            .header("User-Agent", UA)
+            .header("Cookie", format!("qqmusic_uin={uin}; qqmusic_key={key};"))
+            .body(payload.to_string())
+            .send()
+            .map_err(|e| e.to_string())?;
+        let root: Value = resp.json().map_err(|e| e.to_string())?;
+        let code = fcg_code(&root);
+        Ok((code, root["req_0"]["data"].clone()))
+    }
+
+    fn profile_str(data: &Value, fields: &[&str]) -> String {
+        for f in fields {
+            if let Some(v) = data[*f].as_str() {
+                if !v.is_empty() {
+                    return v.to_string();
+                }
+            }
+        }
+        // GetLoginUserInfo 的昵称藏在 data.info（或 .base）下
+        for child_key in ["info", "userInfo", "userinfo", "base"] {
+            let child = &data[child_key];
+            for f in fields {
+                if let Some(v) = child[*f].as_str() {
+                    if !v.is_empty() {
+                        return v.to_string();
+                    }
+                }
+            }
+            if let Some(v) = child["base"][fields[0]].as_str() {
+                if !v.is_empty() {
+                    return v.to_string();
+                }
+            }
+        }
+        String::new()
+    }
+
+    pub fn qr_start(app: tauri::AppHandle) {
+        std::thread::spawn(move || {
+            let session = super::login_session_id();
+            super::set_login("qq", "loading", "", "", "");
+            if let Err(e) = qq_login_flow(&app, session) {
+                super::set_login("qq", "error", "", "", &e);
+            }
+        });
+    }
+
+    fn qq_login_flow(app: &tauri::AppHandle, session: u64) -> Result<(), String> {
+        // 1) CreateQRCode：拿 qrcodeID + base64 PNG（param 里必须带 ct/cv，
+        //    否则手机端授权页 104610 拒绝）
+        let root = login_fgc_qr_create()?;
+        let data = root["req_0"]["data"].clone();
+        let id = data["qrcodeID"].as_str().unwrap_or_default().to_string();
+        let encoded = data["qrcode"].as_str().unwrap_or_default().to_string();
+        if id.is_empty() || encoded.is_empty() {
+            return Err("QQ 未返回二维码".into());
+        }
+        let png = encoded.split(',').next_back().unwrap_or_default();
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(png)
+            .map_err(|e| format!("二维码解码失败: {e}"))?;
+        if png.is_empty() || png.len() > 1 << 20 {
+            return Err("二维码数据异常".into());
+        }
+
+        // 2) MQTT5-over-WebSocket 事件通道（先订阅再亮码；mu.y.qq.com /ws/handshake）
+        let mut channel = QqMqttChannel::connect(&id).map_err(|e| format!("QQ 登录通道连接失败: {e}"))?;
+        if super::login_session_id() != session {
+            return Ok(()); // 已被新一轮登录取代
+        }
+        let png_data = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png));
+        super::set_login("qq", "waiting", "", &png_data, "");
+
+        // 3) 事件循环（180s 超时；scanned / timeout / canceled / cookies）
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+        while super::login_session_id() == session && std::time::Instant::now() < deadline {
+            let Some(event) = channel.next(deadline).map_err(|e| format!("QQ 登录通道错误: {e}"))? else {
+                super::set_login("qq", "expired", "", "", "");
+                return Ok(());
+            };
+            match event.0.as_str() {
+                "scanned" => super::set_login("qq", "scanned", "", &png_data, ""),
+                "timeout" => {
+                    super::set_login("qq", "expired", "", "", "");
+                    return Ok(());
+                }
+                "canceled" => {
+                    super::set_login("qq", "error", "", "", "已在手机上取消登录，请刷新重试");
+                    return Ok(());
+                }
+                "loginFailed" => return Err("QQ 音乐拒绝了本次登录，请检查账号后重试".into()),
+                "cookies" => {
+                    // 手机确认：cookies.qmusic_uin/qqmusic_key 推送过来
+                    let payload: Value = serde_json::from_slice(&event.1)
+                        .map_err(|e| format!("登录回包解析失败: {e}"))?;
+                    let user = payload["cookies"]["qqmusic_uin"]["value"]
+                        .as_str().unwrap_or_default().to_string();
+                    let ticket = payload["cookies"]["qqmusic_key"]["value"]
+                        .as_str().unwrap_or_default().to_string();
+                    if user.is_empty() || ticket.is_empty() {
+                        return Err("手机确认回包缺少登录凭据，请重试".into());
+                    }
+                    let account = qq_exchange(&user, &ticket, &id)?;
+                    super::save_account("qq", &account, app);
+                    super::set_login("qq", "success", "", "", "");
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+        if super::login_session_id() == session {
+            super::set_login("qq", "expired", "", "", "");
+        }
+        Ok(())
+    }
+
+    fn login_fgc_qr_create() -> Result<Value, String> {
+        let payload = json!({
+            "comm": { "ct": 23, "cv": 0 },
+            "req_0": { "module": "music.login.LoginServer", "method": "CreateQRCode",
+                        "param": { "tmeAppID": "qqmusic", "ct": 19, "cv": 2201 } },
+        });
+        let resp = http("qqlogin")
+            .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
+            .header("Content-Type", "application/json")
+            .header("Referer", REFERER)
+            .header("User-Agent", UA)
+            .body(payload.to_string())
+            .send()
+            .map_err(|e| e.to_string())?;
+        let root: Value = resp.json().map_err(|e| e.to_string())?;
+        match fcg_code(&root) {
+            0 => Ok(root),
+            20279 => Err("QQ 音乐设备数已达上限，请在 App 里移除不用的设备后重试".into()),
+            104604 => Err("登录尝试过于频繁，请稍后再试".into()),
+            1000 | 104400 | 104401 => Err("二维码已过期，请刷新".into()),
+            c => Err(format!("QQ 音乐拒绝了二维码请求（code {c}）")),
+        }
+    }
+
+    /// Login 换票（换到的 key 自带 refresh_key 续期凭证）+ 验证；失败退回手机推来的原始 key
+    fn qq_exchange(user: &str, ticket: &str, qr_id: &str) -> Result<super::Account, String> {
+        let uin: i64 = user.parse().map_err(|_| "QQ 号解析失败".to_string())?;
+        let param = json!({
+            "musicid": uin, "qrCodeID": qr_id, "token": ticket,
+            "loginType": 6, "needCookie": 1,
+        });
+        let root = login_fgc_login(param);
+        if let Ok(r) = &root {
+            if fcg_code(r) == 0 {
+                let data = &r["req_0"]["data"];
+                let id = data["musicid"].as_str()
+                    .or_else(|| data["str_musicid"].as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let key = data["musickey"].as_str().unwrap_or_default().to_string();
+                if !id.is_empty() && !key.is_empty() {
+                    let login_type = data["loginType"].as_i64().unwrap_or(if key.starts_with("W_X") { 1 } else { 2 });
+                    // 会话传播可能短暂延迟：1000/104400/104401 重试一次
+                    let mut verified = verify_session(&id, &key, login_type).unwrap_or((-1, Value::Null));
+                    if [1000, 104400, 104401].contains(&verified.0) {
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                        verified = verify_session(&id, &key, login_type).unwrap_or((-1, Value::Null));
+                    }
+                    if verified.0 == 0 {
+                        let nickname = profile_str(&verified.1, &["nick", "nickname", "nickName"]);
+                        return Ok(super::Account {
+                            user_id: id,
+                            token: key,
+                            nickname,
+                            device: String::new(),
+                            cookie: String::new(), // token 字段即 musickey；播放时显式拼 cookie
+                        });
+                    }
+                }
+            }
+        }
+        // 换票失败：手机推的原始 key 直接用（三天后需重新扫码）
+        let login_type = if ticket.starts_with("W_X") { 1 } else { 2 };
+        let (code, profile) = verify_session(user, ticket, login_type).map_err(|e| format!("登录验证失败: {e}"))?;
+        if code != 0 {
+            return Err("手机已确认，但桌面端登录验证未通过，请重试".into());
+        }
+        let nickname = profile_str(&profile, &["nick", "nickname", "nickName"]);
+        Ok(super::Account {
+            user_id: user.to_string(),
+            token: ticket.to_string(),
+            nickname,
+            device: String::new(),
+            cookie: String::new(),
+        })
+    }
+
+    fn login_fgc_login(param: Value) -> Result<Value, String> {
+        let payload = json!({
+            "comm": { "ct": 19, "cv": 2201, "tmeLoginType": 6 },
+            "req_0": { "module": "music.login.LoginServer", "method": "Login", "param": param },
+        });
+        let resp = http("qqlogin")
+            .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
+            .header("Content-Type", "application/json")
+            .header("Referer", REFERER)
+            .header("User-Agent", UA)
+            .body(payload.to_string())
+            .send()
+            .map_err(|e| e.to_string())?;
+        resp.json().map_err(|e| e.to_string())
+    }
+
+    pub fn account(app: &tauri::AppHandle) -> Result<Value, String> {
+        match super::load_account("qq", app) {
+            Some(a) if !a.token.is_empty() && !a.user_id.is_empty() => {
+                let login_type = if a.token.starts_with("W_X") { 1 } else { 2 };
+                let (code, profile) = verify_session(&a.user_id, &a.token, login_type).unwrap_or((-1, Value::Null));
+                if code == 0 {
+                    let nickname = profile_str(&profile, &["nick", "nickname", "nickName"]);
+                    Ok(json!({ "loggedIn": true, "nickname": if nickname.is_empty() { a.nickname } else { nickname } }))
+                } else {
+                    // musickey 失效（三天未续）：视为未登录
+                    Ok(json!({ "loggedIn": false, "note": "QQ 登录已过期，请重新扫码" }))
+                }
+            }
+            _ => Ok(json!({ "loggedIn": false })),
+        }
+    }
+
+    /// 登录后的 GetVkey：comm 带 uin/authst/g_tk，purl 覆盖面远大于游客通道
+    pub fn song_url_logged(account: &super::Account, media_mid: &str, song_mid: &str) -> Result<Value, String> {
+        let guid: String = rand_digits(10);
+        let media = if media_mid.is_empty() { song_mid.to_string() } else { media_mid.to_string() };
+        let files: [(&str, &str); 3] = [("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")];
+        let login_type = if account.token.starts_with("W_X") { 1 } else { 2 };
+        let payload = json!({
+            "comm": {
+                "ct": 19, "cv": 2201,
+                "uin": account.user_id, "authst": account.token,
+                "g_tk": hash33(&account.token), "tmeLoginType": login_type,
+            },
+            "req_0": {
+                "module": "music.vkey.GetVkey", "method": "UrlGetVkey",
+                "param": {
+                    "guid": guid, "uin": account.user_id, "ctx": 0,
+                    "filename": files.iter().map(|(p, e)| format!("{p}{media}.{e}")).collect::<Vec<_>>(),
+                    "songmid": [song_mid, song_mid, song_mid],
+                    "songtype": [0, 0, 0],
+                }
+            },
+        });
+        let resp = http("qqlogin")
+            .post("https://u.y.qq.com/cgi-bin/musicu.fcg")
+            .header("Content-Type", "application/json")
+            .header("Referer", REFERER)
+            .header("User-Agent", UA)
+            .header("Cookie", format!("qqmusic_uin={}; qqmusic_key={};", account.user_id, account.token))
+            .body(payload.to_string())
+            .send()
+            .map_err(|e| e.to_string())?;
+        let root: Value = resp.json().map_err(|e| e.to_string())?;
+        if fcg_code(&root) == 301 {
+            return Err("QQ 登录已过期，请重新扫码".into());
+        }
+        if root["code"].as_i64() != Some(0) {
+            return Err(format!("QQ 音乐播放请求被拒绝（code {}）", root["code"].as_i64().unwrap_or(-1)));
+        }
+        let data = &root["req_0"]["data"];
+        let hosts: Vec<String> = data["sip"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        for item in data["midurlinfo"].as_array().unwrap_or(&Vec::new()) {
+            if item["result"].as_i64().unwrap_or(0) != 0 {
+                continue;
+            }
+            let purl = item["purl"].as_str().unwrap_or_default();
+            if purl.is_empty() {
+                continue;
+            }
+            let mut candidates: Vec<String> = if purl.starts_with("https://") || purl.starts_with("http://") {
+                vec![purl.to_string()]
+            } else {
+                let mut hs: Vec<&String> = hosts.iter().collect();
+                hs.sort_by_key(|h| if h.starts_with("https://") { 0 } else { 1 });
+                hs.into_iter().map(|h| format!("{}{}", h.trim_end_matches('/'), purl)).collect()
+            };
+            candidates.retain(|c| c.ends_with(".mp3") || c.ends_with(".flac"));
+            if let Some(candidate) = candidates.into_iter().next() {
+                let format = if candidate.ends_with(".flac") { "flac" } else { "mp3" };
+                return Ok(json!({ "url": candidate, "trial": item["freeTrialInfo"].is_object(), "format": format }));
+            }
+        }
+        Err("QQ 音乐没有返回可播放的音频".into())
+    }
+
+    /* ---- MQTT 5 over WebSocket（mu.y.qq.com，Sec-WebSocket-Protocol: mqtt） ---- */
+
+    struct QqMqttChannel {
+        stream: native_tls::TlsStream<std::net::TcpStream>,
+        read_buf: Vec<u8>,
+        fragment: Option<Vec<u8>>,
+        topic: String,
+        last_ping: std::time::Instant,
+        ping_interval: std::time::Duration,
+    }
+
+    impl QqMqttChannel {
+        /// TLS + WebSocket 升级 + MQTT CONNECT/SUBSCRIBE；reason 0x9c/0x9d 重定向同主机路径
+        fn connect(qr_id: &str) -> Result<QqMqttChannel, String> {
+            use native_tls::TlsConnector;
+            use std::io::{Read, Write};
+
+            let mut path = "/ws/handshake".to_string();
+            for attempt in 0..4 {
+                let connector = TlsConnector::new().map_err(|e| e.to_string())?;
+                let tcp = std::net::TcpStream::connect("mu.y.qq.com:443")
+                    .map_err(|e| format!("连接 mu.y.qq.com 失败: {e}"))?;
+                tcp.set_read_timeout(Some(std::time::Duration::from_secs(8))).map_err(|e| e.to_string())?;
+                let mut tls: native_tls::TlsStream<std::net::TcpStream> =
+                    connector.connect("mu.y.qq.com", tcp).map_err(|e| format!("TLS 失败: {e}"))?;
+                // WebSocket 升级
+                let mut key_bytes = [0u8; 16];
+                rand_bytes(&mut key_bytes);
+                let ws_key = base64::engine::general_purpose::STANDARD.encode(key_bytes);
+                let req = format!(
+                    "GET {path} HTTP/1.1\r\nHost: mu.y.qq.com\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                     Sec-WebSocket-Key: {ws_key}\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: mqtt\r\n\
+                     Origin: https://y.qq.com\r\nReferer: https://y.qq.com/\r\nUser-Agent: Mozilla/5.0\r\n\r\n"
+                );
+                tls.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+                // 读到 \r\n\r\n
+                let mut head = Vec::new();
+                let mut byte = [0u8; 1];
+                loop {
+                    tls.read(&mut byte).map_err(|e| e.to_string())?;
+                    head.push(byte[0]);
+                    if head.len() > 16384 {
+                        return Err("握手响应过长".into());
+                    }
+                    if head.len() >= 4 && &head[head.len() - 4..] == b"\r\n\r\n" {
+                        break;
+                    }
+                }
+                let head_str = String::from_utf8_lossy(&head);
+                let status = head_str.lines().next().unwrap_or_default();
+                if !status.contains("101") {
+                    return Err(format!("WebSocket 升级被拒: {}", status.trim()));
+                }
+                let mut accept_ok = false;
+                let mut proto_ok = false;
+                for line in head_str.lines().skip(1) {
+                    let lower = line.to_ascii_lowercase();
+                    if lower.starts_with("sec-websocket-accept:") {
+                        // 校验 SHA1(key + GUID)
+                        use sha1::{Digest, Sha1};
+                        let mut hasher = Sha1::new();
+                        hasher.update(ws_key.as_bytes());
+                        hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+                        let expect = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
+                        let got = line.splitn(2, ':').nth(1).unwrap_or_default().trim();
+                        accept_ok = got == expect;
+                    } else if lower.starts_with("sec-websocket-protocol:") && lower.contains("mqtt") {
+                        proto_ok = true;
+                    }
+                }
+                if !accept_ok || !proto_ok {
+                    return Err("WebSocket 握手校验失败".into());
+                }
+
+                // MQTT CONNECT（properties 里必须带 tmeAppID/hashTag/userID）
+                let mut props = Vec::new();
+                mqtt_push_prop_string(&mut props, "pass");
+                mqtt_push_prop_user(&mut props, "tmeAppID", "qqmusic");
+                mqtt_push_prop_user(&mut props, "business", "management");
+                mqtt_push_prop_user(&mut props, "hashTag", qr_id);
+                mqtt_push_prop_user(&mut props, "clientTag", "management.user");
+                mqtt_push_prop_user(&mut props, "userID", qr_id);
+                let client_id = format!("{}{}", now_millis(), rand_digits(4));
+                let mut body = Vec::new();
+                mqtt_push_string(&mut body, "MQTT");
+                body.push(5); // protocol version
+                body.push(2); // clean start
+                mqtt_push_u16(&mut body, 45); // keepalive
+                mqtt_push_varint(&mut body, props.len());
+                body.extend_from_slice(&props);
+                mqtt_push_string(&mut body, &client_id);
+                let mut connect = vec![0x10];
+                mqtt_push_varint(&mut connect, body.len());
+                connect.extend_from_slice(&body);
+                ws_send(&mut tls, 2, &connect).map_err(|e| e.to_string())?;
+
+                let ack = Self::next_mqtt_packet_blocking(&mut tls)
+                    .ok_or_else(|| "MQTT CONNECT 无响应".to_string())?;
+                if ack[0] >> 4 != 2 {
+                    return Err("MQTT 连接被拒".into());
+                }
+                let (reason, server_props) = mqtt_parse_connack(mqtt_packet_body(&ack)?)?;
+                if reason == 0x9c || reason == 0x9d {
+                    let reference = server_props.get("server").ok_or("缺少重定向路由")?;
+                    if attempt == 3 {
+                        return Err("QQ 登录通道重定向次数过多".into());
+                    }
+                    path = format!("/ws/handshake/{reference}");
+                    continue; // 同一 TLS 主机的新路径重连
+                }
+                if reason != 0 {
+                    return Err("MQTT 连接被服务器拒绝".into());
+                }
+                let keepalive_secs: u64 = server_props
+                    .get("keepalive")
+                    .and_then(|k| k.parse().ok())
+                    .unwrap_or(20);
+                let ping_interval = std::time::Duration::from_millis((keepalive_secs * 500).clamp(1000, 20000));
+
+                // SUBSCRIBE：topic management.qrcode_login/{qrId}
+                let topic = format!("management.qrcode_login/{qr_id}");
+                let mut sub_props = Vec::new();
+                mqtt_push_prop_user(&mut sub_props, "authorization", "tmelogin");
+                mqtt_push_prop_user(&mut sub_props, "pubsub", "unicast");
+                let mut sub_body = Vec::new();
+                mqtt_push_u16(&mut sub_body, 1); // packet id
+                mqtt_push_varint(&mut sub_body, sub_props.len());
+                sub_body.extend_from_slice(&sub_props);
+                mqtt_push_string(&mut sub_body, &topic);
+                sub_body.push(0); // QoS 0
+                let mut sub = vec![0x82];
+                mqtt_push_varint(&mut sub, sub_body.len());
+                sub.extend_from_slice(&sub_body);
+                ws_send(&mut tls, 2, &sub).map_err(|e| e.to_string())?;
+
+                let ack = Self::next_mqtt_packet_blocking(&mut tls)
+                    .ok_or_else(|| "MQTT SUBSCRIBE 无响应".to_string())?;
+                if ack[0] >> 4 != 9 {
+                    return Err("MQTT 订阅被拒".into());
+                }
+                // SUBACK body: pid(2) + props(varint) + reason；reason ≥ 0x80 即订阅失败
+                if let Some(&reason) = ack.iter().last() {
+                    if reason >= 0x80 {
+                        return Err("QQ 登录通道订阅被拒".into());
+                    }
+                }
+                tls.set_read_timeout(Some(std::time::Duration::from_secs(1))).map_err(|e| e.to_string())?;
+                return Ok(QqMqttChannel {
+                    stream: tls,
+                    read_buf: Vec::new(),
+                    fragment: None,
+                    topic,
+                    last_ping: std::time::Instant::now(),
+                    ping_interval,
+                });
+            }
+            Err("QQ 登录通道连接失败".into())
+        }
+
+        /// 读一个 MQTT 包（deadline 前持续读），None = 超时
+        fn next_packet_by_deadline(&mut self, deadline: std::time::Instant) -> Result<Option<Vec<u8>>, String> {
+            use std::io::Read;
+            loop {
+                // 发 PINGREQ 保活
+                if self.last_ping.elapsed() >= self.ping_interval {
+                    let ping = vec![0xc0, 0x00];
+                    ws_send(&mut self.stream, 2, &ping).map_err(|e| e.to_string())?;
+                    self.last_ping = std::time::Instant::now();
+                }
+                // 缓冲里已经有完整 MQTT 包？
+                if self.read_buf.len() >= 2 {
+                    let mut length = 0usize;
+                    let mut multiplier = 1usize;
+                    let mut end = 1;
+                    let mut body_known = false;
+                    while end < self.read_buf.len() && end <= 4 {
+                        let value = self.read_buf[end] & 0x7f;
+                        length += (value as usize) * multiplier;
+                        end += 1;
+                        if self.read_buf[end - 1] & 0x80 == 0 {
+                            body_known = true;
+                            break;
+                        }
+                        multiplier *= 128;
+                        if end > 4 {
+                            return Err("MQTT 长度非法".into());
+                        }
+                    }
+                    if body_known {
+                        if self.read_buf.len() >= end + length {
+                            let packet: Vec<u8> = self.read_buf[..end + length].to_vec();
+                            self.read_buf.drain(..end + length);
+                            return Ok(Some(packet));
+                        }
+                        // 包体不全：继续读
+                    }
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Ok(None);
+                }
+                match ws_read_frame(&mut self.stream, &mut self.fragment, deadline) {
+                    Ok(Some(data)) => {
+                        if self.read_buf.len() + data.len() > 1 << 20 {
+                            return Err("MQTT 缓冲过大".into());
+                        }
+                        self.read_buf.extend_from_slice(&data);
+                    }
+                    Ok(None) => continue, // ping/pong/片段
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        /// 下一个登录事件：Some((type, payload)) / None = 超时
+        fn next(&mut self, deadline: std::time::Instant) -> Result<Option<(String, Vec<u8>)>, String> {
+            while std::time::Instant::now() < deadline {
+                let packet = self.next_packet_by_deadline(deadline)?;
+                let Some(packet) = packet else { return Ok(None) };
+                let header = packet[0];
+                match header >> 4 {
+                    3 => {
+                        // PUBLISH：topic → [qos1 packet id] → properties(type=user prop) → payload
+                        let body = mqtt_packet_body(&packet)?;
+                        let (topic, qos, after_topic) = mqtt_parse_publish(body, header)?;
+                        if topic != self.topic {
+                            continue;
+                        }
+                        let mut cursor = after_topic;
+                        if qos == 1 {
+                            if body.len() < cursor + 2 {
+                                return Err("PUBLISH 包 id 越界".into());
+                            }
+                            let pid = ((body[cursor] as usize) << 8) | body[cursor + 1] as usize;
+                            cursor += 2;
+                            let ack = vec![0x40, 0x02, (pid >> 8) as u8, (pid & 0xff) as u8];
+                            ws_send(&mut self.stream, 2, &ack).map_err(|e| e.to_string())?;
+                        }
+                        let (props, rest) = mqtt_parse_properties(&body[cursor..])?;
+                        let event_type = props.get("type").cloned().unwrap_or_default();
+                        return Ok(Some((event_type, rest.to_vec())));
+                    }
+                    13 => {} // PINGRESP
+                    14 => return Err("QQ 登录通道断开".into()),
+                    _ => return Err("MQTT 意外包类型".into()),
+                }
+            }
+            Ok(None)
+        }
+
+        /// 握手阶段阻塞读第一个完整 MQTT 包（socket 已设 8s 超时）
+        fn next_mqtt_packet_blocking(
+            stream: &mut native_tls::TlsStream<std::net::TcpStream>,
+        ) -> Option<Vec<u8>> {
+            let mut pending: Vec<u8> = Vec::new();
+            let mut fragment: Option<Vec<u8>> = None;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while std::time::Instant::now() < deadline {
+                if let Some(data) = ws_read_frame(stream, &mut fragment, deadline).ok().flatten() {
+                    pending.extend_from_slice(&data);
+                    if pending.len() >= 2 {
+                        let mut length = 0usize;
+                        let mut multiplier = 1usize;
+                        let mut end = 1;
+                        let mut done = false;
+                        while end < pending.len() && end <= 4 {
+                            let value = pending[end] & 0x7f;
+                            length += (value as usize) * multiplier;
+                            end += 1;
+                            if pending[end - 1] & 0x80 == 0 {
+                                done = true;
+                                break;
+                            }
+                            multiplier *= 128;
+                        }
+                        if done && pending.len() >= end + length {
+                            return Some(pending[..end + length].to_vec());
+                        }
+                    }
+                }
+            }
+            None
+        }
+    }
+
+    fn rand_bytes(out: &mut [u8]) {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        for b in out.iter_mut() {
+            *b = rng.gen();
+        }
+    }
+
+    fn mqtt_push_string(out: &mut Vec<u8>, s: &str) {
+        let bytes = s.as_bytes();
+        mqtt_push_u16(out, bytes.len());
+        out.extend_from_slice(bytes);
+    }
+
+    fn mqtt_push_u16(out: &mut Vec<u8>, v: usize) {
+        out.push((v >> 8) as u8);
+        out.push((v & 0xff) as u8);
+    }
+
+    fn mqtt_push_varint(out: &mut Vec<u8>, v: usize) {
+        let mut remaining = v;
+        loop {
+            let mut digit = remaining % 128;
+            remaining /= 128;
+            if remaining > 0 {
+                digit |= 0x80;
+            }
+            out.push(digit);
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+
+    /// 0x26 user property（name, value 两字符串）
+    fn mqtt_push_prop_user(out: &mut Vec<u8>, name: &str, value: &str) {
+        out.push(0x26);
+        mqtt_push_string(out, name);
+        mqtt_push_string(out, value);
+    }
+
+    fn mqtt_push_prop_string(out: &mut Vec<u8>, value: &str) {
+        out.push(0x15); // Authentication Method
+        mqtt_push_string(out, value);
+    }
+
+    /// MQTT 完整包 = [头字节][varint 长度][body]；取 body 切片
+    fn mqtt_packet_body(packet: &[u8]) -> Result<&[u8], String> {
+        if packet.len() < 2 {
+            return Err("MQTT 包过短".into());
+        }
+        let mut length = 0usize;
+        let mut multiplier = 1usize;
+        let mut pos = 1;
+        loop {
+            if pos >= packet.len() || pos > 4 {
+                return Err("MQTT 长度非法".into());
+            }
+            let digit = packet[pos];
+            pos += 1;
+            length += ((digit & 0x7f) as usize) * multiplier;
+            if digit & 0x80 == 0 {
+                break;
+            }
+            multiplier *= 128;
+        }
+        if packet.len() < pos + length {
+            return Err("MQTT 包体不完整".into());
+        }
+        Ok(&packet[pos..pos + length])
+    }
+
+    /// 解析 CONNACK：返回 (reason, properties)；properties 含 server/keepalive 等
+    fn mqtt_parse_connack(body: &[u8]) -> Result<(u8, HashMap<String, String>), String> {
+        // body: [ack_flags, reason, properties...]
+        if body.len() < 2 {
+            return Err("CONNACK 过短".into());
+        }
+        let reason = body[1];
+        let (props, _) = mqtt_parse_properties(&body[2..])?;
+        Ok((reason, props))
+    }
+
+    /// 解析 PUBLISH 头：返回 (topic, qos, 包 id/properties 起始下标)
+    fn mqtt_parse_publish(body: &[u8], header: u8) -> Result<(String, u8, usize), String> {
+        if body.len() < 2 {
+            return Err("PUBLISH 过短".into());
+        }
+        let qos = ((header >> 1) & 0x03) as u8;
+        if qos > 1 {
+            return Err("MQTT QoS2 不支持".into());
+        }
+        let topic_len = ((body[0] as usize) << 8) | body[1] as usize;
+        if body.len() < 2 + topic_len {
+            return Err("PUBLISH topic 越界".into());
+        }
+        let topic = String::from_utf8_lossy(&body[2..2 + topic_len]).to_string();
+        Ok((topic, qos, 2 + topic_len))
+    }
+
+    /// MQTT properties 段（varint 长度前缀）；只解析 0x26/0x1c/0x13，其余按宽度跳过
+    fn mqtt_parse_properties(data: &[u8]) -> Result<(HashMap<String, String>, &[u8]), String> {
+        let mut pos = 0usize;
+        // varint
+        let mut length = 0usize;
+        let mut multiplier = 1usize;
+        loop {
+            if pos >= data.len() {
+                return Err("properties 长度越界".into());
+            }
+            let digit = data[pos];
+            pos += 1;
+            length += ((digit & 0x7f) as usize) * multiplier;
+            if digit & 0x80 == 0 {
+                break;
+            }
+            multiplier *= 128;
+            if multiplier > 1 << 21 {
+                return Err("properties 长度非法".into());
+            }
+        }
+        if pos + length > data.len() {
+            return Err("properties 越界".into());
+        }
+        let end = pos + length;
+        let mut values = HashMap::new();
+        while pos < end {
+            let kind = data[pos];
+            pos += 1;
+            match kind {
+                0x26 => {
+                    let (name, next) = mqtt_read_string(data, pos, end)?;
+                    let (value, next2) = mqtt_read_string(data, next, end)?;
+                    values.insert(name, value);
+                    pos = next2;
+                }
+                0x1c => {
+                    let (v, next) = mqtt_read_string(data, pos, end)?;
+                    values.insert("server".into(), v);
+                    pos = next;
+                }
+                0x13 => {
+                    if pos + 2 > end {
+                        return Err("keepalive 越界".into());
+                    }
+                    values.insert("keepalive".into(), format!("{}", ((data[pos] as usize) << 8) | data[pos + 1] as usize));
+                    pos += 2;
+                }
+                0x01 | 0x17 | 0x19 | 0x24 | 0x25 | 0x28 | 0x29 | 0x2a => { pos += 1; }
+                0x21 | 0x22 | 0x23 => { pos += 2; }
+                0x02 | 0x11 | 0x18 | 0x27 => { pos += 4; }
+                0x0b => {
+                    let (_v, next) = mqtt_read_varint(data, pos, end)?;
+                    pos = next;
+                }
+                0x03 | 0x08 | 0x12 | 0x15 | 0x1a | 0x1f => {
+                    let (_v, next) = mqtt_read_string(data, pos, end)?;
+                    pos = next;
+                }
+                0x09 | 0x16 => {
+                    if pos + 2 > end {
+                        return Err("binary 越界".into());
+                    }
+                    let n = ((data[pos] as usize) << 8) | data[pos + 1] as usize;
+                    pos += 2 + n;
+                }
+                _ => return Err(format!("未知 MQTT property 0x{kind:02x}")),
+            }
+            if pos > end {
+                return Err("property 越界".into());
+            }
+        }
+        Ok((values, &data[end..]))
+    }
+
+    fn mqtt_read_string(data: &[u8], mut pos: usize, end: usize) -> Result<(String, usize), String> {
+        if pos + 2 > end {
+            return Err("字符串长度越界".into());
+        }
+        let len = ((data[pos] as usize) << 8) | data[pos + 1] as usize;
+        pos += 2;
+        if pos + len > end {
+            return Err("字符串越界".into());
+        }
+        Ok((String::from_utf8_lossy(&data[pos..pos + len]).to_string(), pos + len))
+    }
+
+    fn mqtt_read_varint(data: &[u8], mut pos: usize, end: usize) -> Result<(usize, usize), String> {
+        let mut value = 0usize;
+        let mut multiplier = 1usize;
+        loop {
+            if pos >= end {
+                return Err("varint 越界".into());
+            }
+            let digit = data[pos];
+            pos += 1;
+            value += ((digit & 0x7f) as usize) * multiplier;
+            if digit & 0x80 == 0 {
+                break;
+            }
+            multiplier *= 128;
+        }
+        Ok((value, pos))
+    }
+
+    /// WebSocket 帧发送（客户端必须掩码）
+    fn ws_send(
+        stream: &mut native_tls::TlsStream<std::net::TcpStream>,
+        opcode: u8,
+        payload: &[u8],
+    ) -> std::io::Result<()> {
+        use rand::Rng;
+        use std::io::Write;
+        let mut rng = rand::thread_rng();
+        let mut mask = [0u8; 4];
+        for b in mask.iter_mut() {
+            *b = rng.gen();
+        }
+        let mut frame = Vec::with_capacity(payload.len() + 14);
+        frame.push(0x80 | opcode);
+        if payload.len() < 126 {
+            frame.push(0x80 | payload.len() as u8);
+        } else if payload.len() <= 0xffff {
+            frame.push(0x80 | 126);
+            frame.push((payload.len() >> 8) as u8);
+            frame.push((payload.len() & 0xff) as u8);
+        } else {
+            frame.push(0x80 | 127);
+            for shift in (0..8).rev() {
+                frame.push(((payload.len() >> (shift * 8)) & 0xff) as u8);
+            }
+        }
+        frame.extend_from_slice(&mask);
+        for (i, b) in payload.iter().enumerate() {
+            frame.push(*b ^ mask[i % 4]);
+        }
+        stream.write_all(&frame)?;
+        stream.flush()
+    }
+
+    /// 读一帧 WebSocket：Some(payload) = 二进制帧；None = ping/pong/片段未完成
+    fn ws_read_frame(
+        stream: &mut native_tls::TlsStream<std::net::TcpStream>,
+        fragment: &mut Option<Vec<u8>>,
+        deadline: std::time::Instant,
+    ) -> Result<Option<Vec<u8>>, String> {
+        use std::io::Read;
+        fn read_exact_timeout(
+            stream: &mut native_tls::TlsStream<std::net::TcpStream>,
+            buf: &mut [u8],
+            deadline: std::time::Instant,
+        ) -> Result<(), String> {
+            let mut filled = 0;
+            while filled < buf.len() {
+                if std::time::Instant::now() >= deadline {
+                    return Err("读超时".into());
+                }
+                match stream.read(&mut buf[filled..]) {
+                    Ok(0) => return Err("连接关闭".into()),
+                    Ok(n) => filled += n,
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        continue;
+                    }
+                    Err(e) => return Err(e.to_string()),
+                }
+            }
+            Ok(())
+        }
+        let mut hdr = [0u8; 2];
+        read_exact_timeout(stream, &mut hdr, deadline)?;
+        let first = hdr[0];
+        let second = hdr[1];
+        if first & 0x70 != 0 || second & 0x80 != 0 {
+            return Err("服务端 WebSocket 帧非法".into());
+        }
+        let mut length = (second & 0x7f) as u64;
+        if length == 126 {
+            let mut ext = [0u8; 2];
+            read_exact_timeout(stream, &mut ext, deadline)?;
+            length = ((ext[0] as u64) << 8) | ext[1] as u64;
+        } else if length == 127 {
+            let mut ext = [0u8; 8];
+            read_exact_timeout(stream, &mut ext, deadline)?;
+            length = 0;
+            for b in ext {
+                length = (length << 8) | b as u64;
+            }
+        }
+        if length > 1 << 20 {
+            return Err("WebSocket 帧过大".into());
+        }
+        let opcode = first & 0x0f;
+        let fin = first & 0x80 != 0;
+        if opcode >= 8 && (!fin || length > 125) {
+            return Err("控制帧非法".into());
+        }
+        let mut payload = vec![0u8; length as usize];
+        read_exact_timeout(stream, &mut payload, deadline)?;
+        match opcode {
+            8 => Err("WebSocket 已被服务端关闭".into()),
+            9 => {
+                // PING → 回 PONG
+                ws_send(stream, 10, &payload).map_err(|e| e.to_string())?;
+                Ok(None)
+            }
+            10 => Ok(None),
+            2 => {
+                if fragment.is_some() {
+                    return Err("意外的二进制片段".into());
+                }
+                if fin {
+                    Ok(Some(payload))
+                } else {
+                    *fragment = Some(payload);
+                    Ok(None)
+                }
+            }
+            0 => {
+                let partial = fragment.take().ok_or_else(|| "意外的续帧".to_string())?;
+                let mut combined = partial;
+                if combined.len() + payload.len() > 1 << 20 {
+                    return Err("片段过大".into());
+                }
+                combined.extend_from_slice(&payload);
+                if fin {
+                    Ok(Some(combined))
+                } else {
+                    *fragment = Some(combined);
+                    Ok(None)
+                }
+            }
+            _ => Err("意外的 WebSocket 数据帧".into()),
+        }
     }
 
 }
@@ -1399,12 +2350,10 @@ pub fn music_login_start(platform: String, app: tauri::AppHandle) -> Result<(), 
     if !platform_supported(&platform) {
         return Err(format!("{platform} 暂不支持"));
     }
-    if platform == "qq" {
-        return Err("QQ 扫码登录暂未开放，当前可直接搜索播放免费歌曲".into());
-    }
     super_login_session_bump();
     match platform.as_str() {
         "netease" => music_platform::netease::qr_start(app),
+        "qq" => music_platform::qq::qr_start(app),
         "kugou" => music_platform::kugou::qr_start(app),
         _ => return Err("不支持的平台".into()),
     }
@@ -1431,8 +2380,8 @@ pub fn music_login_state() -> Value {
 pub fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
     match platform.as_str() {
         "netease" => music_platform::netease::account(&app),
+        "qq" => music_platform::qq::account(&app),
         "kugou" => music_platform::kugou::account(&app),
-        "qq" => Ok(json!({ "loggedIn": false, "note": "QQ 登录暂未开放，可直接搜索播放免费歌曲" })),
         _ => Err("不支持的平台".into()),
     }
 }
@@ -1481,6 +2430,16 @@ pub fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> R
         "qq" => {
             let media = track["mediaMid"].as_str().unwrap_or_default().to_string();
             let mid = track["id"].as_str().unwrap_or_default().to_string();
+            // 登录态优先（会员歌可放），失败退游客通道
+            if let Some(account) = load_account("qq", &app) {
+                if !account.token.is_empty() {
+                    if let Ok(url) = music_platform::qq::song_url_logged(&account, &media, &mid) {
+                        if !url["url"].as_str().unwrap_or_default().is_empty() {
+                            return Ok(url);
+                        }
+                    }
+                }
+            }
             music_platform::qq::song_url(&media, &mid)
         }
         "kugou" => music_platform::kugou::song_url(&app, &track),

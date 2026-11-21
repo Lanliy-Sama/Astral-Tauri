@@ -12,7 +12,7 @@
 
   const PLATFORMS = [
     { key: 'netease', label: '网易云', qr: true },
-    { key: 'qq', label: 'QQ 音乐', qr: false },
+    { key: 'qq', label: 'QQ 音乐', qr: true },
     { key: 'kugou', label: '酷狗', qr: true },
   ];
 
@@ -247,12 +247,6 @@
       {:else if PLATFORMS.find((p) => p.key === platform)?.qr}
         <div class="qr-area qr-idle">
           <button class="md-btn md-tonal-btn" onclick={startLogin}>获取登录二维码</button>
-        </div>
-      {:else if platform === 'qq'}
-        <div class="md-list-tile two-line no-cursor">
-          <div class="tile-content">
-            <div class="tile-subtitle">QQ 音乐扫码登录暂未开放；当前可直接搜索播放免费歌曲</div>
-          </div>
         </div>
       {/if}
     </SettingsCard>
