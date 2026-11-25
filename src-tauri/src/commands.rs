@@ -314,46 +314,120 @@ pub fn frontend_log(msg: String) {
     simple::cmd_log(&format!("[fe] {}", msg));
 }
 
-/// 开机自启动（对应 startup_url_scheme.dart：Windows 计划任务方式）。
+/// 当前用户登录自启动。HKCU Run 不需要管理员权限，且启动参数可与
+/// 「启动时最小化」同步更新；旧的 ONSTART/HIGHEST 计划任务会让普通用户设置失败。
 #[tauri::command]
-pub fn set_startup(enable: bool) -> Result<(), String> {
+pub fn set_startup(enable: bool, minimize: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        let exe = std::env::current_exe()
-            .map_err(|e| e.to_string())?
-            .to_string_lossy()
-            .to_string();
-        let task_arg = format!("\"{}\" --autostart", exe);
+        const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
         let output = if enable {
+            let exe = std::env::current_exe()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string();
+            let command = if minimize {
+                format!("\"{exe}\" --autostart --minimized")
+            } else {
+                format!("\"{exe}\" --autostart")
+            };
             silent_command(
-                "schtasks",
-                &[
-                    "/create",
-                    "/tn",
-                    "Astral",
-                    "/tr",
-                    &task_arg,
-                    "/sc",
-                    "ONSTART",
-                    "/rl",
-                    "HIGHEST",
-                    "/f",
-                ],
+                "reg",
+                &["ADD", RUN_KEY, "/v", "Astral", "/t", "REG_SZ", "/d", &command, "/f"],
             )
             .output()
         } else {
-            silent_command("schtasks", &["/delete", "/tn", "Astral", "/f"]).output()
+            silent_command("reg", &["DELETE", RUN_KEY, "/v", "Astral", "/f"]).output()
         };
         match output {
             Ok(o) if o.status.success() => Ok(()),
-            Ok(o) => Err(String::from_utf8_lossy(&o.stderr).to_string()),
+            Ok(o) => {
+                let message = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                Err(if message.is_empty() {
+                    String::from_utf8_lossy(&o.stdout).trim().to_string()
+                } else {
+                    message
+                })
+            }
             Err(e) => Err(e.to_string()),
         }
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = enable;
+        let _ = (enable, minimize);
         Ok(())
+    }
+}
+
+/// 经被控端明确授权后，由 RemoteDesktopService 转发的白名单输入事件。
+/// 该命令不接收任意脚本、进程启动或 shell 内容。
+#[tauri::command]
+pub fn remote_desktop_input(event: Value) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::Input::KeyboardAndMouse::*;
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SetCursorPos, SM_CXSCREEN, SM_CYSCREEN};
+        let kind = event["kind"].as_str().unwrap_or_default();
+        unsafe fn send_mouse(flags: MOUSE_EVENT_FLAGS, data: u32) -> Result<(), String> {
+            let input = INPUT {
+                r#type: INPUT_MOUSE,
+                Anonymous: INPUT_0 {
+                    mi: MOUSEINPUT { dx: 0, dy: 0, mouseData: data, dwFlags: flags, time: 0, dwExtraInfo: 0 },
+                },
+            };
+            let sent = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+            if sent == 1 { Ok(()) } else { Err("系统拒绝了鼠标输入".into()) }
+        }
+        unsafe fn send_key(vk: u16, up: bool) -> Result<(), String> {
+            let flags = if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) };
+            let input = INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: 0 },
+                },
+            };
+            let sent = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+            if sent == 1 { Ok(()) } else { Err("系统拒绝了键盘输入".into()) }
+        }
+        match kind {
+            "move" => {
+                let x = event["x"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+                let y = event["y"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+                let width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+                let height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+                let px = (x * (width.saturating_sub(1)) as f64).round() as i32;
+                let py = (y * (height.saturating_sub(1)) as f64).round() as i32;
+                unsafe { SetCursorPos(px, py) }.map_err(|e| e.to_string())
+            }
+            "down" | "up" => {
+                let down = kind == "down";
+                let flags = match (event["button"].as_str().unwrap_or("left"), down) {
+                    ("left", true) => MOUSEEVENTF_LEFTDOWN,
+                    ("left", false) => MOUSEEVENTF_LEFTUP,
+                    ("right", true) => MOUSEEVENTF_RIGHTDOWN,
+                    ("right", false) => MOUSEEVENTF_RIGHTUP,
+                    ("middle", true) => MOUSEEVENTF_MIDDLEDOWN,
+                    ("middle", false) => MOUSEEVENTF_MIDDLEUP,
+                    _ => return Err("鼠标按键无效".into()),
+                };
+                unsafe { send_mouse(flags, 0) }
+            }
+            "wheel" => {
+                let delta = event["delta"].as_f64().unwrap_or(0.0).clamp(-1200.0, 1200.0) as i32;
+                unsafe { send_mouse(MOUSEEVENTF_WHEEL, delta as u32) }
+            }
+            "keyDown" | "keyUp" => {
+                let vk = event["vk"].as_u64().unwrap_or(0);
+                if !(1..=254).contains(&vk) { return Err("虚拟键码无效".into()); }
+                unsafe { send_key(vk as u16, kind == "keyUp") }
+            }
+            _ => Err("不支持的远程输入类型".into()),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = event;
+        Err("当前平台暂不支持远程桌面输入".into())
     }
 }
 

@@ -52,6 +52,8 @@ windows = { version = "0.52.0", features = [
     "Win32_System_Threading",
     "Win32_Storage_FileSystem",
     "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 # QQ 扫码 MQTT/WS 登录通道（桌面端专用）：native-tls 在非 Windows/macOS
@@ -60,6 +62,8 @@ windows = { version = "0.52.0", features = [
 [target.'cfg(not(target_os = "android"))'.dependencies]
 native-tls = "0.2"
 sha1 = "0.10"
+# 系统媒体控制：Windows SMTC / Linux MPRIS / macOS Now Playing
+souvlaki = "0.9.3"
 
 [profile.release]
 # Cranelift 后端：LTO 是 LLVM bitcode 专属，必须关闭；

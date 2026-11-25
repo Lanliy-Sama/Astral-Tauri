@@ -812,7 +812,20 @@ mod qq {
         );
         let o = http_get_json(&url, REFERER, "")?;
         let raw = o["lyric"].as_str().unwrap_or_default();
-        let lines = super::lyrics_util::parse_lrc(raw);
+        // 部分 QQ 歌曲即使 nobase64=1 仍返回 Base64 LRC；同时兼容普通文本，
+        // 避免前端把 Base64 当作无时间轴歌词而始终只显示曲名。
+        let decoded;
+        let lyric_text = if raw.contains('[') && raw.contains(':') {
+            raw
+        } else {
+            decoded = base64::engine::general_purpose::STANDARD
+                .decode(raw.trim())
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .unwrap_or_else(|| raw.to_string());
+            decoded.trim_start_matches('\u{feff}')
+        };
+        let lines = super::lyrics_util::parse_lrc(lyric_text);
         Ok(json!({ "found": !lines.is_empty(), "lines": lines }))
     }
 
@@ -881,7 +894,12 @@ mod qq {
                     list.push(format!("https://isure.stream.qqmusic.qq.com/{purl}"));
                     list
                 };
-                candidates.retain(|c| c.ends_with(".mp3") || c.ends_with(".flac"));
+                // vkey 地址通常带 ?guid=...&vkey=... 查询串；只检查 URL path，
+                // 避免把已经成功签发的播放地址全部过滤掉（表现为点击歌曲无反应）。
+                candidates.retain(|c| {
+                    let path = c.split(['?', '#']).next().unwrap_or(c).to_ascii_lowercase();
+                    path.ends_with(".mp3") || path.ends_with(".flac") || path.ends_with(".m4a")
+                });
                 if let Some(candidate) = candidates.into_iter().next() {
                     let format = if candidate.ends_with(".flac") { "flac" } else { "mp3" };
                     return Ok(json!({ "url": candidate, "trial": false, "format": format }));
@@ -2137,7 +2155,7 @@ mod kugou {
                 if hash.len() != 32 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
                     continue;
                 }
-                let artists: Vec<String> = s["singerinfo"]
+                let mut artists: Vec<String> = s["singerinfo"]
                     .as_array()
                     .map(|a| {
                         a.iter()
@@ -2145,22 +2163,46 @@ mod kugou {
                             .collect()
                     })
                     .unwrap_or_default();
+                // v3 搜索多数结果只给 singername，singerinfo 为空；旧接口则使用
+                // singer_name。保留数组结构，前端与另外两平台共用同一渲染逻辑。
+                if artists.is_empty() {
+                    let singer = s["singername"].as_str()
+                        .or_else(|| s["singer_name"].as_str())
+                        .unwrap_or_default()
+                        .replace("<em>", "")
+                        .replace("</em>", "");
+                    if !singer.trim().is_empty() {
+                        artists.push(singer);
+                    }
+                }
                 let album_id = s["album_id"]
                     .as_str()
                     .or_else(|| s["albumInfo"]["album_id"].as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                    .map(String::from)
+                    .or_else(|| s["album_id"].as_i64().map(|v| v.to_string()))
+                    .unwrap_or_default();
                 // v3 搜索返回 duration（秒）；旧字段 timelen 直接当毫秒兜底
                 let sec = s["duration"].as_i64().unwrap_or(0);
                 let ms = if sec > 0 { sec * 1000 } else { s["timelen"].as_i64().unwrap_or(0) };
+                let title = s["songname"].as_str()
+                    .or_else(|| s["songname_original"].as_str())
+                    .unwrap_or_default()
+                    .replace("<em>", "")
+                    .replace("</em>", "");
+                let cover = s["imgurl"].as_str()
+                    .filter(|v| !v.is_empty())
+                    .or_else(|| s["trans_param"]["union_cover"].as_str())
+                    .or_else(|| s["trans_param"]["sizable_cover"].as_str())
+                    .unwrap_or_default()
+                    .replace("{size}", "300");
                 out.push(json!({
                     "key": format!("kugou:{hash}"),
                     "platform": "kugou",
                     "id": hash,
-                    "title": s["songname"].as_str().unwrap_or_default(),
+                    "title": title,
                     "artists": artists,
                     "durationMs": ms,
-                    "cover": s["imgurl"].as_str().unwrap_or_default().replace("{size}", "300"),
+                    "cover": cover,
                     "albumId": album_id,
                     "albumAudioId": s["album_audio_id"].as_str().unwrap_or_default(),
                 }));
@@ -2436,8 +2478,18 @@ pub fn music_search(platform: String, query: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> Result<Value, String> {
-    let track = registry_get(&key).ok_or("曲目信息已过期，请重新搜索")?;
+pub fn music_play_url(
+    platform: String,
+    key: String,
+    track: Option<Value>,
+    app: tauri::AppHandle,
+) -> Result<Value, String> {
+    // 房间共享和重启后的播放不依赖本机搜索注册表；track 只含公开元数据，
+    // 平台 Cookie/token 始终从账号端本地存储读取，绝不随消息发送。
+    let track = track
+        .filter(|t| t["id"].as_str().is_some())
+        .or_else(|| registry_get(&key))
+        .ok_or("曲目信息已过期，请重新搜索")?;
     match platform.as_str() {
         "netease" => {
             let id = track["id"].as_str().unwrap_or_default().to_string();
@@ -2464,21 +2516,34 @@ pub fn music_play_url(platform: String, key: String, app: tauri::AppHandle) -> R
 }
 
 #[tauri::command]
-pub fn music_lyrics(platform: String, key: String) -> Result<Value, String> {
-    let track = registry_get(&key).ok_or("曲目信息已过期，请重新搜索")?;
+pub fn music_lyrics(
+    platform: String,
+    key: String,
+    track: Option<Value>,
+) -> Result<Value, String> {
+    let track = track.or_else(|| registry_get(&key));
+    let key_id = key.split_once(':').map(|(_, id)| id).unwrap_or(key.as_str());
     match platform.as_str() {
         "netease" => {
-            let id = track["id"].as_str().unwrap_or_default().to_string();
-            music_platform::netease::lyrics(&id)
+            let id = track.as_ref()
+                .and_then(|t| t["id"].as_str())
+                .unwrap_or(key_id);
+            music_platform::netease::lyrics(id)
         }
         "qq" => {
-            let mid = track["id"].as_str().unwrap_or_default().to_string();
-            music_platform::qq::lyrics(&mid)
+            let mid = track.as_ref()
+                .and_then(|t| t["id"].as_str())
+                .unwrap_or(key_id);
+            music_platform::qq::lyrics(mid)
         }
         "kugou" => {
-            let hash = track["id"].as_str().unwrap_or_default().to_string();
-            let ms = track["durationMs"].as_i64().unwrap_or(0);
-            music_platform::kugou::lyrics(&hash, ms)
+            let hash = track.as_ref()
+                .and_then(|t| t["id"].as_str())
+                .unwrap_or(key_id);
+            let ms = track.as_ref()
+                .and_then(|t| t["durationMs"].as_i64())
+                .unwrap_or(0);
+            music_platform::kugou::lyrics(hash, ms)
         }
         _ => Err("不支持的平台".into()),
     }

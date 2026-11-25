@@ -166,7 +166,7 @@ jobs:
             CFG="--config $RUNNER_TEMP/version.json"
             echo "构建版本: $VERSION"
           fi
-          npx tauri build $CFG --bundles ${{ matrix.bundles }}
+          node .github/scripts/build-parallel.mjs build $CFG --bundles ${{ matrix.bundles }}
 
       - name: 📤 上传安装包（Windows）
         if: matrix.platform == 'windows-latest'
@@ -294,7 +294,7 @@ jobs:
             CFG="--config $RUNNER_TEMP/version.json"
             echo "构建版本: $VERSION"
           fi
-          npx tauri android build --ci $CFG --apk --target aarch64
+          node .github/scripts/build-parallel.mjs android build --ci $CFG --apk --target aarch64
 
       - name: 📤 上传 APK
         uses: actions/upload-artifact@v4

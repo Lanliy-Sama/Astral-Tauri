@@ -5,6 +5,8 @@ use tauri::{Manager, WindowEvent};
 
 pub mod commands;
 mod music_platform;
+mod room_social;
+mod media_controls;
 
 /// closeMinimize 共享状态（由前端 set_close_minimize 同步）
 pub struct CloseMinimizeState(pub std::sync::Mutex<bool>);
@@ -606,6 +608,7 @@ pub fn run() {
             commands::tcp_ping,
             commands::has_npcap_driver,
             commands::set_startup,
+            commands::remote_desktop_input,
             commands::open_external,
             commands::vpn_prepare,
             commands::vpn_start,
@@ -630,6 +633,14 @@ pub fn run() {
             music_platform::music_search,
             music_platform::music_play_url,
             music_platform::music_lyrics,
+            room_social::room_social_start,
+            room_social::room_social_stop,
+            room_social::room_social_send,
+            room_social::music_stream_offer,
+            room_social::room_music_stream_url,
+            room_social::room_media_listener_start,
+            room_social::room_media_send,
+            media_controls::smtc_update,
         ])
         .setup(|app| {
             // panic 钩子：release GUI 无 stderr，panic 信息落 %TEMP%\astral-panic.log。
@@ -678,7 +689,7 @@ pub fn run() {
                             disable_udp_hole_punching: false,
                             disable_tcp_hole_punching: false,
                             multi_thread: false,
-                            data_compress_algo: 0,
+                            data_compress_algo: 1,
                             bind_device: false,
                             enable_kcp_proxy: false,
                             disable_kcp_input: false,
@@ -710,7 +721,7 @@ pub fn run() {
                         let running = simple::rt_block_on_is_running();
                         simple::cmd_log(&format!("selftest: is_easytier_running = {}", running));
                         simple::cmd_log("selftest: 结束，进程退出");
-                        std::process::exit(0);
+                        std::process::exit(if running { 0 } else { 1 });
                     });
                 }
 
@@ -753,9 +764,11 @@ pub fn run() {
                 }
             }
 
-            // --autostart 参数：静默启动（隐藏窗口，对应 isAutostart/startupMinimize）
+            // 只有开机启动且用户开启「启动时最小化」才隐藏；手动带 --autostart
+            // 或未开启 minimize 时均正常显示窗口。
             let autostart = std::env::args().any(|a| a == "--autostart");
-            if autostart {
+            let start_minimized = std::env::args().any(|a| a == "--minimized");
+            if autostart && start_minimized {
                 #[cfg(desktop)]
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.hide();

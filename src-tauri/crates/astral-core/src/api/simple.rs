@@ -534,6 +534,8 @@ pub fn create_server(
         flags.default_protocol = flag.default_protocol;
         flags.dev_name = "astral".to_string();
         flags.enable_encryption = flag.enable_encryption;
+        // 前端「启用加密」显式映射为 ET 内核 XOR；是否启用仍由上一行控制。
+        flags.encryption_algorithm = "xor".to_string();
         flags.enable_ipv6 = flag.enable_ipv6;
         flags.latency_first = flag.latency_first;
         flags.enable_exit_node = flag.enable_exit_node;

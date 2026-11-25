@@ -40,7 +40,7 @@ jobs:
           node-version: 20
           cache: npm
       - name: 🦀 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-apple-darwin
       - name: 💾 缓存 Rust 构建
@@ -65,7 +65,7 @@ jobs:
             echo "{\"version\":\"$VERSION\"}" > "$RUNNER_TEMP/version.json"
             CFG="--config $RUNNER_TEMP/version.json"
           fi
-          npx tauri build $CFG --bundles app,dmg --target aarch64-apple-darwin
+          node .github/scripts/build-parallel.mjs build $CFG --bundles app,dmg --target aarch64-apple-darwin
       - name: 📤 上传 dmg
         uses: actions/upload-artifact@v4
         with:
@@ -87,7 +87,7 @@ jobs:
           node-version: 20
           cache: npm
       - name: 🦀 安装 Rust 与 iOS 目标
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
       - name: 💾 缓存 Rust 构建
@@ -106,7 +106,7 @@ jobs:
       - name: 🏗️ 初始化 iOS 工程
         run: npx tauri ios init --ci
       - name: 🔨 构建模拟器包（未签名）
-        run: npx tauri ios build --ci --target aarch64-sim
+        run: node .github/scripts/build-parallel.mjs ios build --ci --target aarch64-sim
       - name: 📤 上传 .app
         uses: actions/upload-artifact@v4
         with:
