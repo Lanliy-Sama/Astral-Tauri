@@ -472,16 +472,16 @@ pub fn remote_desktop_input(event: Value) -> Result<(), String> {
 pub fn open_watch_window(url: String, app: AppHandle) -> Result<String, String> {
     let parsed: tauri::Url = url.parse().map_err(|e| format!("网站地址无效: {e}"))?;
     let label = format!("watch-{}", uuid::Uuid::new_v4().simple());
-    tauri::WebviewWindowBuilder::new(
+    let builder = tauri::WebviewWindowBuilder::new(
         &app,
         &label,
         tauri::WebviewUrl::External(parsed),
     )
     .title("Astral 一起看")
-    .inner_size(1280.0, 800.0)
-    .center()
-    .build()
-    .map_err(|e| e.to_string())?;
+    .inner_size(1280.0, 800.0);
+    #[cfg(desktop)]
+    let builder = builder.center();
+    builder.build().map_err(|e| e.to_string())?;
     Ok(label)
 }
 
