@@ -132,7 +132,7 @@
   <button
     class="md-fab music-fab"
     class:connected={!isIdle}
-    data-tip="房间在线音乐"
+    data-tip="房间音乐"
     onclick={() => pushPage(MusicPlatformPage)}
   >
     <Icon name="album" />

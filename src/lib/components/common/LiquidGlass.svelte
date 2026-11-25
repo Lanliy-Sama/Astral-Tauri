@@ -68,8 +68,8 @@
         const normal = normalize([dx * 1.8, dy * 1.8, 1]);
         const [rx, ry] = refractedOffset(normal, view);
         const index = (y * mapWidth + x) * 4;
-        image.data[index] = Math.round(clamp(0.5 + rx * 0.34, 0, 1) * 255);
-        image.data[index + 1] = Math.round(clamp(0.5 + ry * 0.34, 0, 1) * 255);
+        image.data[index] = Math.round(clamp(0.5 + rx * 0.18, 0, 1) * 255);
+        image.data[index + 1] = Math.round(clamp(0.5 + ry * 0.18, 0, 1) * 255);
         image.data[index + 2] = 128;
         image.data[index + 3] = 255;
       }
@@ -102,7 +102,12 @@
     displacement.setAttribute('scale', String(scale));
     displacement.setAttribute('xChannelSelector', 'R');
     displacement.setAttribute('yChannelSelector', 'G');
-    filter.append(image, displacement);
+    displacement.setAttribute('result', 'refracted');
+    const clip = document.createElementNS(SVG_NS, 'feComposite');
+    clip.setAttribute('in', 'refracted');
+    clip.setAttribute('in2', 'SourceGraphic');
+    clip.setAttribute('operator', 'in');
+    filter.append(image, displacement, clip);
     defsSvg?.querySelector('defs')?.appendChild(filter);
     return `url(#${id})`;
   }
@@ -119,11 +124,12 @@
     const viewY = clamp((rect.top + rect.height / 2 - innerHeight / 2) / innerHeight * 0.7, -0.4, 0.4);
     const key = `${width}x${height}-r${Math.round(radius)}-v${Math.round(viewX * 8)},${Math.round(viewY * 8)}`;
     let pair = filterCache.get(key);
-    if (!pair && filterCache.size < 72) {
+    if (!pair && filterCache.size < 160) {
       const map = createNormalMap(width, height, radius, [viewX, viewY]);
+      const compact = element.matches('.md-fab, .md-filled-btn, .md-tonal-btn, .md-elevated-btn, .md-outlined-btn');
       pair = {
-        normal: createFilter(key, map, width, height, 18),
-        hot: createFilter(key, map, width, height, 30, true),
+        normal: createFilter(key, map, width, height, compact ? 3 : 5),
+        hot: createFilter(key, map, width, height, compact ? 5 : 8, true),
       };
       filterCache.set(key, pair);
     }
@@ -191,29 +197,9 @@
   });
 </script>
 
-<!-- 液态玻璃折射滤镜（对齐 glassium 光学模型）：
-  feTurbulence + feDisplacementMap 只作用于边缘透镜层（:global 样式的 ::before，
-  被 mask 限制在边缘带内），中心磨砂层不带位移 —— 与 glassium「边缘折射、中心纯净」一致。
-  - #lg-edge：静止态，轻微几何位移（scale 9）
-  - #lg-edge-hot：按住/拖拽态，强位移（scale 18）+ baseFrequency 持续漂移 = 液态流动 -->
+<!-- 仅承载按组件尺寸生成的 SDF 折射滤镜，不再保留湍流噪点滤镜。 -->
 <svg class="lg-defs" aria-hidden="true" focusable="false" bind:this={defsSvg}>
-  <defs>
-    <filter id="lg-edge" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="7" result="lg-noise" />
-      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
-    </filter>
-    <filter id="lg-edge-hot" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.024" numOctaves="2" seed="7" result="lg-noise">
-        <animate
-          attributeName="baseFrequency"
-          dur="2.8s"
-          values="0.02 0.024;0.028 0.017;0.02 0.024"
-          repeatCount="indefinite"
-        />
-      </feTurbulence>
-      <feDisplacementMap in="SourceGraphic" in2="lg-noise" scale="18" xChannelSelector="R" yChannelSelector="G" />
-    </filter>
-  </defs>
+  <defs></defs>
 </svg>
 
 <style>
@@ -239,7 +225,7 @@
  *
  * 双层结构（每个玻璃元素 = 自身 + 两个伪元素，均为 z:-1）：
  *  ::before「边缘透镜」—— mask 限制在边缘带内，采样【原始背景】：
- *    · url(#lg-edge) feTurbulence+feDisplacementMap 边缘折射
+   *    · 按组件尺寸生成的 SDF 法线位移贴图，仅在圆角轮廓内折射
  *    · 饱和度 +35%、色散（左右边缘红/蓝微渐变）
  *    · 斜面光 + 全周亮环 + 上下主亮边
  *  ::after「中心磨砂」—— 中心镂空边缘，采样背景做 blur+saturate，
@@ -354,15 +340,15 @@ html.liquid-glass .mini-card::before {
   /* 边缘扭曲折射：backdrop-filter 的 SVG url() 引用 Chromium 不支持（且本机
    * 带 mask 的伪元素 backdrop 全不渲染），改用普通 filter —— 对边缘带内的
    * 【背景图副本】做湍流位移扭曲（#lg-edge），mask 裁回边带 = 真折射。 */
-  filter: var(--lg-refraction, url(#lg-edge));
+  filter: var(--lg-refraction, none);
   background:
     /* 色散（棱镜彩环）2.3：四向边缘染色 —— 左红右蓝为主，
      * 上下补充暖橙/冷青，彩色光沿整圈轮廓连续可辨；
      * 叠在斜面光之上，避免被白光洗掉 */
-    linear-gradient(to right, rgb(255 72 72 / 0.28), transparent 36%),
-    linear-gradient(to left, rgb(72 138 255 / 0.28), transparent 36%),
-    linear-gradient(to bottom, rgb(255 122 82 / 0.16), transparent 30%),
-    linear-gradient(to top, rgb(82 190 255 / 0.16), transparent 30%),
+    linear-gradient(to right, rgb(255 72 72 / 0.12), transparent 36%),
+    linear-gradient(to left, rgb(72 138 255 / 0.12), transparent 36%),
+    linear-gradient(to bottom, rgb(255 122 82 / 0.08), transparent 30%),
+    linear-gradient(to top, rgb(82 190 255 / 0.08), transparent 30%),
     /* 斜面光：顶缘受光、底缘地面反光（glassium bevel） */
     linear-gradient(to bottom, rgb(255 255 255 / var(--lg-bevel)), transparent 28%),
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
@@ -485,7 +471,8 @@ html.liquid-glass .md-segmented .segment-pill,
 html.liquid-glass .bottom-nav .selection-pill,
 html.liquid-glass .servers-fab,
 html.liquid-glass .logs-fab,
-html.liquid-glass .mw-fab {
+html.liquid-glass .mw-fab,
+html.liquid-glass .music-fab {
   position: absolute; /* absolute 同样构成伪元素的 containing block，玻璃正确铺满 */
 }
 
@@ -545,7 +532,7 @@ html.liquid-glass .md-elevated-btn:active::before,
 html.liquid-glass .md-outlined-btn:active::before {
   -webkit-backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
   backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
-  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
+  filter: var(--lg-refraction-hot, var(--lg-refraction, none));
 }
 
 /* ---- 按压回弹：按钮/卡片轻微收缩（选中块/滑块的位置由 JS 内联 transform 驱动，不参与） ---- */
@@ -595,17 +582,26 @@ html.liquid-glass .user-page .scroll {
 
 html.liquid-glass .md-card,
 html.liquid-glass .home-box:not(.borderless) {
-  --lg-edge: 22px;
-  --lg-blur: 13px;
+  --lg-edge: 16px;
+  --lg-blur: 8px;
   --lg-spec-r: 150px;
-  --lg-bright: 1.06;
-  /* 中心完全透明：镜面反光近零、静息光清零（见 ::after 的 --lg-rest），
-   * 卡内只留边缘扭曲折射带与一丝玻璃反光 */
-  --lg-sheen: 0.05;
-  --lg-rest: 0;
-  /* 中心完全透明（无表面色无白雾）：卡片 = 边缘折射带 + 玻璃反光，
-   * 中心直通背景。 */
-  --lg-tint: transparent;
+  --lg-bright: 1.03;
+  --lg-sheen: 0.12;
+  --lg-rest: 0.45;
+  /* 中心清澈但有真实玻璃材质：设置页纯色背景下也能看见厚度，
+   * 不再用全透明 + 零静息光导致“完全没有玻璃效果”。 */
+  --lg-tint:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--md-surface-container-low) 72%, transparent),
+      color-mix(in srgb, var(--md-surface-container-low) 58%, transparent) 58%,
+      color-mix(in srgb, var(--md-surface-container-low) 66%, transparent)
+    );
+}
+html.liquid-glass .settings-card > .md-card {
+  border-radius: 16px;
+  --lg-edge: 17px;
+  --lg-blur: 9px;
 }
 /* hover 描边回归组件语义（HomeBox.hovered = primary） */
 html.liquid-glass .home-box:not(.borderless).hovered {
@@ -651,7 +647,7 @@ html.liquid-glass .md-dialog::before {
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
     var(--lg-tint-edge),
     var(--astral-bg-image, none) fixed center / cover no-repeat;
-  filter: var(--lg-refraction, url(#lg-edge));
+  filter: var(--lg-refraction, none);
 }
 
 /* ============================================================
@@ -796,7 +792,7 @@ html.liquid-glass .md-switch::before {
     linear-gradient(to top, rgb(255 255 255 / calc(0.42 * var(--lg-bevel))), transparent 36%),
     var(--astral-bg-image, none) fixed center / cover no-repeat;
   /* 开关轨道同样做边缘扭曲折射（与卡片同一滤镜/同一背景对齐） */
-  filter: var(--lg-refraction, url(#lg-edge));
+  filter: var(--lg-refraction, none);
 }
 /* 轨道中心磨砂：管内体光（顶受光/底反弹）+ 指针高光 + 按压光效 + 主体色 */
 html.liquid-glass .md-switch::after {
@@ -906,7 +902,7 @@ html.liquid-glass .md-switch.dragging {
 }
 html.liquid-glass .md-switch.dragging::before {
   /* 拖动中：动画噪声 + 强位移（#lg-edge-hot）—— 边缘"沸腾"折射 */
-  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
+  filter: var(--lg-refraction-hot, var(--lg-refraction, none));
 }
 /* 拖动 thumb 时：位置由 JS 内联控制，禁用过渡 */
 html.liquid-glass .md-switch.dragging .thumb {
@@ -997,7 +993,7 @@ html.liquid-glass .md-segmented:has(.segment:active) .segment-pill::before,
 html.liquid-glass .md-segmented.lg-dragging .segment-pill::before {
   -webkit-backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
   backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
-  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
+  filter: var(--lg-refraction-hot, var(--lg-refraction, none));
 }
 
 /* ============================================================
@@ -1029,7 +1025,7 @@ html.liquid-glass .bottom-nav.lg-dragging .selection-pill {
   --lg-press: 1;
 }
 html.liquid-glass .bottom-nav.lg-dragging .selection-pill::before {
-  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
+  filter: var(--lg-refraction-hot, var(--lg-refraction, none));
 }
 
 /* ============================================================

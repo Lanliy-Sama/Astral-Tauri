@@ -7,6 +7,8 @@
   import MagicWallPage from '$lib/components/magicwall/MagicWallPage.svelte';
   import PortWhitelistPage from './PortWhitelistPage.svelte';
   import NatTestPage from '$lib/components/nat/NatTestPage.svelte';
+  import PersonalizationPage from './PersonalizationPage.svelte';
+  import MusicPlatformPage from '$lib/components/settings/MusicPlatformPage.svelte';
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import { isWindows } from '$lib/utils/Platform.svelte';
 
@@ -103,6 +105,44 @@
       </div>
     </div>
 
+    <div
+      class="md-title-medium section-title"
+    >个性化</div>
+
+    <div
+      class="md-card tool-card"
+      role="button"
+      tabindex="0"
+      onclick={go(PersonalizationPage)}
+      onkeydown={(e) => onCardKeydown(e, PersonalizationPage)}
+    >
+      <div class="md-list-tile two-line tool-tile">
+        <span class="tile-leading"><Icon name="wallpaper" size={24} color="var(--md-primary)" /></span>
+        <span class="tile-content">
+          <span class="tile-title" style="font-weight:500">自定义背景</span>
+          <span class="tile-subtitle" style="font-size:12px; line-height:16px">选择图片或 GIF，调整应用个性化外观</span>
+        </span>
+        <span class="tile-trailing"><Icon name="chevron_right" color="var(--md-on-surface-variant)" /></span>
+      </div>
+    </div>
+
+    <div
+      class="md-card tool-card"
+      role="button"
+      tabindex="0"
+      onclick={go(MusicPlatformPage)}
+      onkeydown={(e) => onCardKeydown(e, MusicPlatformPage)}
+    >
+      <div class="md-list-tile two-line tool-tile">
+        <span class="tile-leading"><Icon name="album" size={24} color="var(--md-primary)" /></span>
+        <span class="tile-content">
+          <span class="tile-title" style="font-weight:500">房间音乐</span>
+          <span class="tile-subtitle" style="font-size:12px; line-height:16px">本地音乐、在线搜索、房员共享与系统媒体控制</span>
+        </span>
+        <span class="tile-trailing"><Icon name="chevron_right" color="var(--md-on-surface-variant)" /></span>
+      </div>
+    </div>
+
     <div class="end-spacer"></div>
   </div>
 </div>
@@ -124,6 +164,12 @@
   /* 卡片间距 8 */
   .tool-card + .tool-card {
     margin-top: 8px;
+  }
+  .section-title {
+    padding: 18px 0 8px 4px;
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    color: var(--md-on-surface);
   }
   /* 末尾 SizedBox(32) */
   .end-spacer {
