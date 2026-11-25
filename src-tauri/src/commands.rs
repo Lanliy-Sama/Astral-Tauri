@@ -7,7 +7,7 @@ use astral_core::api::{firewall, hops, magic_wall, nat_test, simple};
 use serde_json::Value;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "android")]
 use tauri_plugin_vpn_service::{models::StartVpnRequest, VpnserviceExt};
