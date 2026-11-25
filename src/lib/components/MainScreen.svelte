@@ -13,7 +13,6 @@
   import SnackbarHost from './common/SnackbarHost.svelte';
   import UpdateDialogs from './common/update/UpdateDialogs.svelte';
   import Dialog from './common/Dialog.svelte';
-  import BgmVolumeCapsule from './common/BgmVolumeCapsule.svelte';
   import LyricCapsule from './common/LyricCapsule.svelte';
   import { getStack, popPage } from '../router/PageRouter.svelte';
   import { sm } from '../services/ServiceManager.svelte';
@@ -220,9 +219,7 @@
   {/if}
   <SnackbarHost />
   <UpdateDialogs />
-  <!-- 灵动岛音量胶囊：Ctrl+↑/↓ 调背景音乐音量时弹出 -->
-  <BgmVolumeCapsule />
-  <!-- 灵动岛歌词胶囊：跟随播放中的曲目实时滚动歌词 -->
+  <!-- 统一灵动岛：歌词尾部内联展开音量条，单击展开播放控制 -->
   <LyricCapsule />
 
   <!-- 托盘隐藏确认（Tauri 模式） -->
@@ -242,7 +239,7 @@
   {/each}
 </div>
 
-<svelte:window on:keydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} />
 
 <style>
   .main-screen {

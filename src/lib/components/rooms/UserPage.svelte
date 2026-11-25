@@ -14,6 +14,7 @@
   import AllUserCard from './cards/AllUserCard.svelte';
   import RoomSettingsSheet from './RoomSettingsSheet.svelte';
   import NetworkTopologyView from './topology/NetworkTopologyView.svelte';
+  import RoomSocialPanel from './RoomSocialPanel.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { isServerNode } from '$lib/utils/Network.svelte';
   import {
@@ -26,6 +27,7 @@
   /* 是否显示拓扑图（局部 state，IndexedStack 切 Tab 后保留） */
   let showTopology = $state(false);
   let settingsOpen = $state(false);
+  let socialOpen = $state(false);
 
   /* 断点宽度（MediaQuery.of(context).size.width → window.innerWidth） */
   let windowWidth = $state(window.innerWidth);
@@ -118,6 +120,15 @@
   <div class="fabs">
     <button
       class="md-fab"
+      class:active={socialOpen}
+      data-tip="聊天室 · 语音频道 · 一起看"
+      onclick={() => (socialOpen = !socialOpen)}
+    >
+      <Icon name="forum" size={24} />
+    </button>
+    <div class="fab-gap"></div>
+    <button
+      class="md-fab"
       data-tip={showTopology ? '列表视图' : '拓扑图'}
       onclick={() => (showTopology = !showTopology)}
     >
@@ -130,6 +141,7 @@
   </div>
 
   <RoomSettingsSheet bind:open={settingsOpen} />
+  <RoomSocialPanel bind:open={socialOpen} />
 </div>
 
 <style>
@@ -187,6 +199,10 @@
   }
   .fab-gap {
     height: 16px;
+  }
+  .fabs .md-fab.active {
+    background: var(--md-primary);
+    color: var(--md-on-primary);
   }
   /* FAB 贴底，tooltip 显示在上方（Flutter Tooltip 会避开屏幕边缘） */
   .fabs .md-fab[data-tip]:hover::after {

@@ -1,31 +1,48 @@
 <script>
-  /** 灵动岛歌词胶囊 —— 播放中的曲目（在线平台歌曲 / 本地背景音乐）
-   *  顶部常驻显示当前歌词行 + 曲名歌手。
-   *  歌词：在线曲目经 music_lyrics 按平台拉取（网易云含翻译合并）；
-   *  进度：bgmPosition() = audio.currentTime，天然与播放同步（300ms 步进）。 */
+  /** 统一灵动岛：歌词、音量反馈与播放控制共享同一个居中容器。
+   * Ctrl+↑/↓ 只在歌词岛尾部展开音量条；暂停后仍保留岛屿以便恢复播放。 */
+  import { onMount } from 'svelte';
   import { sm } from '../../services/ServiceManager.svelte';
-  import { bgmPosition } from '../../services/BgmPlayer.svelte';
+  import {
+    bgmPosition,
+    bgmPrevious,
+    bgmNext,
+    bgmToggleAny,
+  } from '../../services/BgmPlayer.svelte';
   import { isTauri } from '../../utils/Platform.svelte';
+  import { voiceService } from '../../services/VoiceService.svelte';
 
   let lineIdx = $state(-1);
+  let expanded = $state(false);
+  let volumeVisible = $state(false);
+  let volumeTimer = 0;
 
-  const active = $derived(
-    sm.bgmState.lyricCapsuleEnabled && sm.bgmState.playing
-  );
+  const invitation = $derived(voiceService.invites[0] || null);
+  const hasTrack = $derived(!!sm.bgmState.onlineTrack || !!sm.bgmState.trackId);
+  const active = $derived(sm.bgmState.lyricCapsuleEnabled && hasTrack);
   const lines = $derived(sm.bgmState.lyricLines || []);
   const label = $derived.by(() => {
-    const t = sm.bgmState.onlineTrack;
-    if (t) return t.title + (t.artist ? ' · ' + t.artist : '');
+    const track = sm.bgmState.onlineTrack;
+    if (track) {
+      const artists = track.artists?.join(' / ') || track.artist || '';
+      return track.title + (artists ? ' · ' + artists : '');
+    }
     const local = sm.bgmState.tracks.find((x) => x.trackId === sm.bgmState.trackId);
     return local ? local.name : '';
   });
 
-  /* 在线曲目：按平台拉取歌词（网易云带翻译合并，credit 行已在 Rust 侧过滤） */
   $effect(() => {
-    const t = sm.bgmState.onlineTrack;
-    if (!t) {
+    const track = sm.bgmState.onlineTrack;
+    lineIdx = -1;
+    expanded = false;
+    if (!track) {
       sm.bgmState.lyricLines = null;
       sm.bgmState.lyricFound = false;
+      return;
+    }
+    if (track.sharedStream) {
+      sm.bgmState.lyricLines = track.sharedLyrics?.length ? track.sharedLyrics : null;
+      sm.bgmState.lyricFound = !!track.sharedLyrics?.length;
       return;
     }
     if (!isTauri()) return;
@@ -33,14 +50,19 @@
     (async () => {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const res = await invoke('music_lyrics', { platform: t.platform, key: t.key });
+        const res = await invoke('music_lyrics', {
+          platform: track.platform,
+          key: track.key,
+          track,
+        });
         if (dead) return;
         sm.bgmState.lyricLines = res?.lines?.length ? res.lines : null;
         sm.bgmState.lyricFound = !!res?.found;
-      } catch {
+      } catch (e) {
         if (!dead) {
           sm.bgmState.lyricLines = null;
           sm.bgmState.lyricFound = false;
+          sm.pushLog(`[歌词] ${track.title || track.key}: ${e?.message || e}`);
         }
       }
     })();
@@ -54,12 +76,15 @@
       lineIdx = -1;
       return;
     }
-    const pos = bgmPosition() * 1000; // 秒 → 毫秒（LRC 时间轴）
-    let idx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].t <= pos) idx = i;
-      else break;
+    const pos = bgmPosition() * 1000;
+    let low = 0;
+    let high = lines.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (lines[mid].t <= pos) low = mid + 1;
+      else high = mid;
     }
+    const idx = low - 1;
     if (idx !== lineIdx) lineIdx = idx;
   }
 
@@ -69,26 +94,116 @@
   });
 
   $effect(() => {
-    if (!active) return;
-    const timer = setInterval(tick, 300);
+    if (!sm.bgmState.playing) return;
+    const timer = setInterval(tick, 250);
     return () => clearInterval(timer);
   });
 
+  $effect(() => {
+    const pulse = sm.bgmState.volumePulse;
+    if (!pulse) return;
+    volumeVisible = true;
+    expanded = false;
+    clearTimeout(volumeTimer);
+    volumeTimer = setTimeout(() => (volumeVisible = false), 1600);
+  });
+
+  onMount(() => {
+    voiceService.start();
+    return () => clearTimeout(volumeTimer);
+  });
+
   const currentLine = $derived(lineIdx >= 0 && lineIdx < lines.length ? lines[lineIdx].l : '');
-  const show = $derived(active && (label !== '' || currentLine !== ''));
+  const show = $derived(!!invitation || volumeVisible || (active && label !== ''));
+
+  function toggleExpanded() {
+    if (invitation) return;
+    if (active && !volumeVisible) expanded = !expanded;
+    else if (active) {
+      volumeVisible = false;
+      expanded = true;
+    }
+  }
+
+  async function acceptCurrentInvite() {
+    if (!invitation) return;
+    try {
+      await voiceService.acceptInvite(invitation);
+    } catch {
+      // 具体错误保留在 voiceService.error，房间语音面板中可见。
+    }
+  }
 </script>
 
 {#if show}
-  <div class="lyric-capsule">
-    <span class="ms filled lyr-note">lyrics</span>
-    <div class="lyr-body">
-      {#if currentLine}
-        <div class="lyr-line">{currentLine}</div>
-        <div class="lyr-track">{label}</div>
+  <div
+    class="lyric-capsule"
+    class:expanded
+    class:volume-visible={volumeVisible}
+    role={active && !invitation ? 'button' : 'status'}
+    tabindex={active && !invitation ? 0 : -1}
+    aria-expanded={expanded}
+    aria-label={invitation ? '语音频道邀请' : active ? '展开音乐控制' : '背景音乐音量'}
+    onclick={toggleExpanded}
+    onkeydown={(e) => {
+      if (active && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        toggleExpanded();
+      }
+    }}
+  >
+    <div class="capsule-main">
+      {#if invitation}
+        <span class="ms filled lyr-note">podcasts</span>
+        <div class="lyr-body invite-body">
+          <div class="lyr-line">{invitation.channel.ownerName} 邀请你加入语音</div>
+          <div class="lyr-track">{invitation.channel.name} · 5 分钟内有效</div>
+        </div>
+        <div class="invite-actions" onclick={(e) => e.stopPropagation()}>
+          <button class="invite-btn accept" onclick={acceptCurrentInvite}>加入</button>
+          <button class="invite-btn" onclick={() => voiceService.declineInvite(invitation.id)}>忽略</button>
+        </div>
       {:else}
-        <div class="lyr-line">{label || '　'}</div>
+        {#if active}
+          <span class="ms filled lyr-note">{sm.bgmState.playing ? 'graphic_eq' : 'music_note'}</span>
+          <div class="lyr-body">
+            {#if currentLine}
+              <div class="lyr-line">{currentLine}</div>
+              <div class="lyr-track">{label}</div>
+            {:else}
+              <div class="lyr-line">{label || '　'}</div>
+              <div class="lyr-track">{sm.bgmState.playing ? '正在播放' : '已暂停 · 单击展开控制'}</div>
+            {/if}
+          </div>
+        {/if}
+        <div class="lyr-volume" class:visible={volumeVisible} aria-hidden={!volumeVisible}>
+          <span class="ms filled volume-icon">
+            {sm.bgmState.volume === 0 ? 'volume_off' : sm.bgmState.volumeDelta >= 0 ? 'volume_up' : 'volume_down'}
+          </span>
+          <div class="volume-track">
+            <div class="volume-fill" style="width:{sm.bgmState.volume}%"></div>
+          </div>
+          <span class="volume-num">{sm.bgmState.volume}</span>
+        </div>
+        {#if active && !volumeVisible}
+          <span class="ms expand-icon">{expanded ? 'expand_less' : 'expand_more'}</span>
+        {/if}
       {/if}
     </div>
+
+    {#if expanded && active && !invitation}
+      <div class="controls" onclick={(e) => e.stopPropagation()}>
+        <button class="control-btn" data-tip="上一首" aria-label="上一首" onclick={bgmPrevious}>
+          <span class="ms filled">skip_previous</span>
+        </button>
+        <button class="control-btn primary" aria-label={sm.bgmState.playing ? '暂停' : '播放'} onclick={bgmToggleAny}>
+          <span class="ms filled">{sm.bgmState.playing ? 'pause' : 'play_arrow'}</span>
+        </button>
+        <button class="control-btn" data-tip="下一首" aria-label="下一首" onclick={bgmNext}>
+          <span class="ms filled">skip_next</span>
+        </button>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -99,19 +214,31 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: min(680px, 92vw);
-    padding: 10px 18px;
+    flex-direction: column;
+    max-width: min(760px, 94vw);
+    padding: 9px 14px;
     border-radius: 999px;
-    background: rgb(24 24 27 / 0.92);
+    background: rgb(24 24 27 / 0.94);
     color: #ffffff;
-    box-shadow:
-      0 4px 14px rgb(0 0 0 / 0.28),
-      inset 0 0 0 1px rgb(255 255 255 / 0.08);
-    backdrop-filter: blur(12px) saturate(1.4);
-    z-index: 3490; /* 音量胶囊(3500)弹出时覆盖歌词胶囊 */
-    pointer-events: none;
+    box-shadow: 0 5px 18px rgb(0 0 0 / 0.3), inset 0 0 0 1px rgb(255 255 255 / 0.09);
+    backdrop-filter: blur(14px) saturate(1.35);
+    z-index: 3500;
+    cursor: pointer;
+    transform-origin: top center;
+    animation: island-in 260ms cubic-bezier(0.05, 0.7, 0.1, 1);
+    transition: border-radius 220ms ease, box-shadow 180ms ease;
+  }
+  .lyric-capsule.expanded {
+    border-radius: 26px;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.36), inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  }
+  .capsule-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 38px;
+    min-width: 0;
   }
   .lyr-note {
     font-size: 20px;
@@ -122,23 +249,85 @@
   .lyr-body {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    justify-content: center;
+    gap: 1px;
     min-width: 0;
+    max-width: min(480px, 58vw);
   }
-  .lyr-line {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 18px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .lyr-line,
   .lyr-track {
-    font-size: 11px;
-    line-height: 14px;
-    color: rgb(255 255 255 / 0.62);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: center;
+  }
+  .lyr-line { font-size: 14px; font-weight: 600; line-height: 18px; }
+  .lyr-track { font-size: 11px; line-height: 14px; color: rgb(255 255 255 / 0.62); }
+  .expand-icon { width: 18px; height: 18px; font-size: 18px; opacity: 0.65; flex-shrink: 0; }
+  .invite-body { max-width: min(330px, 42vw); text-align: left; }
+  .invite-body .lyr-line, .invite-body .lyr-track { text-align: left; }
+  .invite-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .invite-btn {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .invite-btn.accept { background: #fff; color: #18181b; border-color: #fff; }
+  .invite-btn:active { transform: scale(0.94); }
+  .lyr-volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 0;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: width 260ms cubic-bezier(0.05, 0.7, 0.1, 1),
+      max-width 260ms cubic-bezier(0.05, 0.7, 0.1, 1), opacity 160ms ease;
+  }
+  .lyr-volume.visible { width: 174px; max-width: 174px; opacity: 1; }
+  .volume-icon { width: 20px; height: 20px; font-size: 20px; flex-shrink: 0; }
+  .volume-track { width: 104px; height: 5px; border-radius: 999px; background: rgb(255 255 255 / 0.2); overflow: hidden; }
+  .volume-fill { height: 100%; border-radius: inherit; background: #fff; transition: width 140ms ease; }
+  .volume-num { min-width: 26px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    padding: 7px 20px 3px;
+    animation: controls-in 180ms ease;
+  }
+  .control-btn {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    background: transparent;
+    cursor: pointer;
+    transition: background 140ms ease, transform 140ms ease;
+  }
+  .control-btn:hover { background: rgb(255 255 255 / 0.12); }
+  .control-btn:active { transform: scale(0.9); }
+  .control-btn.primary { background: #fff; color: #18181b; width: 42px; height: 42px; }
+  .control-btn .ms { width: 25px; height: 25px; font-size: 25px; }
+  @keyframes island-in { from { opacity: 0; transform: translate(-50%, -12px) scale(0.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+  @keyframes controls-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 480px) {
+    .lyr-body { max-width: 42vw; }
+    .lyr-volume.visible { width: 142px; max-width: 142px; }
+    .volume-track { width: 76px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lyric-capsule, .lyr-volume, .volume-fill, .control-btn { animation: none; transition: none; }
   }
 </style>

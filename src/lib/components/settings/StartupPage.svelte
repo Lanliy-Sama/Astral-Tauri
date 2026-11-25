@@ -8,11 +8,22 @@
   import Icon from '$lib/components/common/Icon.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { t } from '$lib/i18n/I18n.svelte';
+  import { snackError } from '$lib/components/common/SnackbarStore.svelte';
+
+  async function updateSetting(kind, value) {
+    try {
+      if (kind === 'startup') await sm.updateStartup(value);
+      else if (kind === 'minimize') await sm.updateStartupMinimize(value);
+      else await sm.updateStartupAutoConnect(value);
+    } catch (e) {
+      snackError('启动设置未生效', String(e?.message || e));
+    }
+  }
 
   /* SwitchListTile 整行可点；点 Switch 本体时避免与 tile 冒泡双触发 */
-  function switchTileClick(e, current, update) {
+  function switchTileClick(e, current, kind) {
     if (e.target.closest('.md-switch')) return;
-    update(!current);
+    updateSetting(kind, !current);
   }
 </script>
 
@@ -21,36 +32,36 @@
     <SettingsCard>
       <div
         class="md-switch-list-tile"
-        onclick={(e) => switchTileClick(e, sm.startupState.startup, sm.updateStartup)}
+        onclick={(e) => switchTileClick(e, sm.startupState.startup, 'startup')}
       >
         <div class="tile-content">
           <div class="tile-title">{t('startup_on_boot')}</div>
           <div class="tile-subtitle">{t('startup_on_boot_desc')}</div>
         </div>
-        <Switch value={sm.startupState.startup} onChange={(v) => sm.updateStartup(v)} />
+        <Switch value={sm.startupState.startup} onChange={(v) => updateSetting('startup', v)} />
       </div>
 
       <div
         class="md-switch-list-tile"
-        onclick={(e) => switchTileClick(e, sm.startupState.startupMinimize, sm.updateStartupMinimize)}
+        onclick={(e) => switchTileClick(e, sm.startupState.startupMinimize, 'minimize')}
       >
         <div class="tile-content">
           <div class="tile-title">{t('startup_minimize')}</div>
           <div class="tile-subtitle">{t('startup_minimize_desc')}</div>
         </div>
-        <Switch value={sm.startupState.startupMinimize} onChange={(v) => sm.updateStartupMinimize(v)} />
+        <Switch value={sm.startupState.startupMinimize} onChange={(v) => updateSetting('minimize', v)} />
       </div>
 
       <div
         class="md-switch-list-tile"
         onclick={(e) =>
-          switchTileClick(e, sm.startupState.startupAutoConnect, sm.updateStartupAutoConnect)}
+          switchTileClick(e, sm.startupState.startupAutoConnect, 'autoConnect')}
       >
         <div class="tile-content">
           <div class="tile-title">{t('startup_auto_connect')}</div>
           <div class="tile-subtitle">{t('startup_auto_connect_desc')}</div>
         </div>
-        <Switch value={sm.startupState.startupAutoConnect} onChange={(v) => sm.updateStartupAutoConnect(v)} />
+        <Switch value={sm.startupState.startupAutoConnect} onChange={(v) => updateSetting('autoConnect', v)} />
       </div>
     </SettingsCard>
 

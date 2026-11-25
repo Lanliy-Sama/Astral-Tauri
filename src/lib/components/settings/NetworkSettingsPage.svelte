@@ -107,8 +107,7 @@
       >
         <div class="tile-content">
           <div class="tile-title">{t('enable_encryption')}</div>
-          <!-- 原版副标题复用 auto_set_mtu（怪异映射，保留） -->
-          <div class="tile-subtitle">{t('auto_set_mtu')}</div>
+          <div class="tile-subtitle">启用后使用 ET 内核 XOR 加密算法；关闭时禁用加密</div>
         </div>
         <Switch
           value={sm.networkConfigState.enableEncryption}

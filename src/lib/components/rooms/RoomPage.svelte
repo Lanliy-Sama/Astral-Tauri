@@ -14,6 +14,9 @@
   import EditRoomDialog from './dialogs/EditRoomDialog.svelte';
   import PasteImportDialog from './dialogs/PasteImportDialog.svelte';
   import ShareExportDialog, { copyRoomShareLink } from './dialogs/ShareExportDialog.svelte';
+  import MusicPlatformPage from '$lib/components/settings/MusicPlatformPage.svelte';
+  import { pushPage } from '$lib/router/PageRouter.svelte';
+  import { roomSocial } from '$lib/services/RoomSocial.svelte';
 
   /* 断点（按 window.innerWidth）：≥1200→4 ≥900→3 ≥600→2 否则 1 */
   let windowWidth = $state(window.innerWidth);
@@ -30,6 +33,17 @@
   const isConnected = $derived(connection === 'connected');
   const isIdle = $derived(connection === 'idle');
   const selectedRoom = $derived(sm.roomState.selectedRoom);
+
+  $effect(() => {
+    const room = isConnected ? selectedRoom : null;
+    if (room) roomSocial.start(room);
+    else if (roomSocial.connected) roomSocial.stop();
+  });
+
+  $effect(() => {
+    const nodes = sm.connectionState.netStatus?.nodes || [];
+    if (roomSocial.connected) roomSocial.setNodes(nodes);
+  });
 
   const statusText = $derived(
     (isConnected ? '已连接' : connection === 'connecting' ? '连接中' : '未连接') +
@@ -114,6 +128,15 @@
       </div>
     {/if}
   </div>
+
+  <button
+    class="md-fab music-fab"
+    class:connected={!isIdle}
+    data-tip="房间在线音乐"
+    onclick={() => pushPage(MusicPlatformPage)}
+  >
+    <Icon name="album" />
+  </button>
 
   {#if isIdle}
     <!-- FAB 行：sort + 16 + paste + 16 + add（右下角固定） -->
@@ -200,6 +223,16 @@
   /* 尾部 spacer：safeBottom + 20 */
   .bottom-spacer {
     height: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .music-fab {
+    position: absolute;
+    right: 224px;
+    bottom: 16px;
+    z-index: 11;
+  }
+  .music-fab.connected {
+    right: 88px;
   }
 
   /* FAB：Scaffold floatingActionButton 右下角 */

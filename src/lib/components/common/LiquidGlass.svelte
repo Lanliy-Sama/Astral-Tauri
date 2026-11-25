@@ -1,35 +1,192 @@
 <script>
-  /**
-   * 液态玻璃系统（光学参数对齐 glassium）—— 本 Svelte 5 组件自包含全部实现：
-   *   1. <style> 的 :global 块承载全部光学材质（原独立 liquid-glass.css）：
-   *      双层伪元素结构（::before 边缘透镜折射/色散 + ::after 中心磨砂/高光），
-   *      按压/拖拽（--lg-press）、镜面高光跟随（--lg-spec/--lg-x/--lg-y）、
-   *      开关玻璃管插值（--lg-on）。
-   *   2. SVG 折射滤镜 defs：#lg-edge 静止态、#lg-edge-hot 按住/拖动态
-   *      （feTurbulence + feDisplacementMap 只作用于边缘透镜层，
-   *       中心磨砂层不带位移 —— 「边缘折射、中心纯净」）。
-   *   3. JS：html.liquid-glass 根类随「软件设置 → 液态玻璃效果」开关切换；
-   *      开启时委派 pointermove，把指针坐标写入 .lg-spec 元素的
-   *      --lg-x/--lg-y（镜面高光跟随指针）。
-   * 使用：App.svelte 渲染一次 <LiquidGlass />（无 UI，仅 defs + 全局样式 + 效果）。
-   */
+  /** Svelte 5 原生液态玻璃：圆角矩形 SDF → 超椭圆厚度 → 法线 → 折射 UV。
+   * 位移只施加到边缘背景副本；卡片内容与中心采样不被扭曲。 */
   import { sm } from '../../services/ServiceManager.svelte';
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const GLASS_SELECTOR = '.lg-glass, .md-card, .home-box:not(.borderless), .md-fab, .md-filled-btn, .md-tonal-btn, .md-elevated-btn, .md-outlined-btn, .md-menu, .md-dialog, .list-user-card, .all-card, .mini-card';
+  let defsSvg = null;
+  let filterCache = new Map();
+  let applied = new Set();
+
+  function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+  function normalize(v) {
+    const length = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / length, v[1] / length, v[2] / length];
+  }
+
+  function roundedRectSdf(x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    const qx = Math.abs(x - width / 2) - (width / 2 - r);
+    const qy = Math.abs(y - height / 2) - (height / 2 - r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  }
+
+  /** n=4 超椭圆厚度剖面：中心为平面，靠边缘曲率快速增加。 */
+  function surfaceHeight(x, y, width, height, radius, thickness) {
+    const distance = roundedRectSdf(x, y, width, height, radius);
+    const inside = clamp(-distance / thickness, 0, 1);
+    return Math.pow(Math.max(0, 1 - Math.pow(1 - inside, 4)), 1 / 4);
+  }
+
+  function refractedOffset(normal, view) {
+    const incident = normalize([view[0], view[1], 1]);
+    const eta = 1 / 1.46;
+    const dot = incident[0] * normal[0] + incident[1] * normal[1] + incident[2] * normal[2];
+    const cos = -dot;
+    const k = 1 - eta * eta * (1 - cos * cos);
+    if (k < 0) return [0, 0];
+    const factor = eta * cos - Math.sqrt(k);
+    const ray = normalize([
+      eta * incident[0] + factor * normal[0],
+      eta * incident[1] + factor * normal[1],
+      eta * incident[2] + factor * normal[2],
+    ]);
+    return [ray[0] / Math.max(0.2, ray[2]), ray[1] / Math.max(0.2, ray[2])];
+  }
+
+  function createNormalMap(width, height, radius, view) {
+    const ratio = Math.min(1, 160 / width, 160 / height);
+    const mapWidth = Math.max(24, Math.round(width * ratio));
+    const mapHeight = Math.max(24, Math.round(height * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = mapWidth;
+    canvas.height = mapHeight;
+    const context = canvas.getContext('2d', { alpha: false });
+    const image = context.createImageData(mapWidth, mapHeight);
+    const thickness = Math.max(5, Math.min(28, Math.min(width, height) * 0.24));
+    const stepX = width / mapWidth;
+    const stepY = height / mapHeight;
+    for (let y = 0; y < mapHeight; y++) {
+      for (let x = 0; x < mapWidth; x++) {
+        const px = (x + 0.5) * stepX;
+        const py = (y + 0.5) * stepY;
+        const dx = surfaceHeight(px - stepX, py, width, height, radius, thickness)
+          - surfaceHeight(px + stepX, py, width, height, radius, thickness);
+        const dy = surfaceHeight(px, py - stepY, width, height, radius, thickness)
+          - surfaceHeight(px, py + stepY, width, height, radius, thickness);
+        const normal = normalize([dx * 1.8, dy * 1.8, 1]);
+        const [rx, ry] = refractedOffset(normal, view);
+        const index = (y * mapWidth + x) * 4;
+        image.data[index] = Math.round(clamp(0.5 + rx * 0.34, 0, 1) * 255);
+        image.data[index + 1] = Math.round(clamp(0.5 + ry * 0.34, 0, 1) * 255);
+        image.data[index + 2] = 128;
+        image.data[index + 3] = 255;
+      }
+    }
+    context.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+
+  function createFilter(key, map, width, height, scale, hot = false) {
+    const filter = document.createElementNS(SVG_NS, 'filter');
+    const id = `lg-sdf-${key}${hot ? '-hot' : ''}`;
+    filter.setAttribute('id', id);
+    filter.setAttribute('x', '-18%');
+    filter.setAttribute('y', '-18%');
+    filter.setAttribute('width', '136%');
+    filter.setAttribute('height', '136%');
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    filter.classList.add('lg-generated-filter');
+    const image = document.createElementNS(SVG_NS, 'feImage');
+    image.setAttribute('href', map);
+    image.setAttribute('x', '0');
+    image.setAttribute('y', '0');
+    image.setAttribute('width', String(width));
+    image.setAttribute('height', String(height));
+    image.setAttribute('preserveAspectRatio', 'none');
+    image.setAttribute('result', 'normals');
+    const displacement = document.createElementNS(SVG_NS, 'feDisplacementMap');
+    displacement.setAttribute('in', 'SourceGraphic');
+    displacement.setAttribute('in2', 'normals');
+    displacement.setAttribute('scale', String(scale));
+    displacement.setAttribute('xChannelSelector', 'R');
+    displacement.setAttribute('yChannelSelector', 'G');
+    filter.append(image, displacement);
+    defsSvg?.querySelector('defs')?.appendChild(filter);
+    return `url(#${id})`;
+  }
+
+  function applyRefraction(element) {
+    if (!defsSvg || !element.isConnected) return;
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 20 || rect.height < 16) return;
+    const width = Math.max(24, Math.round(rect.width / 16) * 16);
+    const height = Math.max(24, Math.round(rect.height / 16) * 16);
+    const style = getComputedStyle(element);
+    const radius = Math.min(48, parseFloat(style.borderTopLeftRadius) || 12);
+    const viewX = clamp((rect.left + rect.width / 2 - innerWidth / 2) / innerWidth * 0.7, -0.4, 0.4);
+    const viewY = clamp((rect.top + rect.height / 2 - innerHeight / 2) / innerHeight * 0.7, -0.4, 0.4);
+    const key = `${width}x${height}-r${Math.round(radius)}-v${Math.round(viewX * 8)},${Math.round(viewY * 8)}`;
+    let pair = filterCache.get(key);
+    if (!pair && filterCache.size < 72) {
+      const map = createNormalMap(width, height, radius, [viewX, viewY]);
+      pair = {
+        normal: createFilter(key, map, width, height, 18),
+        hot: createFilter(key, map, width, height, 30, true),
+      };
+      filterCache.set(key, pair);
+    }
+    if (pair) {
+      element.style.setProperty('--lg-refraction', pair.normal);
+      element.style.setProperty('--lg-refraction-hot', pair.hot);
+      applied.add(element);
+    }
+  }
 
   $effect(() => {
     const on = sm.appSettingsState.liquidGlass;
     document.documentElement.classList.toggle('liquid-glass', on);
     if (!on) return;
-    const move = (e) => {
-      const el = e.target && e.target.closest ? e.target.closest('.lg-spec') : null;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--lg-x', (e.clientX - r.left) + 'px');
-      el.style.setProperty('--lg-y', (e.clientY - r.top) + 'px');
+    let scanTimer = 0;
+    const scan = () => {
+      clearTimeout(scanTimer);
+      scanTimer = 0;
+      for (const element of document.querySelectorAll(GLASS_SELECTOR)) {
+        resizeObserver.observe(element);
+        applyRefraction(element);
+      }
+      for (const element of applied) {
+        if (!element.isConnected) {
+          resizeObserver.unobserve(element);
+          applied.delete(element);
+        }
+      }
     };
-    document.addEventListener('pointermove', move);
+    const schedule = () => {
+      if (!scanTimer) scanTimer = setTimeout(scan, 120);
+    };
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) applyRefraction(entry.target);
+    });
+    const mutations = new MutationObserver(schedule);
+    mutations.observe(document.body, { childList: true, subtree: true });
+    const move = (event) => {
+      const element = event.target?.closest?.('.lg-spec, .md-card, .md-fab, .md-btn');
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      element.style.setProperty('--lg-x', `${event.clientX - rect.left}px`);
+      element.style.setProperty('--lg-y', `${event.clientY - rect.top}px`);
+    };
+    document.addEventListener('pointermove', move, { passive: true });
+    document.addEventListener('scroll', schedule, true);
+    window.addEventListener('resize', schedule);
+    scan();
     return () => {
+      clearTimeout(scanTimer);
+      mutations.disconnect();
+      resizeObserver.disconnect();
       document.removeEventListener('pointermove', move);
+      document.removeEventListener('scroll', schedule, true);
+      window.removeEventListener('resize', schedule);
       document.documentElement.classList.remove('liquid-glass');
+      for (const element of applied) {
+        element.style.removeProperty('--lg-refraction');
+        element.style.removeProperty('--lg-refraction-hot');
+      }
+      applied.clear();
+      defsSvg?.querySelectorAll('.lg-generated-filter').forEach((node) => node.remove());
+      filterCache.clear();
     };
   });
 </script>
@@ -39,7 +196,7 @@
   被 mask 限制在边缘带内），中心磨砂层不带位移 —— 与 glassium「边缘折射、中心纯净」一致。
   - #lg-edge：静止态，轻微几何位移（scale 9）
   - #lg-edge-hot：按住/拖拽态，强位移（scale 18）+ baseFrequency 持续漂移 = 液态流动 -->
-<svg class="lg-defs" aria-hidden="true" focusable="false">
+<svg class="lg-defs" aria-hidden="true" focusable="false" bind:this={defsSvg}>
   <defs>
     <filter id="lg-edge" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
       <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="7" result="lg-noise" />
@@ -197,7 +354,7 @@ html.liquid-glass .mini-card::before {
   /* 边缘扭曲折射：backdrop-filter 的 SVG url() 引用 Chromium 不支持（且本机
    * 带 mask 的伪元素 backdrop 全不渲染），改用普通 filter —— 对边缘带内的
    * 【背景图副本】做湍流位移扭曲（#lg-edge），mask 裁回边带 = 真折射。 */
-  filter: url(#lg-edge);
+  filter: var(--lg-refraction, url(#lg-edge));
   background:
     /* 色散（棱镜彩环）2.3：四向边缘染色 —— 左红右蓝为主，
      * 上下补充暖橙/冷青，彩色光沿整圈轮廓连续可辨；
@@ -386,8 +543,9 @@ html.liquid-glass .md-filled-btn:active::before,
 html.liquid-glass .md-tonal-btn:active::before,
 html.liquid-glass .md-elevated-btn:active::before,
 html.liquid-glass .md-outlined-btn:active::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  -webkit-backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
+  backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
+  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
 }
 
 /* ---- 按压回弹：按钮/卡片轻微收缩（选中块/滑块的位置由 JS 内联 transform 驱动，不参与） ---- */
@@ -493,7 +651,7 @@ html.liquid-glass .md-dialog::before {
     linear-gradient(to top, rgb(255 255 255 / calc(var(--lg-bevel) * 0.42)), transparent 32%),
     var(--lg-tint-edge),
     var(--astral-bg-image, none) fixed center / cover no-repeat;
-  filter: url(#lg-edge);
+  filter: var(--lg-refraction, url(#lg-edge));
 }
 
 /* ============================================================
@@ -638,7 +796,7 @@ html.liquid-glass .md-switch::before {
     linear-gradient(to top, rgb(255 255 255 / calc(0.42 * var(--lg-bevel))), transparent 36%),
     var(--astral-bg-image, none) fixed center / cover no-repeat;
   /* 开关轨道同样做边缘扭曲折射（与卡片同一滤镜/同一背景对齐） */
-  filter: url(#lg-edge);
+  filter: var(--lg-refraction, url(#lg-edge));
 }
 /* 轨道中心磨砂：管内体光（顶受光/底反弹）+ 指针高光 + 按压光效 + 主体色 */
 html.liquid-glass .md-switch::after {
@@ -748,7 +906,7 @@ html.liquid-glass .md-switch.dragging {
 }
 html.liquid-glass .md-switch.dragging::before {
   /* 拖动中：动画噪声 + 强位移（#lg-edge-hot）—— 边缘"沸腾"折射 */
-  filter: url(#lg-edge-hot);
+  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
 }
 /* 拖动 thumb 时：位置由 JS 内联控制，禁用过渡 */
 html.liquid-glass .md-switch.dragging .thumb {
@@ -837,8 +995,9 @@ html.liquid-glass .md-segmented.lg-dragging .segment-pill {
 }
 html.liquid-glass .md-segmented:has(.segment:active) .segment-pill::before,
 html.liquid-glass .md-segmented.lg-dragging .segment-pill::before {
-  -webkit-backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
-  backdrop-filter: url(#lg-edge-hot) blur(1px) saturate(1.55) brightness(1.1);
+  -webkit-backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
+  backdrop-filter: blur(1px) saturate(1.35) brightness(1.04);
+  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
 }
 
 /* ============================================================
@@ -862,6 +1021,15 @@ html.liquid-glass .bottom-nav .selection-pill {
 }
 html.liquid-glass .bottom-nav:has(.bottom-nav-item:active) .selection-pill {
   --lg-press: 1;
+}
+html.liquid-glass .bottom-nav .selection-pill {
+  transition-property: --lg-spec, --lg-press, --lg-on, border-color, box-shadow;
+}
+html.liquid-glass .bottom-nav.lg-dragging .selection-pill {
+  --lg-press: 1;
+}
+html.liquid-glass .bottom-nav.lg-dragging .selection-pill::before {
+  filter: var(--lg-refraction-hot, var(--lg-refraction, url(#lg-edge-hot)));
 }
 
 /* ============================================================

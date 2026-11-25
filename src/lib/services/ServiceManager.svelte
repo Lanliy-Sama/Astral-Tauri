@@ -210,6 +210,9 @@ export class BgmState {
   lyricCapsuleEnabled = $state(true); // 灵动岛歌词胶囊开关
   lyricLines = $state(null);      // 当前曲目歌词 [{t,l}]（在线曲目从平台拉取）
   lyricFound = $state(false);
+  smtcEnabled = $state(true); // 系统媒体控制（SMTC / MPRIS / Now Playing）
+  /* 房间音乐账号权限：仅共享搜索/播放能力，不共享登录凭据 */
+  roomShare = $state({ netease: true, qq: true, kugou: true });
 }
 
 /* ============ ServerStatusState ============ */
@@ -298,6 +301,7 @@ class ServiceManager {
     this._connectionDuration = 0;
     this._configBuilder = null;
     this._androidTunAttaching = false;
+    this._startupAutoConnectStarted = false;
 
     this.appVersion = APP_VERSION_FALLBACK;
     this.initialized = false;
@@ -862,18 +866,22 @@ class ServiceManager {
     await this._persistSettings({ sortOrder: v });
   }
   async updateStartup(v) {
+    // 系统设置成功后才更新 UI/数据库，失败时开关不假装已生效。
+    if (isTauri()) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_startup', {
+        enable: v,
+        minimize: this.startupState.startupMinimize,
+      });
+    }
     this.startupState.startup = v;
     await this._persistSettings({ startup: v });
-    if (isTauri()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('set_startup', { enable: v });
-      } catch (e) {
-        console.warn('设置开机自启失败:', e);
-      }
-    }
   }
   async updateStartupMinimize(v) {
+    if (isTauri() && this.startupState.startup) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_startup', { enable: true, minimize: v });
+    }
     this.startupState.startupMinimize = v;
     await this._persistSettings({ startupMinimize: v });
   }
@@ -940,6 +948,12 @@ class ServiceManager {
     const s = await this._getSettings();
     this.bgmState.enabled = s.bgmEnabled === true;
     this.bgmState.lyricCapsuleEnabled = s.lyricCapsuleEnabled !== false;
+    this.bgmState.smtcEnabled = s.smtcEnabled !== false;
+    this.bgmState.roomShare = {
+      netease: s.roomShare?.netease !== false,
+      qq: s.roomShare?.qq !== false,
+      kugou: s.roomShare?.kugou !== false,
+    };
     this.bgmState.volume = Math.min(100, Math.max(0, Math.round(Number(s.bgmVolume ?? 60))));
     await this.refreshBgmTracks();
     const trackId = s.bgmTrackId ?? null;
@@ -998,6 +1012,17 @@ class ServiceManager {
   async updateLyricCapsuleEnabled(v) {
     this.bgmState.lyricCapsuleEnabled = v;
     await this._persistSettings({ lyricCapsuleEnabled: v });
+  }
+
+  async updateSmtcEnabled(v) {
+    this.bgmState.smtcEnabled = v;
+    await this._persistSettings({ smtcEnabled: v });
+  }
+
+  async updateMusicShare(platform, enabled) {
+    if (!['netease', 'qq', 'kugou'].includes(platform)) return;
+    this.bgmState.roomShare = { ...this.bgmState.roomShare, [platform]: enabled };
+    await this._persistSettings({ roomShare: this.bgmState.roomShare });
   }
 
   async persistBgmTrackId(trackId) {
@@ -1137,14 +1162,22 @@ class ServiceManager {
   }
 
   async _tryStartupAutoConnect() {
-    if (this.startupState.startupAutoConnect && this.hasConnectTarget()) {
-      try {
-        if (await this.isNpcapReady()) {
-          await this.connect({ isManual: false });
-        }
-      } catch (e) {
-        console.warn('自动连接失败:', e);
+    if (!this.startupState.startupAutoConnect || this._startupAutoConnectStarted) return;
+    this._startupAutoConnectStarted = true;
+    if (!this.hasConnectTarget()) {
+      this.pushLog('[startup] 自动连接未执行：没有已选房间或可用服务器');
+      return;
+    }
+    try {
+      if (!(await this.isNpcapReady())) {
+        this.pushLog('[startup] 自动连接未执行：Npcap 未就绪，请先手动连接并完成驱动安装');
+        return;
       }
+      this.pushLog('[startup] 开始自动连接已选房间');
+      await this.connect({ isManual: false });
+    } catch (e) {
+      console.warn('自动连接失败:', e);
+      this.pushLog(`[startup] 自动连接失败：${String(e?.message || e)}`);
     }
   }
 
