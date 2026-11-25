@@ -15,6 +15,7 @@
     onEdit = null,
     onDelete = null,
     onShare = null,
+    onJoin = null,
   } = $props();
 
   let hovered = $state(false);
@@ -119,6 +120,18 @@
         <span class="room-name">{room.name}</span>
       </div>
       <div class="icon-row">
+        {#if onJoin}
+          <button
+            class="md-icon-btn icon-20"
+            data-tip="加入此房间（可同时加入多个）"
+            onclick={(event) => {
+              event.stopPropagation();
+              onJoin?.();
+            }}
+          >
+            <Icon name="add_link" size={20} color="var(--md-primary)" />
+          </button>
+        {/if}
         {#if onShare}
           <button
             class="md-icon-btn icon-20"

@@ -272,12 +272,22 @@ async fn current_instance() -> Option<Arc<NativeCoreInstance>> {
     Some(instance)
 }
 
+/// 按实例解析（None = 旧单实例接口）；多房间模式互不影响。
+async fn instance_for(instance_id: Option<uuid::Uuid>) -> Option<Arc<NativeCoreInstance>> {
+    let Some(id) = instance_id else { return current_instance().await };
+    let instance = MANAGER.instance(id)?;
+    if instance.state() == CoreInstanceState::Stopped {
+        return None;
+    }
+    Some(instance)
+}
+
 /// 装配当前实例的运行快照（官方 management 层实现，与 2.6 时代
 /// NetworkInstance::get_running_info 同构）。
 /// 2.7 的 peer_route_pairs 不保证含本机节点（旧版含）—— 拓扑图以本机
 /// 为根、成员列表固定显示本机卡，缺失则在此统一注入，所有消费方生效。
-async fn fetch_running_info() -> Option<NetworkInstanceRunningInfo> {
-    let instance = current_instance().await?;
+async fn fetch_running_info_for(instance_id: Option<uuid::Uuid>) -> Option<NetworkInstanceRunningInfo> {
+    let instance = instance_for(instance_id).await?;
     let mut info = network_instance_running_info(instance.as_ref()).await.ok()?;
     if let Some(my) = info.my_node_info.as_ref() {
         let my_peer_id = my.peer_id;
@@ -311,6 +321,10 @@ async fn fetch_running_info() -> Option<NetworkInstanceRunningInfo> {
         }
     }
     Some(info)
+}
+
+async fn fetch_running_info() -> Option<NetworkInstanceRunningInfo> {
+    fetch_running_info_for(None).await
 }
 
 // 返回EasyTier的版本号
@@ -423,10 +437,7 @@ pub async fn set_tun_fd(fd: i32) -> Result<(), String> {
     }
 }
 
-pub async fn get_running_info() -> String {
-    let Some(info) = fetch_running_info().await else {
-        return "null".to_string();
-    };
+fn running_info_json(info: NetworkInstanceRunningInfo) -> String {
     // 前端契约：my_node_info.virtual_ipv4.address.addr（u32 主机序整数）
     let virtual_ipv4 = info
         .my_node_info
@@ -448,6 +459,20 @@ pub async fn get_running_info() -> String {
         "peer_route_pairs": info.peer_route_pairs,
     }))
     .unwrap_or_else(|_| "null".to_string())
+}
+
+pub async fn get_running_info() -> String {
+    let Some(info) = fetch_running_info().await else {
+        return "null".to_string();
+    };
+    running_info_json(info)
+}
+
+pub async fn get_running_info_for(instance_id: uuid::Uuid) -> String {
+    let Some(info) = fetch_running_info_for(Some(instance_id)).await else {
+        return "null".to_string();
+    };
+    running_info_json(info)
 }
 
 pub struct FlagsC {
@@ -502,7 +527,7 @@ pub fn create_server(
     cidrs: Vec<String>,
     forwards: Vec<Forward>,
     flag: FlagsC,
-) -> JoinHandle<Result<(), String>> {
+) -> JoinHandle<Result<uuid::Uuid, String>> {
     safe_print!("{}", format!("创建服务器: {}，启用DHCP: {}, 指定IP: {}, 房间名称: {}, 房间密码: {}, 服务器URL: {:?}, 监听器URL: {:?}", username, enable_dhcp, specified_ip, room_name, room_password, severurl, onurl));
     RT.spawn(async move {
         // Create config with better error handling
@@ -646,7 +671,7 @@ pub fn create_server(
         safe_println!("instance {} started", instance_id);
         cmd_log("task: 实例已启动并写入 INSTANCE_ID");
 
-        Ok(())
+        Ok(instance_id)
     })
 }
 
@@ -676,6 +701,19 @@ pub fn close_server() {
     });
 }
 
+/// 关闭指定实例，不影响其它已加入房间。
+pub async fn close_server_for(instance_id: uuid::Uuid) -> Result<(), String> {
+    MANAGER
+        .delete_network_instances(vec![instance_id])
+        .await
+        .map_err(|e| format!("关闭实例失败: {e:#}"))?;
+    let mut current = INSTANCE_ID.write().await;
+    if current.as_ref() == Some(&instance_id) {
+        *current = None;
+    }
+    Ok(())
+}
+
 // 获取节点路由对（本机兜底注入已在 fetch_running_info 统一处理）
 pub async fn get_peer_route_pairs() -> Result<Vec<PeerRoutePair>, String> {
     let info = fetch_running_info()
@@ -686,7 +724,15 @@ pub async fn get_peer_route_pairs() -> Result<Vec<PeerRoutePair>, String> {
 
 // 获取网络状态信息
 pub async fn get_network_status() -> KVNetworkStatus {
-    let info = match fetch_running_info().await {
+    network_status_for(None).await
+}
+
+pub async fn get_network_status_for(instance_id: uuid::Uuid) -> KVNetworkStatus {
+    network_status_for(Some(instance_id)).await
+}
+
+async fn network_status_for(instance_id: Option<uuid::Uuid>) -> KVNetworkStatus {
+    let info = match fetch_running_info_for(instance_id).await {
         Some(info) => info,
         None => {
             return KVNetworkStatus {

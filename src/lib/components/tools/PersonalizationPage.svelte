@@ -4,6 +4,7 @@
   import SettingsCard from '../settings/parts/SettingsCard.svelte';
   import MusicPlatformPage from '../settings/MusicPlatformPage.svelte';
   import Icon from '$lib/components/common/Icon.svelte';
+  import Switch from '$lib/components/common/Switch.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { t } from '$lib/i18n/I18n.svelte';
   import { isTauri } from '$lib/utils/Platform.svelte';
@@ -135,6 +136,18 @@
         </button>
         {#if bgBusy}<span class="bg-busy-hint">{t('bg_processing')}…</span>{/if}
         <input type="file" accept={BG_ACCEPT_ATTR} bind:this={bgFileEl} onchange={onBgFileChosen} hidden />
+      </div>
+    </SettingsCard>
+
+    <div class="gap-16"></div>
+
+    <SettingsCard>
+      <div class="md-switch-list-tile no-cursor">
+        <div class="tile-content">
+          <div class="tile-title">液态玻璃效果</div>
+          <div class="tile-subtitle">为卡片、按钮、选择器和音乐封面启用清晰的圆角玻璃材质</div>
+        </div>
+        <Switch value={sm.appSettingsState.liquidGlass} onChange={(value) => sm.updateLiquidGlass(value)} />
       </div>
     </SettingsCard>
 

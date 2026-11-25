@@ -1304,6 +1304,10 @@ class ServiceManager {
    * @returns {Promise<boolean|null>} true 成功 / false 失败 / null 用户取消
    */
   async connect({ isManual = true } = {}) {
+    if (!isAndroid()) {
+      const { roomConnections } = await import('./RoomConnections.svelte');
+      return roomConnections.connectRoom(this.roomState.selectedRoom);
+    }
     try {
       return await this._connectInner({ isManual });
     } catch (e) {
@@ -1584,6 +1588,10 @@ class ServiceManager {
 
   /** 用户取消连接 */
   async cancelConnection() {
+    if (!isAndroid()) {
+      const { roomConnections } = await import('./RoomConnections.svelte');
+      return roomConnections.disconnectRoom();
+    }
     if (this._cancelCompleter && !this._cancelCompleter.done) {
       this._cancelCompleter.done = true;
     }
@@ -1592,6 +1600,10 @@ class ServiceManager {
 
   /** 断开连接 */
   async disconnect({ silent = false } = {}) {
+    if (!isAndroid()) {
+      const { roomConnections } = await import('./RoomConnections.svelte');
+      return roomConnections.disconnectRoom();
+    }
     if (this._cancelCompleter && !this._cancelCompleter.done) {
       this._cancelCompleter.done = true;
     }

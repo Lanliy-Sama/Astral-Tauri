@@ -26,8 +26,12 @@ pub async fn get_running_info() -> String {
 }
 
 #[tauri::command]
-pub async fn get_network_status() -> Result<Value, String> {
-    let status = simple::get_network_status().await;
+pub async fn get_running_info_for(instance_id: String) -> Result<String, String> {
+    let id = uuid::Uuid::parse_str(&instance_id).map_err(|e| e.to_string())?;
+    Ok(simple::get_running_info_for(id).await)
+}
+
+fn network_status_value(status: simple::KVNetworkStatus) -> Result<Value, String> {
     let dto = NetworkStatusDto {
         total_nodes: status.total_nodes as u64,
         nodes: status
@@ -75,46 +79,57 @@ pub async fn get_network_status() -> Result<Value, String> {
     serde_json::to_value(dto).map_err(|e| e.to_string())
 }
 
-/// 创建虚拟网络（fire-and-forget，与原版 JoinHandle 语义一致：
-/// 成败由前端轮询 get_running_info 判定）。
 #[tauri::command]
-pub fn create_server(config: CreateServerConfig) -> Result<(), String> {
+pub async fn get_network_status() -> Result<Value, String> {
+    network_status_value(simple::get_network_status().await)
+}
+
+#[tauri::command]
+pub async fn get_network_status_for(instance_id: String) -> Result<Value, String> {
+    let id = uuid::Uuid::parse_str(&instance_id).map_err(|e| e.to_string())?;
+    network_status_value(simple::get_network_status_for(id).await)
+}
+
+fn flags_from_dto(flag: FlagsDto) -> simple::FlagsC {
+    simple::FlagsC {
+        default_protocol: flag.default_protocol,
+        dev_name: flag.dev_name,
+        enable_encryption: flag.enable_encryption,
+        enable_ipv6: flag.enable_ipv6,
+        mtu: flag.mtu,
+        latency_first: flag.latency_first,
+        enable_exit_node: flag.enable_exit_node,
+        no_tun: flag.no_tun,
+        use_smoltcp: flag.use_smoltcp,
+        relay_network_whitelist: flag.relay_network_whitelist,
+        disable_p2p: flag.disable_p2p,
+        enable_udp_broadcast_relay: flag.enable_udp_broadcast_relay,
+        relay_all_peer_rpc: flag.relay_all_peer_rpc,
+        disable_udp_hole_punching: flag.disable_udp_hole_punching,
+        disable_tcp_hole_punching: flag.disable_tcp_hole_punching,
+        multi_thread: flag.multi_thread,
+        data_compress_algo: flag.data_compress_algo,
+        bind_device: flag.bind_device,
+        enable_kcp_proxy: flag.enable_kcp_proxy,
+        disable_kcp_input: flag.disable_kcp_input,
+        disable_relay_kcp: flag.disable_relay_kcp,
+        proxy_forward_by_system: flag.proxy_forward_by_system,
+        accept_dns: flag.accept_dns,
+        private_mode: flag.private_mode,
+        enable_quic_proxy: flag.enable_quic_proxy,
+        disable_quic_input: flag.disable_quic_input,
+        disable_sym_hole_punching: flag.disable_sym_hole_punching,
+        tcp_whitelist: flag.tcp_whitelist,
+        udp_whitelist: flag.udp_whitelist,
+        socks5_port: flag.socks5_port,
+    }
+}
+
+fn start_server(config: CreateServerConfig) -> simple::JoinHandle<Result<uuid::Uuid, String>> {
     simple::cmd_log("command: create_server 进入");
     simple::send_udp_to_localhost("[cmd] create_server 进入");
-    let flag = astral_core::api::simple::FlagsC {
-        default_protocol: config.flag.default_protocol,
-        dev_name: config.flag.dev_name,
-        enable_encryption: config.flag.enable_encryption,
-        enable_ipv6: config.flag.enable_ipv6,
-        mtu: config.flag.mtu,
-        latency_first: config.flag.latency_first,
-        enable_exit_node: config.flag.enable_exit_node,
-        no_tun: config.flag.no_tun,
-        use_smoltcp: config.flag.use_smoltcp,
-        relay_network_whitelist: config.flag.relay_network_whitelist,
-        disable_p2p: config.flag.disable_p2p,
-        enable_udp_broadcast_relay: config.flag.enable_udp_broadcast_relay,
-        relay_all_peer_rpc: config.flag.relay_all_peer_rpc,
-        disable_udp_hole_punching: config.flag.disable_udp_hole_punching,
-        disable_tcp_hole_punching: config.flag.disable_tcp_hole_punching,
-        multi_thread: config.flag.multi_thread,
-        data_compress_algo: config.flag.data_compress_algo,
-        bind_device: config.flag.bind_device,
-        enable_kcp_proxy: config.flag.enable_kcp_proxy,
-        disable_kcp_input: config.flag.disable_kcp_input,
-        disable_relay_kcp: config.flag.disable_relay_kcp,
-        proxy_forward_by_system: config.flag.proxy_forward_by_system,
-        accept_dns: config.flag.accept_dns,
-        private_mode: config.flag.private_mode,
-        enable_quic_proxy: config.flag.enable_quic_proxy,
-        disable_quic_input: config.flag.disable_quic_input,
-        disable_sym_hole_punching: config.flag.disable_sym_hole_punching,
-        tcp_whitelist: config.flag.tcp_whitelist,
-        udp_whitelist: config.flag.udp_whitelist,
-        socks5_port: config.flag.socks5_port,
-    };
-    // forwards 恒为空（与原版 ServerConfigBuilder.build() 一致）
-    let _ = simple::create_server(
+    let flag = flags_from_dto(config.flag);
+    simple::create_server(
         config.username,
         config.enable_dhcp,
         config.specified_ip,
@@ -125,10 +140,25 @@ pub fn create_server(config: CreateServerConfig) -> Result<(), String> {
         config.cidrs,
         Vec::new(),
         flag,
-    );
+    )
+}
+
+/// 创建虚拟网络（fire-and-forget，与原版 JoinHandle 语义一致）。
+#[tauri::command]
+pub fn create_server(config: CreateServerConfig) -> Result<(), String> {
+    let _ = start_server(config);
     simple::cmd_log("command: create_server 即将返回 Ok");
     simple::send_udp_to_localhost("[cmd] create_server 退出");
     Ok(())
+}
+
+/// 多房间模式：返回独立实例 UUID，供后续状态查询与关闭。
+#[tauri::command]
+pub async fn create_server_with_id(config: CreateServerConfig) -> Result<String, String> {
+    let id = start_server(config)
+        .await
+        .map_err(|e| format!("创建实例任务失败: {e:#}"))??;
+    Ok(id.to_string())
 }
 
 #[tauri::command]
@@ -137,6 +167,12 @@ pub fn close_server() {
     simple::send_udp_to_localhost("[cmd] close_server 进入");
     simple::close_server();
     simple::send_udp_to_localhost("[cmd] close_server 退出");
+}
+
+#[tauri::command]
+pub async fn close_server_for(instance_id: String) -> Result<(), String> {
+    let id = uuid::Uuid::parse_str(&instance_id).map_err(|e| e.to_string())?;
+    simple::close_server_for(id).await
 }
 
 #[tauri::command]

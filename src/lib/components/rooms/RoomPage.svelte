@@ -17,6 +17,7 @@
   import MusicPlatformPage from '$lib/components/settings/MusicPlatformPage.svelte';
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import { roomSocial } from '$lib/services/RoomSocial.svelte';
+  import { roomConnections } from '$lib/services/RoomConnections.svelte';
 
   /* 断点（按 window.innerWidth）：≥1200→4 ≥900→3 ≥600→2 否则 1 */
   let windowWidth = $state(window.innerWidth);
@@ -70,6 +71,15 @@
     shareOpen = true;
   }
 
+  async function joinRoom(room) {
+    await roomConnections.connectRoom(room);
+  }
+
+  async function deleteRoom(room) {
+    await roomConnections.disconnectRoom(room.id);
+    await sm.deleteRoom(room.id);
+  }
+
   /* 瀑布流 items：RoomCard span=1 */
   const masonryItems = $derived(
     sm.roomState.rooms.map((room) => ({
@@ -78,14 +88,37 @@
         room,
         isSelected: sm.roomState.selectedRoom?.id === room.id,
         onEdit: () => openEdit(room),
-        onDelete: () => sm.deleteRoom(room.id),
+        onDelete: () => deleteRoom(room),
         onShare: () => openShare(room),
+        onJoin: () => joinRoom(room),
       },
     }))
   );
 </script>
 
 <div class="room-page">
+  {#if roomConnections.tabs.length}
+    <div class="room-tabs" role="tablist" aria-label="已加入房间">
+      {#each roomConnections.tabs as session (session.room.id)}
+        <div class="room-tab" class:active={roomConnections.activeRoomId === session.room.id}>
+          <button
+            class="tab-select"
+            role="tab"
+            aria-selected={roomConnections.activeRoomId === session.room.id}
+            onclick={() => roomConnections.setActiveRoom(session.room.id)}
+          >
+            <span class="status-dot {session.status}"></span>
+            <span class="tab-name">{session.room.name}</span>
+            <span class="tab-state">{session.status === 'connected' ? '已连接' : session.status === 'connecting' ? '连接中' : '连接失败'}</span>
+          </button>
+          <button class="tab-close" aria-label={`退出 ${session.room.name}`} onclick={() => roomConnections.disconnectRoom(session.room.id)}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   {#if isConnected && selectedRoom}
     <!-- 顶部当前房间卡：Card margin(16,16,16,8) r8，hover 边框 primary 1px -->
     <div
@@ -169,6 +202,55 @@
     flex-direction: column;
     position: relative;
     overflow: hidden;
+  }
+
+  .room-tabs {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+    margin: 12px 16px 0;
+    padding: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .room-tab {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    max-width: 250px;
+    border: 1px solid var(--md-outline-variant);
+    border-radius: 16px;
+    background: var(--md-surface-container-low);
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+  .room-tab.active {
+    border-color: var(--md-primary);
+    background: var(--md-primary-06);
+  }
+  .tab-select {
+    min-width: 0;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 4px 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--md-on-surface);
+    cursor: pointer;
+  }
+  .status-dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--md-outline); }
+  .status-dot.connected { background: var(--flutter-green); }
+  .status-dot.connecting { background: var(--flutter-orange); animation: tab-pulse 1s ease-in-out infinite; }
+  .status-dot.error { background: var(--md-error); }
+  .tab-name { max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+  .tab-state { color: var(--md-on-surface-variant); font-size: 10px; white-space: nowrap; }
+  .tab-close { width: 30px; height: 30px; display: grid; place-items: center; margin-right: 4px; border: 0; border-radius: 50%; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
+  .tab-close:hover { background: var(--md-on-surface-08); color: var(--md-error); }
+  @keyframes tab-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) {
+    .status-dot.connecting { animation: none; }
   }
 
   /* 当前房间卡 */

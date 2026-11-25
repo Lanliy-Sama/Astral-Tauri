@@ -42,6 +42,20 @@ export async function createServer(config) {
   return tauriInvoke('create_server', { config });
 }
 
+/** 多房间：按实例 ID 查询与关闭。 */
+export async function getRunningInfoFor(instanceId) {
+  return tauriInvoke('get_running_info_for', { instanceId });
+}
+export async function getNetworkStatusFor(instanceId) {
+  return tauriInvoke('get_network_status_for', { instanceId });
+}
+export async function createServerWithId(config) {
+  return tauriInvoke('create_server_with_id', { config });
+}
+export async function closeServerFor(instanceId) {
+  return tauriInvoke('close_server_for', { instanceId });
+}
+
 /** 关闭服务器 */
 export async function closeServer() {
   return tauriInvoke('close_server');
