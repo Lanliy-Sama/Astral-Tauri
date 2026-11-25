@@ -8,6 +8,7 @@
   import { watchService } from '../../services/WatchService.svelte';
   import { desktopService } from '../../services/RemoteDesktopService.svelte';
   import { fileShare } from '../../services/FileShare.svelte';
+  import { t } from '../../i18n/I18n.svelte';
 
   let { open = $bindable(false) } = $props();
   let tab = $state('chat');
@@ -108,27 +109,27 @@
 <aside class="social-panel" class:open aria-hidden={!open}>
   <div class="panel-head">
     <div class="head-copy">
-      <div class="panel-title">房间协作</div>
-      <div class="panel-subtitle">{roomSocial.peers.length} 位房员可通信 · {roomSocial.accounts.length} 个共享音乐账号</div>
+      <div class="panel-title">{t('room_collaboration')}</div>
+      <div class="panel-subtitle">{t('members_available', { count: roomSocial.peers.length })} · {t('shared_music_accounts', { count: roomSocial.accounts.length })}</div>
     </div>
-    <button class="md-icon-btn" aria-label="关闭房间协作" onclick={() => (open = false)}>
+    <button class="md-icon-btn" aria-label={t('close_collaboration')} onclick={() => (open = false)}>
       <Icon name="close" />
     </button>
   </div>
 
   <div class="social-tabs" role="tablist">
     <button class:selected={tab === 'chat'} onclick={() => (tab = 'chat')} role="tab">
-      <Icon name="chat_bubble" size={19} />聊天室
+      <Icon name="chat_bubble" size={19} />{t('chat')}
     </button>
     <button class:selected={tab === 'voice'} onclick={() => (tab = 'voice')} role="tab">
-      <Icon name="podcasts" size={19} />语音
+      <Icon name="podcasts" size={19} />{t('voice')}
       {#if voiceService.invites.length}<span class="tab-badge">{voiceService.invites.length}</span>{/if}
     </button>
     <button class:selected={tab === 'watch'} onclick={() => (tab = 'watch')} role="tab">
-      <Icon name="live_tv" size={19} />一起看
+      <Icon name="live_tv" size={19} />{t('watch_together')}
     </button>
     <button class:selected={tab === 'files'} onclick={() => (tab = 'files')} role="tab">
-      <Icon name="folder_shared" size={19} />文件
+      <Icon name="folder_shared" size={19} />{t('files')}
       {#if fileShare.files.length}<span class="tab-badge">{fileShare.files.length}</span>{/if}
     </button>
   </div>
@@ -140,7 +141,7 @@
           {#if !roomSocial.messages.length}
             <div class="empty-state">
               <Icon name="forum" size={44} color="var(--md-outline)" />
-              <span>还没有消息，和房间里的玩家打个招呼吧</span>
+              <span>{t('no_messages')}</span>
             </div>
           {/if}
           {#each roomSocial.messages as message (message.id)}
@@ -155,8 +156,8 @@
           <textarea
             bind:value={chatText}
             maxlength="2000"
-            placeholder="输入房间消息…"
-            aria-label="聊天消息"
+            placeholder={t('message_placeholder')}
+            aria-label={t('message_placeholder')}
             onkeydown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -164,7 +165,7 @@
               }
             }}
           ></textarea>
-          <button class="md-fab small" aria-label="发送消息" disabled={!chatText.trim()} onclick={sendChat}>
+          <button class="md-fab small" aria-label={t('send_message')} disabled={!chatText.trim()} onclick={sendChat}>
             <Icon name="send" size={20} />
           </button>
         </div>
@@ -172,28 +173,28 @@
     {:else if tab === 'voice'}
       <div class="voice-layout">
         <section class="social-card create-card">
-          <div class="section-title"><Icon name="add" size={19} />创建语音频道</div>
-          <div class="voice-nickname">当前房间昵称：<strong>{sm.playerState.playerName || '房员'}</strong></div>
-          <input class="social-input" bind:value={newChannelName} maxlength="32" placeholder="频道名称" />
+          <div class="section-title"><Icon name="add" size={19} />{t('create_voice_channel')}</div>
+          <div class="voice-nickname">{t('current_nickname')}<strong>{sm.playerState.playerName || '房员'}</strong></div>
+          <input class="social-input" bind:value={newChannelName} maxlength="32" placeholder={t('channel_name')} />
           <div class="create-options">
-            <label><Switch bind:value={newChannelHidden} />隐藏频道</label>
-            <label><Switch bind:value={newChannelInviteOnly} />仅限邀请</label>
+            <label><Switch bind:value={newChannelHidden} />{t('hidden_channel')}</label>
+            <label><Switch bind:value={newChannelInviteOnly} />{t('invite_only')}</label>
           </div>
           <button class="md-btn md-tonal-btn full-btn" disabled={!newChannelName.trim() || voiceService.busy} onclick={createChannel}>
-            创建并加入
+            {t('create_and_join')}
           </button>
         </section>
 
         {#if voiceService.activeChannelId}
           <section class="social-card active-voice">
             <div>
-              <div class="section-title">正在语音</div>
+              <div class="section-title">{t('voice')}</div>
               <div class="active-name">{voiceService.channels.find((c) => c.id === voiceService.activeChannelId)?.name}</div>
             </div>
-            <button class="md-icon-btn" data-tip={voiceService.muted ? '取消静音' : '静音'} onclick={() => voiceService.toggleMute()}>
+            <button class="md-icon-btn" data-tip={voiceService.muted ? t('unmute') : t('mute')} onclick={() => voiceService.toggleMute()}>
               <Icon name={voiceService.muted ? 'mic_off' : 'mic'} color={voiceService.muted ? 'var(--md-error)' : 'var(--md-primary)'} />
             </button>
-            <button class="md-btn md-text-btn" onclick={() => voiceService.leave()}>离开</button>
+            <button class="md-btn md-text-btn" onclick={() => voiceService.leave()}>{t('leave')}</button>
           </section>
         {/if}
         {#if voiceService.error}<div class="error-text">{voiceService.error}</div>{/if}
@@ -206,7 +207,7 @@
                   <Icon name={channel.hidden ? 'visibility_off' : channel.inviteOnly ? 'lock' : 'podcasts'} size={20} />
                   <div>
                     <div class="channel-name">{channel.name}</div>
-                    <div class="channel-owner">频道主：{channel.ownerName}</div>
+                    <div class="channel-owner">{t('owner')}: {channel.ownerName}</div>
                   </div>
                 </div>
                 <button
@@ -214,7 +215,7 @@
                   disabled={voiceService.busy}
                   onclick={() => voiceService.activeChannelId === channel.id ? voiceService.leave() : joinChannel(channel)}
                 >
-                  {voiceService.activeChannelId === channel.id ? '离开' : '加入'}
+                  {voiceService.activeChannelId === channel.id ? t('leave') : t('join')}
                 </button>
               </div>
               <div class="channel-badges">
@@ -229,15 +230,15 @@
                     <span class="member-name">{member.nickname}{member.peer === channel.owner ? '（频道主）' : ''}</span>
                     {#if member.muted}<Icon name="mic_off" size={17} color="var(--md-error)" />{/if}
                     {#if member.peer !== roomSocial.localIp}
-                      <button class="md-icon-btn compact" data-tip={`请求控制 ${member.nickname} 的桌面`} onclick={() => desktopService.request(member)}>
+                      <button class="md-icon-btn compact" data-tip={t('request_desktop', { name: member.nickname })} onclick={() => desktopService.request(member)}>
                         <Icon name="desktop_windows" size={18} color="var(--md-primary)" />
                       </button>
                     {/if}
                     {#if voiceService.isOwner(channel) && member.peer !== roomSocial.localIp}
-                      <button class="md-icon-btn compact" data-tip={member.muted ? '解除禁言' : '禁言'} onclick={() => voiceService.setMemberMuted(channel.id, member.peer, !member.muted)}>
+                      <button class="md-icon-btn compact" data-tip={member.muted ? t('unmute') : t('mute')} onclick={() => voiceService.setMemberMuted(channel.id, member.peer, !member.muted)}>
                         <Icon name={member.muted ? 'mic' : 'mic_off'} size={18} />
                       </button>
-                      <button class="md-icon-btn compact danger" data-tip="踢出频道" onclick={() => voiceService.kickMember(channel.id, member.peer)}>
+                      <button class="md-icon-btn compact danger" data-tip={t('kick')} onclick={() => voiceService.kickMember(channel.id, member.peer)}>
                         <Icon name="person_remove" size={18} color="var(--md-error)" />
                       </button>
                     {/if}
@@ -247,23 +248,23 @@
 
               {#if voiceService.isOwner(channel)}
                 <div class="owner-tools">
-                  <div class="owner-title">频道主管理</div>
+                  <div class="owner-title">{t('owner_tools')}</div>
                   <label class="policy-row">
-                    <span>隐藏频道（仅邀请可见）</span>
+                    <span>{t('hidden_channel_desc')}</span>
                     <Switch value={channel.hidden} onChange={(value) => voiceService.setPolicy(channel.id, { hidden: value })} />
                   </label>
                   <label class="policy-row">
-                    <span>需要邀请才可加入</span>
+                    <span>{t('invite_only_desc')}</span>
                     <Switch value={channel.inviteOnly} onChange={(value) => voiceService.setPolicy(channel.id, { inviteOnly: value })} />
                   </label>
                   <div class="invite-row">
                     <select
                       class="social-input"
-                      aria-label="选择要邀请的房员"
+                      aria-label={t('invite')}
                       value={inviteTargets[channel.id] || ''}
                       onchange={(e) => (inviteTargets[channel.id] = e.currentTarget.value)}
                     >
-                      <option value="">选择房员</option>
+                      <option value="">{t('select_member')}</option>
                       {#each roomSocial.members.filter((m) => !channel.members.some((member) => member.peer === m.peer)) as member (member.peer)}
                         <option value={member.peer}>{member.nickname}</option>
                       {/each}
@@ -272,7 +273,7 @@
                       class="md-btn md-outlined-btn compact-btn"
                       disabled={!inviteTargets[channel.id]}
                       onclick={() => voiceService.invite(channel.id, inviteTargets[channel.id])}
-                    >邀请</button>
+                    >{t('invite')}</button>
                   </div>
                 </div>
               {/if}
@@ -390,11 +391,11 @@
       <div class="files-layout">
         <section class="social-card file-share-head">
           <div>
-            <div class="section-title"><Icon name="folder_shared" size={20} />房间文件分享</div>
-            <p>选择文件后仅广播元数据，成员点击下载时才从分享端传输文件。</p>
+            <div class="section-title"><Icon name="folder_shared" size={20} />{t('file_sharing')}</div>
+            <p>{t('file_share_desc')}</p>
           </div>
           <button class="md-btn md-tonal-btn" disabled={fileShare.sharing} onclick={() => fileInput?.click()}>
-            {fileShare.sharing ? '正在准备…' : '选择文件'}
+            {fileShare.sharing ? t('preparing') : t('select_files')}
           </button>
           <input type="file" multiple hidden bind:this={fileInput} onchange={(event) => {
             fileShare.shareFiles(event.currentTarget.files);
@@ -417,15 +418,15 @@
                 {/if}
               </div>
               {#if file.ownerPeer === roomSocial.localIp}
-                <span class="file-own">已分享</span>
+                <span class="file-own">{t('shared')}</span>
               {:else}
                 <button class="md-btn md-outlined-btn compact-btn" disabled={fileShare.downloads[file.id]?.status === 'downloading'} onclick={() => fileShare.download(file)}>
-                  {fileShare.downloads[file.id]?.status === 'downloading' ? '下载中…' : fileShare.downloads[file.id]?.status === 'done' ? '再次下载' : '下载'}
+                  {fileShare.downloads[file.id]?.status === 'downloading' ? t('downloading') : fileShare.downloads[file.id]?.status === 'done' ? t('download_again') : t('download')}
                 </button>
               {/if}
             </section>
           {:else}
-            <div class="empty-state"><Icon name="folder_open" size={44} color="var(--md-outline)" /><span>暂无文件分享，选择本地文件开始分享</span></div>
+            <div class="empty-state"><Icon name="folder_open" size={44} color="var(--md-outline)" /><span>{t('no_files')}</span></div>
           {/each}
         </div>
       </div>

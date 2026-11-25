@@ -180,7 +180,7 @@ fn serve_file_stream(stream: &mut TcpStream, path: &std::path::Path, range: &str
     if let Some(spec) = range.strip_prefix("bytes=") {
         let mut parts = spec.splitn(2, '-');
         start = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
-        if let Some(value) = parts.next().and_then(|v| v.parse().ok()) {
+        if let Some(value) = parts.next().and_then(|v| v.parse::<u64>().ok()) {
             end = value.min(total.saturating_sub(1));
         }
     }

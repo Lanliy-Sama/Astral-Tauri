@@ -5,6 +5,7 @@
   import { sm } from './ServiceManager.svelte';
   import { openExternal } from '../rust/Api.svelte';
   import { isTauri } from '../utils/Platform.svelte';
+  import { t } from '../i18n/I18n.svelte';
   import { tcpMediaPort, chooseMime, TcpRecorder, TcpMediaReceiver } from './TcpMedia.svelte';
 
   function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
@@ -37,10 +38,10 @@
       this.starting = true;
       this.error = '';
       try {
-        if (!roomSocial.connected) throw new Error('请先连接房间');
+        if (!roomSocial.connected) throw new Error(t('connect_room_first'));
         const target = new URL(url);
-        if (target.protocol !== 'https:') throw new Error('仅允许 HTTPS 视频网站');
-        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('当前 WebView 不支持画面采集');
+        if (target.protocol !== 'https:') throw new Error(t('https_only'));
+        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error(t('unsupported_capture'));
         let windowLabel = '';
         if (isTauri()) {
           const { invoke } = await import('@tauri-apps/api/core');
@@ -173,7 +174,7 @@
     _ended(payload, peer) {
       if (payload.sessionId !== this.session?.id || this._receiver?.peer !== peer) return;
       this.stop(false);
-      this.error = '共享主机已结束一起看';
+      this.error = t('watch_ended');
     }
 
     _closePeer(peer) {

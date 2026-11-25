@@ -2,6 +2,7 @@
   /** 房间文件分享：元数据广播，下载时按需建立 TCP 文件流。 */
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
+  import { t } from '../i18n/I18n.svelte';
 
   function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
   function blobBase64(blob) {
@@ -29,14 +30,14 @@
         this.downloads = {};
         for (const pending of this._pending.values()) {
           clearTimeout(pending.timer);
-          pending.reject(new Error('已离开房间'));
+          pending.reject(new Error(t('room_left')));
         }
         this._pending.clear();
       });
     }
 
     async shareFiles(fileList) {
-      if (!roomSocial.connected) throw new Error('请先连接房间');
+      if (!roomSocial.connected) throw new Error(t('connect_room_first'));
       const files = Array.from(fileList || []);
       if (!files.length || this.sharing) return;
       this.sharing = true;
@@ -84,7 +85,7 @@
         const response = await new Promise((resolve, reject) => {
           const timer = setTimeout(() => {
             this._pending.delete(requestId);
-            reject(new Error('分享端响应超时'));
+            reject(new Error(t('download_timeout')));
           }, 30000);
           this._pending.set(requestId, { file, resolve, reject, timer });
           roomSocial._sendOne(file.ownerPeer, 'file_download_request', {
@@ -108,7 +109,7 @@
       const base = { requestId: payload.requestId };
       const file = this.files.find((item) => item.id === payload.fileId && item.ownerPeer === roomSocial.localIp);
       try {
-        if (!file) throw new Error('文件不存在或已取消分享');
+        if (!file) throw new Error(t('file_missing'));
         const { invoke } = await import('@tauri-apps/api/core');
         const offer = await invoke('room_file_offer', { fileId: file.id });
         await roomSocial._sendOne(peer, 'file_download_response', { ...base, ...offer });

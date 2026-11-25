@@ -115,7 +115,7 @@
     </div>
     {#if sm.appSettingsState.customBackground}
       <span class="tile-trailing bg-preview-wrap">
-        <img class="bg-preview" src={sm.appSettingsState.customBackground} alt="当前背景预览" />
+        <img class="bg-preview" src={sm.appSettingsState.customBackground} alt={t('current_background_preview')} />
       </span>
     {/if}
   </div>
@@ -129,8 +129,8 @@
   <div class="md-divider"></div>
   <div class="md-switch-list-tile no-cursor">
     <div class="tile-content">
-      <div class="tile-title">液态玻璃效果</div>
-      <div class="tile-subtitle">为卡片、按钮、选择器和音乐封面启用清晰的圆角玻璃材质</div>
+      <div class="tile-title">{t('liquid_glass')}</div>
+      <div class="tile-subtitle">{t('liquid_glass_desc')}</div>
     </div>
     <Switch value={sm.appSettingsState.liquidGlass} onChange={(value) => sm.updateLiquidGlass(value)} />
   </div>

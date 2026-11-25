@@ -5,13 +5,14 @@
   import { sm } from '../../services/ServiceManager.svelte';
   import { bgmPosition, bgmPrevious, bgmNext, bgmToggleAny, bgmSeek } from '../../services/BgmPlayer.svelte';
   import { popPage } from '../../router/PageRouter.svelte';
+  import { t } from '../../i18n/I18n.svelte';
 
   let lineIdx = $state(-1);
   let lyricsScrollEl = null;
   const online = $derived(sm.bgmState.onlineTrack);
   const local = $derived(sm.bgmState.tracks.find((track) => track.trackId === sm.bgmState.trackId));
-  const title = $derived(online?.title || local?.name || '未播放音乐');
-  const artist = $derived(online?.artists?.join(' / ') || (local ? '本地音乐' : '选择一首歌曲开始播放'));
+  const title = $derived(online?.title || local?.name || t('no_music_playing'));
+  const artist = $derived(online?.artists?.join(' / ') || (local ? t('local_music') : t('select_song_to_play')));
   const cover = $derived(online?.cover || '');
   const lines = $derived(sm.bgmState.lyricLines || []);
 
@@ -48,12 +49,12 @@
 
 <div class="lyrics-page">
   <header class="lyrics-header">
-    <button class="md-icon-btn" aria-label="返回" onclick={popPage}><Icon name="arrow_back" /></button>
+    <button class="md-icon-btn" aria-label={t('back')} onclick={popPage}><Icon name="arrow_back" /></button>
     <div class="header-copy">
       <div class="header-title">{title}</div>
       <div class="header-artist">{artist}</div>
     </div>
-    <span class="playing-state">{sm.bgmState.playing ? '正在播放' : '已暂停'}</span>
+    <span class="playing-state">{sm.bgmState.playing ? t('playing') : t('paused')}</span>
   </header>
 
   <main class="lyrics-main">
@@ -74,15 +75,15 @@
         <div class="track-artist">{artist}</div>
       </div>
       <div class="fullscreen-controls">
-        <button class="md-icon-btn" aria-label="上一首" onclick={bgmPrevious}><Icon name="skip_previous" filled /></button>
-        <button class="play-toggle" aria-label={sm.bgmState.playing ? '暂停' : '播放'} onclick={bgmToggleAny}>
+        <button class="md-icon-btn" aria-label={t('previous')} onclick={bgmPrevious}><Icon name="skip_previous" filled /></button>
+        <button class="play-toggle" aria-label={sm.bgmState.playing ? t('pause') : t('play')} onclick={bgmToggleAny}>
           <Icon name={sm.bgmState.playing ? 'pause' : 'play_arrow'} size={34} filled />
         </button>
-        <button class="md-icon-btn" aria-label="下一首" onclick={bgmNext}><Icon name="skip_next" filled /></button>
+        <button class="md-icon-btn" aria-label={t('next')} onclick={bgmNext}><Icon name="skip_next" filled /></button>
       </div>
     </section>
 
-    <section class="lyrics-scroll" aria-label="滚动歌词" bind:this={lyricsScrollEl}>
+    <section class="lyrics-scroll" aria-label={t('scroll_lyrics')} bind:this={lyricsScrollEl}>
       {#if lines.length}
         <div class="lyrics-spacer"></div>
         {#each lines as line, index (`${line.t}-${index}`)}
@@ -98,8 +99,8 @@
       {:else}
         <div class="no-lyrics">
           <Icon name="lyrics" size={54} color="var(--md-outline)" />
-          <span>当前歌曲暂无可滚动歌词</span>
-          <small>播放时仍可查看曲名、歌手与封面</small>
+          <span>{t('no_lyrics')}</span>
+          <small>{t('no_lyrics_hint')}</small>
         </div>
       {/if}
     </section>

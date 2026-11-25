@@ -19,6 +19,7 @@
   } from '$lib/services/BgmPlayer.svelte';
   import { isTauri } from '$lib/utils/Platform.svelte';
   import { onMount, untrack } from 'svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
 
   const PLATFORMS = [
     { key: 'local', label: '本地音乐', qr: false },
@@ -80,7 +81,7 @@
         try {
           const ext = (file.name.split('.').pop() || '').toLowerCase();
           if (!AUDIO_EXTS.includes(ext)) {
-            snackError('不支持的格式', file.name);
+            snackError(t('unsupported_format'), file.name);
             continue;
           }
           const id = await invoke('bgm_write_begin', { ext });
@@ -96,14 +97,14 @@
           });
           imported += 1;
         } catch (error) {
-          snackError('导入失败', `${file.name}：${error?.message || error}`);
+          snackError(t('import_failed'), `${file.name}：${error?.message || error}`);
         }
       }
     } finally {
       importing = false;
       results = localTracks(query);
     }
-    if (imported) snackInfo('导入完成', `已导入 ${imported} 首本地音乐`);
+    if (imported) snackInfo(t('import_complete'), `已导入 ${imported} 首本地音乐`);
   }
 
   async function deleteLocal(track) {
@@ -242,7 +243,7 @@
       }
       sm.bgmState.onlineQueue = results;
       sm.bgmState.onlineIndex = -1;
-      if (!results.length) searchError = '没有找到匹配的歌曲';
+      if (!results.length) searchError = t('no_results');
     } catch (e) {
       results = [];
       searchError = String(e?.message || e);
@@ -275,7 +276,7 @@
     } catch (e) {
       console.warn('在线播放失败:', e);
       const message = String(e?.message || e);
-      snackError('播放失败', `${track.title || '歌曲'}：${message}`);
+      snackError(t('play_failed'), `${track.title || '歌曲'}：${message}`);
       sm.pushLog(`[在线音乐] ${track.title ?? ''} 播放失败：${message}`);
     }
   }
@@ -326,30 +327,30 @@
     try {
       await roomListen.start();
     } catch (error) {
-      snackError('一起听发起失败', String(error?.message || error));
+      snackError(t('listen_start_failed'), String(error?.message || error));
     }
   }
 
   const stateText = {
-    loading: '二维码生成中…',
-    waiting: '请用手机 App 扫码登录',
-    scanned: '已扫码，请在手机上确认',
-    success: '登录成功',
-    expired: '二维码已过期，请刷新',
-    error: '登录失败，请刷新重试',
+    loading: t('qr_loading'),
+    waiting: t('qr_waiting'),
+    scanned: t('qr_scanned'),
+    success: t('login_success'),
+    expired: t('qr_expired'),
+    error: t('qr_error'),
     idle: '',
   };
 </script>
 
-<SubPage title="房间音乐">
+<SubPage title={t('room_music')}>
   <div class="page-list">
     <!-- 平台切换 -->
     <SettingsCard>
       <div class="md-list-tile two-line no-cursor">
         <span class="tile-leading"><Icon name="album" size={24} color="var(--md-on-surface-variant)" /></span>
         <div class="tile-content">
-          <div class="tile-title">音乐平台</div>
-          <div class="tile-subtitle">本地音乐与在线平台统一播放；在线平台支持房间账号能力共享</div>
+          <div class="tile-title">{t('music_platform')}</div>
+          <div class="tile-subtitle">{t('music_platform_desc')}</div>
         </div>
       </div>
       <div class="md-divider"></div>
@@ -368,12 +369,12 @@
         <div class="md-list-tile two-line no-cursor">
           <span class="tile-leading"><Icon name="audio_file" size={24} color="var(--md-primary)" /></span>
           <div class="tile-content">
-            <div class="tile-title">已导入 {sm.bgmState.tracks.length} 首本地音乐</div>
-            <div class="tile-subtitle">支持 {AUDIO_EXTS.join(' / ')}，本地文件不会上传给房员</div>
+            <div class="tile-title">{t('imported_count', { count: sm.bgmState.tracks.length })}</div>
+            <div class="tile-subtitle">{`${AUDIO_EXTS.join(' / ')} · ${t('local_files_private')}`}</div>
           </div>
           <span class="tile-trailing">
             <button class="md-btn md-tonal-btn" disabled={importing} onclick={() => fileEl?.click()}>
-              {importing ? '导入中…' : '导入音乐'}
+              {importing ? t('importing') : t('import_music')}
             </button>
           </span>
         </div>
@@ -393,24 +394,24 @@
         <div class="md-list-tile two-line no-cursor">
           <span class="tile-leading"><Icon name="person" size={24} color="var(--md-primary)" /></span>
           <div class="tile-content">
-            <div class="tile-title">已登录{status.nickname ? `：${status.nickname}` : ''}</div>
-            <div class="tile-subtitle">可以播放账号有权限的歌曲了</div>
+            <div class="tile-title">{status.nickname ? t('logged_in_as', { name: status.nickname }) : t('login_success')}</div>
+            <div class="tile-subtitle">{t('music_platform_desc')}</div>
           </div>
           <span class="tile-trailing">
-            <button class="md-btn md-text-btn" onclick={logout}>退出登录</button>
+            <button class="md-btn md-text-btn" onclick={logout}>{t('logout')}</button>
           </span>
         </div>
       {:else if PLATFORMS.find((p) => p.key === platform)?.qr}
         <div class="qr-area qr-idle">
-          <button class="md-btn md-tonal-btn" onclick={startLogin}>获取登录二维码</button>
+          <button class="md-btn md-tonal-btn" onclick={startLogin}>{t('qr_login')}</button>
         </div>
       {/if}
       {#if platform !== 'local' && status.loggedIn}
         <div class="md-divider"></div>
         <div class="md-switch-list-tile no-cursor">
           <div class="tile-content">
-            <div class="tile-title">向房间共享此账号的播放能力</div>
-            <div class="tile-subtitle">房员仅看到账号名称；搜索与音频流由本机代理，不发送 Cookie 或登录凭证，也不会在本机播放</div>
+            <div class="tile-title">{t('share_account')}</div>
+            <div class="tile-subtitle">{t('share_account_desc')}</div>
           </div>
           <Switch
             value={sm.bgmState.roomShare[platform] !== false}
@@ -426,22 +427,22 @@
       <div class="md-list-tile two-line no-cursor">
         <span class="tile-leading"><Icon name="settings_remote" size={24} color="var(--md-on-surface-variant)" /></span>
         <div class="tile-content">
-          <div class="tile-title">播放与系统媒体控制</div>
-          <div class="tile-subtitle">本地、在线与房员共享音乐共用以下设置</div>
+          <div class="tile-title">{t('play_settings')}</div>
+          <div class="tile-subtitle">{t('play_settings_desc')}</div>
         </div>
       </div>
       <div class="md-divider"></div>
       <div class="md-switch-list-tile no-cursor">
         <div class="tile-content">
-          <div class="tile-title">系统媒体控制（SMTC）</div>
-          <div class="tile-subtitle">向系统菜单和支持的第三方壁纸/媒体工具同步歌曲、封面、进度与播放控制</div>
+          <div class="tile-title">{t('smtc')}</div>
+          <div class="tile-subtitle">{t('smtc_desc')}</div>
         </div>
         <Switch value={sm.bgmState.smtcEnabled} onChange={toggleSmtc} />
       </div>
       <div class="md-switch-list-tile no-cursor">
         <div class="tile-content">
-          <div class="tile-title">灵动岛歌词</div>
-          <div class="tile-subtitle">单击岛屿展开播放控制；调音量时在同一岛尾部展开音量条</div>
+          <div class="tile-title">{t('lyric_island')}</div>
+          <div class="tile-subtitle">{t('lyric_island_desc')}</div>
         </div>
         <Switch value={sm.bgmState.lyricCapsuleEnabled} onChange={(value) => sm.updateLyricCapsuleEnabled(value)} />
       </div>
@@ -454,7 +455,7 @@
           step="1"
           value={sm.bgmState.volume}
           oninput={(e) => updateVolume(Number(e.currentTarget.value))}
-          aria-label="音乐音量"
+          aria-label={t('volume')}
         />
         <span>{sm.bgmState.volume}</span>
       </div>
@@ -467,30 +468,30 @@
         {#if roomListen.incoming}
           <div class="listen-invite">
             <div class="listen-copy">
-              <strong>{roomListen.incoming.hostName} 邀请你一起听歌</strong>
-              <span>加入后，主机的切歌和播放状态会同步给你</span>
+              <strong>{t('listen_invite_title', { name: roomListen.incoming.hostName })}</strong>
+              <span>{t('listen_invite_desc')}</span>
             </div>
             <div class="listen-actions">
-              <button class="md-btn md-filled-btn" onclick={() => roomListen.accept()}>接受</button>
-              <button class="md-btn md-text-btn" onclick={() => roomListen.decline()}>忽略</button>
+              <button class="md-btn md-filled-btn" onclick={() => roomListen.accept()}>{t('accept')}</button>
+              <button class="md-btn md-text-btn" onclick={() => roomListen.decline()}>{t('ignore')}</button>
             </div>
           </div>
         {:else if roomListen.active}
           <div class="listen-invite">
             <div class="listen-copy">
-              <strong>{roomListen.isHost ? '你正在主持一起听' : `正在和 ${roomListen.hostName} 一起听`}</strong>
-              <span>{roomListen.isHost ? `${roomListen.members.length} 位成员已加入` : '切歌与播放状态由主机同步'}</span>
+              <strong>{roomListen.isHost ? t('host_listen') : t('listen_with', { name: roomListen.hostName })}</strong>
+              <span>{roomListen.isHost ? t('members_joined', { count: roomListen.members.length }) : t('listen_sync_hint')}</span>
             </div>
-            <button class="md-btn md-text-btn" onclick={() => roomListen.stop()}>退出一起听</button>
+            <button class="md-btn md-text-btn" onclick={() => roomListen.stop()}>{t('leave_listen')}</button>
           </div>
         {:else}
           <div class="listen-invite">
             <div class="listen-copy">
-              <strong>一起听</strong>
-              <span>邀请房间成员同步播放当前歌曲，支持多位成员加入</span>
+              <strong>{t('listen_together')}</strong>
+              <span>{t('listen_desc')}</span>
             </div>
             <button class="md-btn md-tonal-btn" onclick={startListenTogether}>
-              <Icon name="group_add" size={18} />发起一起听
+              <Icon name="group_add" size={18} />{t('start_listen')}
             </button>
           </div>
         {/if}
@@ -503,14 +504,14 @@
     <SettingsCard>
       {#if platform !== 'local' && roomSocial.connected}
         <div class="account-source">
-          <span class="source-label">搜索与播放账号</span>
-          <select bind:value={sourcePeer} aria-label="选择共享账号">
-            <option value="local">我的账号{status.nickname ? `（${status.nickname}）` : ' / 游客'}</option>
+          <span class="source-label">{t('account_source')}</span>
+          <select bind:value={sourcePeer} aria-label={t('account_source')}>
+            <option value="local">{status.nickname ? t('my_account') + `（${status.nickname}）` : t('guest_account')}</option>
             {#each sharedAccounts as account (account.peer)}
-              <option value={account.peer}>{account.accountName} · {account.owner} 共享</option>
+              <option value={account.peer}>{t('shared_by', { name: account.accountName, owner: account.owner })}</option>
             {/each}
           </select>
-          <span class="source-status">{sharedAccounts.length ? `${sharedAccounts.length} 个房员账号可用` : '暂无房员共享此平台'}</span>
+          <span class="source-status">{sharedAccounts.length ? t('shared_accounts_count', { count: sharedAccounts.length }) : t('no_shared_accounts')}</span>
         </div>
         <div class="md-divider"></div>
       {/if}
@@ -518,14 +519,14 @@
         <input
           class="search-input"
           type="text"
-          placeholder={`在 ${PLATFORMS.find((p) => p.key === platform)?.label || ''} 搜索歌曲`}
+          placeholder={`${PLATFORMS.find((p) => p.key === platform)?.label || ''} · ${t('search_music')}`}
           bind:value={query}
           onkeydown={(e) => {
             if (e.key === 'Enter') doSearch();
           }}
         />
         <button class="md-btn md-tonal-btn" onclick={doSearch} disabled={searching || !query.trim()}>
-          搜索
+          {t('search')}
         </button>
       </div>
       {#if searchError}
@@ -543,7 +544,7 @@
           {/each}
         </div>
       {:else if platform === 'local'}
-        <div class="local-empty">还没有本地音乐，点击上方“导入音乐”开始。</div>
+        <div class="local-empty">{t('local_empty')}</div>
       {/if}
     </SettingsCard>
 
@@ -555,8 +556,8 @@
         <div class="md-list-tile two-line no-cursor">
           <span class="tile-leading"><Icon name="queue_music" size={24} color="var(--md-on-surface-variant)" /></span>
           <div class="tile-content">
-            <div class="tile-title">我的歌单</div>
-            <div class="tile-subtitle">点开播放账号歌单里的歌曲</div>
+            <div class="tile-title">{t('my_playlists')}</div>
+            <div class="tile-subtitle">{t('playlist_hint')}</div>
           </div>
         </div>
         <div class="md-divider"></div>
@@ -573,7 +574,7 @@
             >
               <div class="track-meta">
                 <div class="track-title">{p.name}</div>
-                <div class="track-artist">{p.count} 首</div>
+                <div class="track-artist">{t('track_count', { count: p.count })}</div>
               </div>
               <span class="tile-trailing"><Icon name="chevron_right" size={22} /></span>
             </div>

@@ -4,6 +4,7 @@
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
   import { tcpMediaPort, chooseMime, TcpRecorder, TcpMediaReceiver } from './TcpMedia.svelte';
+  import { t } from '../i18n/I18n.svelte';
 
   const FRAME_RATES = [30, 60, 120, 144, 165, 240];
   function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
@@ -76,7 +77,7 @@
       this.starting = true;
       this.error = '';
       try {
-        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('当前平台不支持桌面采集');
+        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error(t('desktop_unsupported'));
         this._stream = await navigator.mediaDevices.getDisplayMedia({
           video: { frameRate: { ideal: this.frameRate, max: this.frameRate } }, audio: true,
         });
@@ -122,7 +123,7 @@
     _declined(payload, peer) {
       if (this.outgoing?.peer === peer && this.outgoing.requestId === payload.requestId) {
         this.outgoing = null;
-        this.error = '对方拒绝了远程桌面请求';
+        this.error = t('desktop_rejected');
       }
     }
 
@@ -271,7 +272,7 @@
     _ended(payload, peer) {
       if (peer !== this._peer || payload.sessionId !== this.session?.id) return;
       this.stop(false);
-      this.error = '远程桌面会话已结束';
+      this.error = t('desktop_ended');
     }
   }
 

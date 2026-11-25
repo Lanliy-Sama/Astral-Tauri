@@ -4,6 +4,7 @@
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
   import { tcpMediaPort, chooseMime, TcpRecorder, TcpMediaReceiver } from './TcpMedia.svelte';
+  import { t } from '../i18n/I18n.svelte';
 
   function id() {
     return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
@@ -80,8 +81,8 @@
 
     async createChannel(name, policy = {}) {
       const channelName = name.trim();
-      if (!channelName) throw new Error('请输入频道名称');
-      if (channelName.length > 32) throw new Error('频道名称不能超过 32 字');
+      if (!channelName) throw new Error(t('channel_name'));
+      if (channelName.length > 32) throw new Error(t('channel_name'));
       const self = roomSocial.localIp;
       const channel = {
         id: id(), name: channelName, owner: self,
@@ -102,7 +103,7 @@
       this.busy = true;
       this.error = '';
       try {
-        if (!roomSocial.connected) throw new Error('请先连接房间');
+        if (!roomSocial.connected) throw new Error(t('connect_room_first'));
         const owned = this._owned.get(channel.id);
         if (owned) {
           if (!owned.members.some((m) => m.peer === roomSocial.localIp)) {
@@ -114,7 +115,7 @@
         }
         if (channel.inviteOnly || channel.hidden) {
           const invite = this._invited.get(channel.id);
-          if (!invite || invite.expiresAt <= Date.now()) throw new Error('需要频道主的有效邀请');
+          if (!invite || invite.expiresAt <= Date.now()) throw new Error(t('invite_required'));
           const approved = await this._requestJoin(channel, invite);
           await this._activate(approved);
           this.invites = this.invites.filter((item) => item.id !== invite.id);
@@ -169,7 +170,7 @@
     }
 
     async _activate(channel) {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('当前平台不支持麦克风采集');
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error(t('mic_unsupported'));
       await this.leave();
       this._stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false,
@@ -218,7 +219,7 @@
 
     toggleMute() {
       if (this.selfMuted()) {
-        this.error = '频道主已将你禁言';
+        this.error = t('member_muted');
         return;
       }
       this._manualMuted = !this._manualMuted;
@@ -244,7 +245,7 @@
 
     async setPolicy(channelId, patch) {
       const channel = this._owned.get(channelId);
-      if (!channel) throw new Error('只有频道主可以修改频道');
+      if (!channel) throw new Error(t('owner_required'));
       if (typeof patch.hidden === 'boolean') channel.hidden = patch.hidden;
       if (typeof patch.inviteOnly === 'boolean') channel.inviteOnly = patch.inviteOnly;
       if (this.activeChannelId === channelId) this._activeChannel = copyChannel(channel);
@@ -255,9 +256,9 @@
 
     async invite(channelId, peer) {
       const channel = this._owned.get(channelId);
-      if (!channel) throw new Error('只有频道主可以邀请');
-      if (!roomSocial.members.some((m) => m.peer === peer)) throw new Error('该房员不在线');
-      if (channel.banned.includes(peer)) throw new Error('该房员已被移出频道');
+      if (!channel) throw new Error(t('owner_required'));
+      if (!roomSocial.members.some((m) => m.peer === peer)) throw new Error(t('member_offline'));
+      if (channel.banned.includes(peer)) throw new Error(t('member_banned'));
       const invite = { id: id(), peer, expiresAt: Date.now() + 5 * 60_000 };
       channel.invites[invite.id] = invite;
       await roomSocial._sendOne(peer, 'voice_invite', {
@@ -269,7 +270,7 @@
     async setMemberMuted(channelId, peer, muted) {
       const channel = this._owned.get(channelId);
       const member = channel?.members.find((m) => m.peer === peer);
-      if (!channel || !member) throw new Error('成员不在频道中');
+      if (!channel || !member) throw new Error(t('channel_missing'));
       member.muted = !!muted;
       if (peer === roomSocial.localIp) this._syncMute();
       if (muted) this._closePeer(peer);
@@ -336,12 +337,12 @@
       const channel = this._owned.get(payload.channelId);
       const base = { requestId: payload.requestId, channelId: payload.channelId };
       if (!channel) {
-        await roomSocial._sendOne(peer, 'voice_join_reject', { ...base, error: '频道已不存在' }).catch(() => {});
+        await roomSocial._sendOne(peer, 'voice_join_reject', { ...base, error: t('channel_missing') }).catch(() => {});
         return;
       }
       const invite = channel.invites[payload.inviteId];
       if (!invite || invite.peer !== peer || invite.expiresAt <= Date.now() || channel.banned.includes(peer)) {
-        await roomSocial._sendOne(peer, 'voice_join_reject', { ...base, error: '邀请无效或已被移出频道' });
+        await roomSocial._sendOne(peer, 'voice_join_reject', { ...base, error: t('invalid_invite') });
         return;
       }
       delete channel.invites[invite.id];
@@ -367,7 +368,7 @@
       if (!pending || pending.owner !== peer) return;
       clearTimeout(pending.timer);
       this._pendingJoins.delete(payload.requestId);
-      pending.reject(new Error(payload.error || '频道主拒绝了加入请求'));
+      pending.reject(new Error(payload.error || t('invalid_invite')));
     }
 
     async _joined(payload, peer) {
@@ -415,7 +416,7 @@
       this._invited.set(channel.id, { id: `member-${channel.id}`, expiresAt: Date.now() + 15000, channel });
       if (this.activeChannelId === channel.id) {
         if (!channel.members.some((m) => m.peer === roomSocial.localIp)) {
-          this.error = '你已不在此频道中';
+          this.error = t('channel_missing');
           this.leave(false);
           return;
         }
@@ -433,7 +434,7 @@
         this.invites = this.invites.filter((invite) => invite.channel.owner !== peer || invite.channel.id !== payload.channelId);
         return;
       }
-      this.error = '你已被频道主移出频道';
+      this.error = t('kicked');
       this._invited.delete(payload.channelId);
       await this.leave(false);
     }
@@ -458,7 +459,7 @@
       this._invited.clear();
       this.invites = [];
       this.channels = [];
-      for (const pending of this._pendingJoins.values()) { clearTimeout(pending.timer); pending.reject(new Error('已离开房间')); }
+      for (const pending of this._pendingJoins.values()) { clearTimeout(pending.timer); pending.reject(new Error(t('room_left'))); }
       this._pendingJoins.clear();
     }
 

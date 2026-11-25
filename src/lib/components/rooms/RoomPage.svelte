@@ -18,6 +18,7 @@
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import { roomSocial } from '$lib/services/RoomSocial.svelte';
   import { roomConnections } from '$lib/services/RoomConnections.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
 
   /* 断点（按 window.innerWidth）：≥1200→4 ≥900→3 ≥600→2 否则 1 */
   let windowWidth = $state(window.innerWidth);
@@ -47,8 +48,7 @@
   });
 
   const statusText = $derived(
-    (isConnected ? '已连接' : connection === 'connecting' ? '连接中' : '未连接') +
-      (isConnected ? ' (点击分享房间)' : '')
+    isConnected ? t('connected_share_hint') : connection === 'connecting' ? t('connecting') : t('not_connected')
   );
 
   /* 弹窗开关（组件顶层 state，Tab 切换保活保留） */
@@ -98,7 +98,7 @@
 
 <div class="room-page">
   {#if roomConnections.tabs.length}
-    <div class="room-tabs" role="tablist" aria-label="已加入房间">
+    <div class="room-tabs" role="tablist" aria-label={t('joined_rooms')}>
       {#each roomConnections.tabs as session (session.room.id)}
         <div class="room-tab" class:active={roomConnections.activeRoomId === session.room.id}>
           <button
@@ -109,9 +109,9 @@
           >
             <span class="status-dot {session.status}"></span>
             <span class="tab-name">{session.room.name}</span>
-            <span class="tab-state">{session.status === 'connected' ? '已连接' : session.status === 'connecting' ? '连接中' : '连接失败'}</span>
+            <span class="tab-state">{session.status === 'connected' ? t('connected') : session.status === 'connecting' ? t('connecting') : t('connection_failed')}</span>
           </button>
-          <button class="tab-close" aria-label={`退出 ${session.room.name}`} onclick={() => roomConnections.disconnectRoom(session.room.id)}>
+          <button class="tab-close" aria-label={t('leave_room', { name: session.room.name })} onclick={() => roomConnections.disconnectRoom(session.room.id)}>
             <Icon name="close" size={16} />
           </button>
         </div>
@@ -139,8 +139,8 @@
           }
         }}
       >
-        <div class="tile-title">当前房间: {selectedRoom.name}</div>
-        <div class="tile-subtitle">连接状态: {statusText}</div>
+        <div class="tile-title">{t('current_room', { name: selectedRoom.name })}</div>
+        <div class="tile-subtitle">{t('connection_status', { status: statusText })}</div>
       </div>
     </div>
   {/if}
@@ -165,7 +165,7 @@
   <button
     class="md-fab music-fab"
     class:connected={!isIdle}
-    data-tip="房间音乐"
+    data-tip={t('room_music')}
     onclick={() => pushPage(MusicPlatformPage)}
   >
     <Icon name="album" />

@@ -3,6 +3,7 @@
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
   import { bgmPlayOnlineTrack, bgmToggleAny, bgmNext, bgmPrevious, bgmSeek } from './BgmPlayer.svelte';
+  import { t } from '../i18n/I18n.svelte';
 
   function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
   function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
@@ -55,7 +56,7 @@
     }
 
     async start() {
-      if (!roomSocial.connected) throw new Error('请先连接房间');
+      if (!roomSocial.connected) throw new Error(t('connect_room_first'));
       this.active = true;
       this.isHost = true;
       this.sessionId = id();
@@ -193,7 +194,7 @@
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           this._pending.delete(requestId);
-          reject(new Error('主机音频响应超时'));
+          reject(new Error(t('download_timeout')));
         }, 20000);
         this._pending.set(requestId, { resolve, reject, timer });
         roomSocial._sendOne(this.hostPeer, 'local_stream_request', { requestId, trackId }).catch(reject);
@@ -203,7 +204,7 @@
     async _localOffer(payload, peer) {
       const base = { requestId: payload.requestId };
       try {
-        if (!this.active || !this.isHost || !this.members.some((m) => m.peer === peer)) throw new Error('成员尚未加入一起听');
+        if (!this.active || !this.isHost || !this.members.some((m) => m.peer === peer)) throw new Error(t('listen_not_member'));
         const { invoke } = await import('@tauri-apps/api/core');
         const offer = await invoke('local_music_stream_offer', { trackId: payload.trackId });
         await roomSocial._sendOne(peer, 'local_stream_response', { ...base, ...offer });

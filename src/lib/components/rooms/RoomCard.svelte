@@ -8,6 +8,7 @@
   import Dialog from '$lib/components/common/Dialog.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { buildSchemes } from '$lib/theme/Material3.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
 
   let {
     room,
@@ -123,7 +124,7 @@
         {#if onJoin}
           <button
             class="md-icon-btn icon-20"
-            data-tip="加入此房间（可同时加入多个）"
+            data-tip={t('join_room')}
             onclick={(event) => {
               event.stopPropagation();
               onJoin?.();
