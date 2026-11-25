@@ -207,7 +207,7 @@
     height: auto;
     font-size: 12px;
     line-height: 16px;
-    background: var(--md-surface-container-low);
+    background: transparent;
     padding: 0 4px;
     margin-left: -4px;
   }
@@ -265,7 +265,7 @@
     font-size: 12px;
     line-height: 16px;
     color: var(--md-on-surface-variant);
-    background: var(--md-surface-container-low);
+    background: transparent;
     padding: 0 4px;
     margin-left: -4px;
     white-space: nowrap;

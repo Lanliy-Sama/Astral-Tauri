@@ -9,6 +9,7 @@
   import Switch from '$lib/components/common/Switch.svelte';
   import { snackError, snackInfo } from '$lib/components/common/SnackbarStore.svelte';
   import { roomSocial } from '$lib/services/RoomSocial.svelte';
+  import { roomListen } from '$lib/services/RoomListen.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import {
     bgmPlayOnlineTrack,
@@ -321,6 +322,14 @@
     return () => stopPoll();
   });
 
+  async function startListenTogether() {
+    try {
+      await roomListen.start();
+    } catch (error) {
+      snackError('一起听发起失败', String(error?.message || error));
+    }
+  }
+
   const stateText = {
     loading: '二维码生成中…',
     waiting: '请用手机 App 扫码登录',
@@ -452,6 +461,43 @@
     </SettingsCard>
 
     <div class="gap-16"></div>
+
+    {#if roomSocial.connected}
+      <SettingsCard>
+        {#if roomListen.incoming}
+          <div class="listen-invite">
+            <div class="listen-copy">
+              <strong>{roomListen.incoming.hostName} 邀请你一起听歌</strong>
+              <span>加入后，主机的切歌和播放状态会同步给你</span>
+            </div>
+            <div class="listen-actions">
+              <button class="md-btn md-filled-btn" onclick={() => roomListen.accept()}>接受</button>
+              <button class="md-btn md-text-btn" onclick={() => roomListen.decline()}>忽略</button>
+            </div>
+          </div>
+        {:else if roomListen.active}
+          <div class="listen-invite">
+            <div class="listen-copy">
+              <strong>{roomListen.isHost ? '你正在主持一起听' : `正在和 ${roomListen.hostName} 一起听`}</strong>
+              <span>{roomListen.isHost ? `${roomListen.members.length} 位成员已加入` : '切歌与播放状态由主机同步'}</span>
+            </div>
+            <button class="md-btn md-text-btn" onclick={() => roomListen.stop()}>退出一起听</button>
+          </div>
+        {:else}
+          <div class="listen-invite">
+            <div class="listen-copy">
+              <strong>一起听</strong>
+              <span>邀请房间成员同步播放当前歌曲，支持多位成员加入</span>
+            </div>
+            <button class="md-btn md-tonal-btn" onclick={startListenTogether}>
+              <Icon name="group_add" size={18} />发起一起听
+            </button>
+          </div>
+        {/if}
+        {#if roomListen.error}<div class="search-error">{roomListen.error}</div>{/if}
+      </SettingsCard>
+      <div class="gap-16"></div>
+    {/if}
 
     <!-- 搜索 -->
     <SettingsCard>
@@ -611,6 +657,14 @@
   .qr-state {
     font-size: 14px;
     color: var(--md-on-surface-variant);
+  }
+  .listen-invite { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
+  .listen-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .listen-copy strong { font-size: 14px; }
+  .listen-copy span { color: var(--md-on-surface-variant); font-size: 11px; line-height: 17px; }
+  .listen-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  @media (max-width: 560px) {
+    .listen-invite { align-items: flex-start; flex-direction: column; }
   }
   .account-source {
     display: grid;

@@ -4,6 +4,7 @@
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
   import { openExternal } from '../rust/Api.svelte';
+  import { isTauri } from '../utils/Platform.svelte';
   import { tcpMediaPort, chooseMime, TcpRecorder, TcpMediaReceiver } from './TcpMedia.svelte';
 
   function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
@@ -40,18 +41,32 @@
         const target = new URL(url);
         if (target.protocol !== 'https:') throw new Error('仅允许 HTTPS 视频网站');
         if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('当前 WebView 不支持画面采集');
-        this._stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: { ideal: 30, max: 60 } }, audio: true,
-        });
+        let windowLabel = '';
+        if (isTauri()) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          windowLabel = await invoke('open_watch_window', { url: target.toString() });
+        } else {
+          await openExternal(target.toString());
+        }
+        try {
+          this._stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 30, max: 60 } }, audio: true,
+          });
+        } catch (error) {
+          if (windowLabel && isTauri()) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('close_watch_window', { label: windowLabel }).catch(() => {});
+          }
+          throw error;
+        }
         this.session = {
-          id: id(), url: target.toString(), platform,
+          id: id(), url: target.toString(), platform, windowLabel,
           host: sm.playerState.playerName || '房员', startedAt: Date.now(),
         };
         this.hosting = true;
         this.joined = false;
         this.guests = [];
         this._stream.getVideoTracks()[0]?.addEventListener('ended', () => this.stop());
-        await openExternal(target.toString());
         await roomSocial.broadcast('watch_request', { session: this.session });
       } catch (e) {
         this.error = String(e?.message || e);
@@ -101,6 +116,10 @@
         await roomSocial.broadcast(this.hosting ? 'watch_end' : 'watch_leave', { sessionId: current.id }).catch(() => {});
       }
       const recorder = this._recorder;
+      if (current?.windowLabel && isTauri()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('close_watch_window', { label: current.windowLabel }).catch(() => {});
+      }
       this._recorder = null;
       recorder?.stop();
       this._receiver?.dispose();

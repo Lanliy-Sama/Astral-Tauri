@@ -62,7 +62,11 @@
   .list-user-card {
     display: flex;
     align-items: center;
+    margin-bottom: 5px;
     padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
     cursor: pointer;
   }
   .list-user-card:hover {

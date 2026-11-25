@@ -91,27 +91,32 @@
     for (const event of ['timeupdate', 'durationchange', 'loadedmetadata', 'volumechange', 'seeked']) {
       audioEl.addEventListener(event, syncBgmSmtc);
     }
-    // 播完自动切下一首（顺序循环：本地歌单 / 在线队列）
+    // 播完自动切下一首（一起听成员先请求主机，普通播放使用本地队列）
     audioEl.addEventListener('ended', () => {
-      if (sm.bgmState.onlineTrack) {
-        bgmPlayOnlineNext();
-        return;
-      }
-      const tracks = sm.bgmState.tracks;
-      if (!tracks.length) {
-        sm.bgmState.playing = false;
-        return;
-      }
-      const cur = tracks.findIndex((t) => t.trackId === sm.bgmState.trackId);
-      bgmPlayTrack((cur + 1) % tracks.length);
+      import('./RoomListen.svelte').then(({ roomListen }) => {
+        if (roomListen.handleLocalAction('next')) return;
+        if (sm.bgmState.onlineTrack) {
+          bgmPlayOnlineNext();
+          return;
+        }
+        const tracks = sm.bgmState.tracks;
+        if (!tracks.length) {
+          sm.bgmState.playing = false;
+          return;
+        }
+        const cur = tracks.findIndex((t) => t.trackId === sm.bgmState.trackId);
+        bgmPlayTrack((cur + 1) % tracks.length);
+      });
     });
     audioEl.addEventListener('pause', () => {
       sm.bgmState.playing = false;
       syncBgmSmtc();
+      import('./RoomListen.svelte').then(({ roomListen }) => roomListen.notify());
     });
     audioEl.addEventListener('play', () => {
       sm.bgmState.playing = true;
       syncBgmSmtc();
+      import('./RoomListen.svelte').then(({ roomListen }) => roomListen.notify());
     });
     // 音源加载失败 → 应用日志页可见（诊断 astralbgm 协议问题用）
     audioEl.addEventListener('error', () => {
@@ -221,6 +226,12 @@
     return audioEl ? audioEl.currentTime : 0;
   }
 
+  export function bgmSeek(seconds) {
+    if (!audioEl || !Number.isFinite(seconds)) return;
+    audioEl.currentTime = Math.max(0, Math.min(seconds, Number.isFinite(audioEl.duration) ? audioEl.duration : seconds));
+    syncBgmSmtc();
+  }
+
   /** 播放在线曲目：music_play_url 解析平台直链 → <audio> 直接播放 */
   export async function bgmPlayOnlineTrack(track) {
     if (!isTauri()) throw new Error('浏览器预览无法调用平台播放接口');
@@ -299,11 +310,16 @@
 
   /** 灵动岛统一控制：在线队列与本地歌单共用上一首/暂停/下一首。 */
   export function bgmToggleAny() {
-    if (sm.bgmState.onlineTrack) bgmOnlineToggle();
-    else bgmToggle();
+    import('./RoomListen.svelte').then(({ roomListen }) => {
+      if (roomListen.handleLocalAction('toggle')) return;
+      if (sm.bgmState.onlineTrack) bgmOnlineToggle();
+      else bgmToggle();
+    });
   }
 
   export async function bgmNext() {
+    const { roomListen } = await import('./RoomListen.svelte');
+    if (roomListen.handleLocalAction('next')) return;
     if (sm.bgmState.onlineTrack) {
       await bgmPlayOnlineNext();
       return;
@@ -314,6 +330,8 @@
   }
 
   export async function bgmPrevious() {
+    const { roomListen } = await import('./RoomListen.svelte');
+    if (roomListen.handleLocalAction('previous')) return;
     if (audioEl && audioEl.currentTime > 4) {
       audioEl.currentTime = 0;
       return;

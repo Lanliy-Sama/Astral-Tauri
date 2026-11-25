@@ -110,10 +110,9 @@
   }
 
   .platform-badge {
-    padding: 2px 6px;
-    background: var(--md-primary-container);
-    border-radius: 4px;
-    color: var(--md-on-primary-container);
+    padding: 2px 0;
+    background: transparent;
+    color: var(--md-primary);
     font-size: 12px;
     font-weight: 500;
     line-height: 16px;

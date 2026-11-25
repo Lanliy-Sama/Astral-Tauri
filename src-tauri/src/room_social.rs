@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use base64::Engine as _;
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -21,6 +21,8 @@ static PROXY_RUNNING: AtomicBool = AtomicBool::new(false);
 static STREAM_PORT: OnceLock<Mutex<u16>> = OnceLock::new();
 static PROXY_PORT: OnceLock<Mutex<u16>> = OnceLock::new();
 static OFFERS: OnceLock<Mutex<HashMap<String, StreamOffer>>> = OnceLock::new();
+static SHARED_FILES: OnceLock<Mutex<HashMap<String, SharedFile>>> = OnceLock::new();
+static FILE_WRITES: OnceLock<Mutex<HashMap<String, FileWrite>>> = OnceLock::new();
 static MEDIA_RUNNING: AtomicBool = AtomicBool::new(false);
 static MEDIA_PORT: OnceLock<Mutex<u16>> = OnceLock::new();
 static MEDIA_SINKS: OnceLock<Mutex<HashMap<String, TcpStream>>> = OnceLock::new();
@@ -30,7 +32,26 @@ struct StreamOffer {
     url: String,
     platform: String,
     format: String,
+    content_type: String,
+    file_path: Option<std::path::PathBuf>,
     created: Instant,
+}
+
+#[derive(Clone)]
+struct SharedFile {
+    path: std::path::PathBuf,
+    name: String,
+    size: u64,
+    mime: String,
+}
+
+struct FileWrite {
+    file: std::fs::File,
+    path: std::path::PathBuf,
+    name: String,
+    size: u64,
+    mime: String,
+    written: u64,
 }
 
 fn room() -> &'static Mutex<String> {
@@ -38,6 +59,12 @@ fn room() -> &'static Mutex<String> {
 }
 fn offers() -> &'static Mutex<HashMap<String, StreamOffer>> {
     OFFERS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn shared_files() -> &'static Mutex<HashMap<String, SharedFile>> {
+    SHARED_FILES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn file_writes() -> &'static Mutex<HashMap<String, FileWrite>> {
+    FILE_WRITES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn read_line(stream: &mut TcpStream, limit: usize) -> Result<String, String> {
@@ -145,6 +172,39 @@ fn upstream_headers(platform: &str) -> reqwest::header::HeaderMap {
     headers
 }
 
+fn serve_file_stream(stream: &mut TcpStream, path: &std::path::Path, range: &str, content_type: &str) -> Result<(), String> {
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let total = file.metadata().map_err(|e| e.to_string())?.len();
+    let mut start = 0u64;
+    let mut end = total.saturating_sub(1);
+    if let Some(spec) = range.strip_prefix("bytes=") {
+        let mut parts = spec.splitn(2, '-');
+        start = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        if let Some(value) = parts.next().and_then(|v| v.parse().ok()) {
+            end = value.min(total.saturating_sub(1));
+        }
+    }
+    if start > end || start >= total {
+        stream.write_all(b"{\"status\":416}\n").map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let length = end - start + 1;
+    let status = if start > 0 || end + 1 < total { 206 } else { 200 };
+    let content_range = format!("bytes {start}-{end}/{total}");
+    let metadata = json!({
+        "status": status,
+        "contentType": content_type,
+        "contentLength": length,
+        "contentRange": content_range,
+        "acceptRanges": "bytes",
+    });
+    stream.write_all(metadata.to_string().as_bytes()).map_err(|e| e.to_string())?;
+    stream.write_all(b"\n").map_err(|e| e.to_string())?;
+    file.seek(SeekFrom::Start(start)).map_err(|e| e.to_string())?;
+    std::io::copy(&mut file.take(length), stream).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn serve_stream(mut stream: TcpStream) {
     let result = (|| -> Result<(), String> {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
@@ -155,6 +215,9 @@ fn serve_stream(mut stream: TcpStream) {
         let offer = offers().lock().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
             .ok_or("音频流已过期，请重新播放")?;
         let range = request["range"].as_str().unwrap_or_default();
+        if let Some(path) = offer.file_path.as_deref() {
+            return serve_file_stream(&mut stream, path, range, &offer.content_type);
+        }
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(Duration::from_secs(8))
             // 不设置整个响应的总超时：歌曲可能持续数分钟，流式拷贝期间保持连接。
@@ -203,10 +266,140 @@ pub fn music_stream_offer(track: Value, app: tauri::AppHandle) -> Result<Value, 
     let format = source["format"].as_str().unwrap_or("mp3").to_string();
     let mut map = offers().lock().unwrap_or_else(|e| e.into_inner());
     map.retain(|_, value| value.created.elapsed() < Duration::from_secs(600));
-    map.insert(id.clone(), StreamOffer { url, platform: platform.clone(), format: format.clone(), created: Instant::now() });
+    map.insert(id.clone(), StreamOffer { url, platform: platform.clone(), format: format.clone(), content_type: "audio/mpeg".into(), file_path: None, created: Instant::now() });
     drop(map);
     let lyrics = crate::music_platform::music_lyrics(platform, key, Some(track)).ok();
     Ok(json!({ "streamId": id, "streamPort": port, "format": format, "lyrics": lyrics }))
+}
+
+#[tauri::command]
+pub fn local_music_stream_offer(track_id: String, app: tauri::AppHandle) -> Result<Value, String> {
+    use tauri::Manager;
+    if track_id.len() != 36 || track_id.contains('/') || track_id.contains('\\') || track_id.contains("..") {
+        return Err("本地曲目标识无效".into());
+    }
+    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?.join("bgm");
+    let path = std::fs::read_dir(&directory)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.file_name().map(|name| name.to_string_lossy().starts_with(&format!("{track_id}."))).unwrap_or(false))
+        .ok_or("本地音频文件不存在")?;
+    let format = path.extension().map(|ext| ext.to_string_lossy().to_string()).unwrap_or_else(|| "mp3".into());
+    let port = ensure_stream_listener()?;
+    let id = uuid::Uuid::new_v4().to_string();
+    offers().lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), StreamOffer {
+        url: String::new(), platform: "local".into(), format: format.clone(),
+        content_type: if format == "flac" { "audio/flac".into() } else { "audio/mpeg".into() },
+        file_path: Some(path), created: Instant::now(),
+    });
+    Ok(json!({ "streamId": id, "streamPort": port, "format": format, "lyrics": { "found": false, "lines": [] } }))
+}
+
+fn shared_file_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?.join("shared_files");
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    Ok(directory)
+}
+
+#[tauri::command]
+pub fn room_file_write_begin(name: String, size: u64, mime: String, app: tauri::AppHandle) -> Result<String, String> {
+    if name.trim().is_empty() || name.len() > 255 || size > 2 * 1024 * 1024 * 1024 || mime.len() > 128 {
+        return Err("文件元数据无效或文件超过 2GB".into());
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let extension = std::path::Path::new(&name).extension()
+        .map(|ext| ext.to_string_lossy().to_string())
+        .filter(|ext| !ext.is_empty() && ext.len() <= 10 && ext.chars().all(|c| c.is_ascii_alphanumeric()))
+        .unwrap_or_else(|| "bin".into());
+    let path = shared_file_dir(&app)?.join(format!("{id}.{extension}"));
+    let file = std::fs::File::create_new(&path).map_err(|e| e.to_string())?;
+    file_writes().lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), FileWrite {
+        file, path, name, size, mime, written: 0,
+    });
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn room_file_write_append(id: String, b64: String) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    let mut writes = file_writes().lock().unwrap_or_else(|e| e.into_inner());
+    let session = writes.get_mut(&id).ok_or("文件写入会话不存在")?;
+    if session.written + bytes.len() as u64 > session.size {
+        return Err("文件内容超过声明大小".into());
+    }
+    session.file.write_all(&bytes).map_err(|e| e.to_string())?;
+    session.written += bytes.len() as u64;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn room_file_write_end(id: String) -> Result<Value, String> {
+    let session = file_writes().lock().unwrap_or_else(|e| e.into_inner()).remove(&id).ok_or("文件写入会话不存在")?;
+    if session.written != session.size {
+        return Err("文件尚未写入完成".into());
+    }
+    session.file.sync_all().map_err(|e| e.to_string())?;
+    let metadata = json!({
+        "id": id, "name": session.name, "size": session.size, "mime": session.mime,
+    });
+    shared_files().lock().unwrap_or_else(|e| e.into_inner()).insert(id, SharedFile {
+        path: session.path,
+        name: metadata["name"].as_str().unwrap_or_default().to_string(),
+        size: session.size,
+        mime: session.mime,
+    });
+    Ok(metadata)
+}
+
+#[tauri::command]
+pub fn room_file_offer(file_id: String) -> Result<Value, String> {
+    let (path, mime) = {
+        let files = shared_files().lock().unwrap_or_else(|e| e.into_inner());
+        let file = files.get(&file_id).ok_or("共享文件不存在")?;
+        (file.path.clone(), file.mime.clone())
+    };
+    let port = ensure_stream_listener()?;
+    let id = uuid::Uuid::new_v4().to_string();
+    offers().lock().unwrap_or_else(|e| e.into_inner()).insert(id.clone(), StreamOffer {
+        url: String::new(), platform: "file".into(), format: "file".into(),
+        content_type: if mime.is_empty() { "application/octet-stream".into() } else { mime },
+        file_path: Some(path), created: Instant::now(),
+    });
+    Ok(json!({ "streamId": id, "streamPort": port }))
+}
+
+#[tauri::command]
+pub fn room_file_download(peer: String, stream_port: u16, stream_id: String, file_name: String, app: tauri::AppHandle) -> Result<Value, String> {
+    use tauri::Manager;
+    let ip: std::net::IpAddr = peer.parse().map_err(|_| "分享端地址无效".to_string())?;
+    if stream_id.len() != 36 { return Err("文件流标识无效".into()); }
+    let mut remote = TcpStream::connect_timeout(&SocketAddr::new(ip, stream_port), Duration::from_secs(6))
+        .map_err(|e| format!("分享端连接失败: {e}"))?;
+    remote.write_all(json!({ "id": stream_id, "range": Value::Null }).to_string().as_bytes()).map_err(|e| e.to_string())?;
+    remote.write_all(b"\n").map_err(|e| e.to_string())?;
+    let metadata_line = read_line(&mut remote, 8192)?;
+    let metadata: Value = serde_json::from_str(metadata_line.trim_end_matches('\r')).map_err(|e| e.to_string())?;
+    let status = metadata["status"].as_u64().unwrap_or(502);
+    if status != 200 && status != 206 {
+        return Err(format!("分享端返回错误 {status}"));
+    }
+    let safe_name: String = file_name.chars()
+        .map(|c| if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | ' ') { c } else { '_' })
+        .take(128).collect();
+    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?.join("downloads");
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    let mut path = directory.join(if safe_name.trim().is_empty() { "download.bin".into() } else { safe_name });
+    if path.exists() {
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "download".into());
+        let ext = path.extension().map(|s| s.to_string_lossy().to_string());
+        path = directory.join(format!("{stem}-{}{}", uuid::Uuid::new_v4().simple().to_string().chars().take(8).collect::<String>(), ext.map(|e| format!(".{e}")).unwrap_or_default());
+    }
+    let mut file = std::fs::File::create_new(&path).map_err(|e| e.to_string())?;
+    let written = std::io::copy(&mut remote, &mut file).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    Ok(json!({ "path": path.to_string_lossy(), "size": written }))
 }
 
 fn ensure_proxy_listener() -> Result<u16, String> {

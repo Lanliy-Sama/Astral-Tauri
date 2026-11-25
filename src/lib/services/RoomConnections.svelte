@@ -15,13 +15,10 @@
     activeRoomId = $state(null);
     tabs = $derived(Object.values(this.sessions).filter((session) => ['connecting', 'connected', 'error'].includes(session.status)));
     _monitors = new Map();
+    _androidFd = null;
 
     async connectRoom(room) {
       if (!room) return false;
-      if (isAndroid()) {
-        sm.pushLog('[multi-room] Android 系统 VPN 暂不支持同时加入多个房间');
-        return false;
-      }
       const existing = this.sessions[room.id];
       if (existing && ['connecting', 'connected'].includes(existing.status)) {
         this.setActiveRoom(room.id);
@@ -41,6 +38,7 @@
       try {
         if (!(await sm.isNpcapReady())) throw new Error('Npcap 未就绪，请先完成驱动安装');
         const config = sm._buildServerConfig(room);
+        if (isAndroid()) config.flag.noTun = true;
         session.instanceId = await rust.createServerWithId(config);
         return await this._waitUntilConnected(room.id);
       } catch (error) {
@@ -68,6 +66,7 @@
               session.status = 'connected';
               session.netStatus = await rust.getNetworkStatusFor(session.instanceId);
               session.attempts = 0;
+              await this._configureAndroidTun(session.ipv4);
               this.setActiveRoom(roomId);
               this._startMonitor(roomId);
               return true;
@@ -82,6 +81,28 @@
       session.error = '等待虚拟 IP 超时';
       this.setActiveRoom(roomId);
       return false;
+    }
+
+    async _configureAndroidTun(ipv4) {
+      if (!isAndroid()) return;
+      if (this._androidFd == null) {
+        const prepared = await rust.vpnPrepare();
+        if (!prepared?.granted) throw new Error('未获得 Android VPN 权限');
+        const result = await rust.vpnStart({
+          ipv4Addr: `${ipv4}/24`,
+          routes: sm.vpnState.customVpn || [],
+          dns: null,
+          disallowedApplications: [],
+          mtu: sm.networkConfigState.mtu || 1380,
+        });
+        this._androidFd = Number(result?.fd);
+        if (!Number.isInteger(this._androidFd) || this._androidFd < 0) {
+          this._androidFd = null;
+          throw new Error('未取得 Android TUN fd');
+        }
+      }
+      // 同一 fd 默认重新挂载全部运行实例，不会撤销其他房间。
+      await rust.setTunFd(this._androidFd);
     }
 
     _startMonitor(roomId) {
@@ -140,6 +161,14 @@
       delete this.sessions[roomId];
       if (instanceId) await rust.closeServerFor(instanceId).catch(() => {});
       const next = this.tabs[0];
+      if (isAndroid()) {
+        if (this.tabs.some((item) => item.status === 'connected') && this._androidFd != null) {
+          await rust.setTunFd(this._androidFd).catch(() => {});
+        } else if (this._androidFd != null) {
+          await rust.vpnStop().catch(() => {});
+          this._androidFd = null;
+        }
+      }
       if (next) this.setActiveRoom(next.room.id);
       else {
         this.activeRoomId = null;

@@ -1,5 +1,5 @@
 <script module>
-  /** 多频道语音：频道主维护成员/邀请/禁言名单，音频走房员间 WebRTC。
+  /** 多频道语音：频道主维护成员/邀请/禁言名单，音频走房员间 TCP 媒体通道。
    * 隐藏频道不公开广播；邀请、批准和踢出均为定向房间消息。 */
   import { roomSocial } from './RoomSocial.svelte';
   import { sm } from './ServiceManager.svelte';
@@ -19,7 +19,9 @@
     muted = $state(false);
     busy = $state(false);
     error = $state('');
-    nickname = $state(sm.playerState.playerName || '房员');
+    get nickname() {
+      return sm.playerState.playerName || '房员';
+    }
 
     _activeChannel = null;
     _owned = new Map();

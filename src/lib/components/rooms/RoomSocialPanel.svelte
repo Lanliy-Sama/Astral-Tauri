@@ -7,6 +7,7 @@
   import { voiceService } from '../../services/VoiceService.svelte';
   import { watchService } from '../../services/WatchService.svelte';
   import { desktopService } from '../../services/RemoteDesktopService.svelte';
+  import { fileShare } from '../../services/FileShare.svelte';
 
   let { open = $bindable(false) } = $props();
   let tab = $state('chat');
@@ -20,6 +21,7 @@
   let watchUrl = $state('https://www.bilibili.com');
   let videoEl = null;
   let desktopVideoEl = null;
+  let fileInput = null;
 
   const videoSites = [
     { name: '抖音', url: 'https://www.douyin.com' },
@@ -61,6 +63,14 @@
   function desktopKey(event, down) {
     event.preventDefault();
     desktopService.sendKey(down, event.keyCode);
+  }
+
+  function formatBytes(size) {
+    const value = Number(size) || 0;
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
+    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${value} B`;
   }
 
   function timeText(timestamp) {
@@ -117,6 +127,10 @@
     <button class:selected={tab === 'watch'} onclick={() => (tab = 'watch')} role="tab">
       <Icon name="live_tv" size={19} />一起看
     </button>
+    <button class:selected={tab === 'files'} onclick={() => (tab = 'files')} role="tab">
+      <Icon name="folder_shared" size={19} />文件
+      {#if fileShare.files.length}<span class="tab-badge">{fileShare.files.length}</span>{/if}
+    </button>
   </div>
 
   <div class="panel-body">
@@ -159,7 +173,7 @@
       <div class="voice-layout">
         <section class="social-card create-card">
           <div class="section-title"><Icon name="add" size={19} />创建语音频道</div>
-          <input class="social-input" bind:value={voiceService.nickname} maxlength="24" placeholder="我的频道昵称" />
+          <div class="voice-nickname">当前房间昵称：<strong>{sm.playerState.playerName || '房员'}</strong></div>
           <input class="social-input" bind:value={newChannelName} maxlength="32" placeholder="频道名称" />
           <div class="create-options">
             <label><Switch bind:value={newChannelHidden} />隐藏频道</label>
@@ -372,6 +386,49 @@
           {#if desktopService.error}<div class="error-text">{desktopService.error}</div>{/if}
         </section>
       </div>
+    {:else if tab === 'files'}
+      <div class="files-layout">
+        <section class="social-card file-share-head">
+          <div>
+            <div class="section-title"><Icon name="folder_shared" size={20} />房间文件分享</div>
+            <p>选择文件后仅广播元数据，成员点击下载时才从分享端传输文件。</p>
+          </div>
+          <button class="md-btn md-tonal-btn" disabled={fileShare.sharing} onclick={() => fileInput?.click()}>
+            {fileShare.sharing ? '正在准备…' : '选择文件'}
+          </button>
+          <input type="file" multiple hidden bind:this={fileInput} onchange={(event) => {
+            fileShare.shareFiles(event.currentTarget.files);
+            event.currentTarget.value = '';
+          }} />
+        </section>
+        {#if fileShare.error}<div class="error-text">{fileShare.error}</div>{/if}
+        <div class="file-list">
+          {#each fileShare.files as file (file.ownerPeer + file.id)}
+            <section class="social-card file-row">
+              <div class="file-icon"><Icon name="insert_drive_file" size={26} color="var(--md-primary)" /></div>
+              <div class="file-copy">
+                <div class="file-name" data-tip={file.name}>{file.name}</div>
+                <div class="file-meta">{formatBytes(file.size)} · {file.ownerName}</div>
+                {#if fileShare.downloads[file.id]?.path}
+                  <div class="file-path selectable">{fileShare.downloads[file.id].path}</div>
+                {/if}
+                {#if fileShare.downloads[file.id]?.error}
+                  <div class="error-text">{fileShare.downloads[file.id].error}</div>
+                {/if}
+              </div>
+              {#if file.ownerPeer === roomSocial.localIp}
+                <span class="file-own">已分享</span>
+              {:else}
+                <button class="md-btn md-outlined-btn compact-btn" disabled={fileShare.downloads[file.id]?.status === 'downloading'} onclick={() => fileShare.download(file)}>
+                  {fileShare.downloads[file.id]?.status === 'downloading' ? '下载中…' : fileShare.downloads[file.id]?.status === 'done' ? '再次下载' : '下载'}
+                </button>
+              {/if}
+            </section>
+          {:else}
+            <div class="empty-state"><Icon name="folder_open" size={44} color="var(--md-outline)" /><span>暂无文件分享，选择本地文件开始分享</span></div>
+          {/each}
+        </div>
+      </div>
     {:else}
       <div class="watch-layout">
         {#if watchService.incoming}
@@ -422,7 +479,7 @@
           </section>
         {/if}
         {#if watchService.error}<div class="error-text">{watchService.error}</div>{/if}
-        <div class="watch-disclaimer">不转发网站登录态、Cookie、DOM 或输入事件。DRM 视频和浏览器保护内容可能无法采集；同步精度取决于 WebRTC 网络状况。</div>
+        <div class="watch-disclaimer">不转发网站登录态、Cookie、DOM 或输入事件。DRM 视频和浏览器保护内容可能无法采集；同步精度取决于 TCP 媒体通道的网络状况。</div>
       </div>
     {/if}
   </div>
@@ -452,7 +509,7 @@
   .head-copy { flex: 1; min-width: 0; }
   .panel-title { font-size: 19px; line-height: 26px; font-weight: 700; }
   .panel-subtitle { font-size: 11px; color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .social-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 0 12px 10px; }
+  .social-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 0 12px 10px; }
   .social-tabs button {
     position: relative;
     height: 40px;
@@ -469,7 +526,21 @@
   .social-tabs button.selected { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
   .tab-badge { min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 9px; background: var(--md-error); color: var(--md-on-error); font-size: 10px; }
   .panel-body { flex: 1; min-height: 0; overflow: hidden; }
-  .chat-layout, .voice-layout, .watch-layout { height: 100%; }
+  .chat-layout, .voice-layout, .watch-layout, .files-layout { height: 100%; }
+  .files-layout { overflow-y: auto; padding: 2px 12px 20px; }
+  .file-share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .file-share-head p { margin: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: 16px; }
+  .file-share-head .md-btn { flex-shrink: 0; }
+  .file-row { display: flex; align-items: center; gap: 10px; }
+  .file-icon { flex-shrink: 0; }
+  .file-copy { flex: 1; min-width: 0; }
+  .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+  .file-meta { margin-top: 3px; color: var(--md-on-surface-variant); font-size: 10px; }
+  .file-own { color: var(--md-primary); font-size: 10px; white-space: nowrap; }
+  .file-path { margin-top: 7px; color: var(--md-primary); font-size: 9px; line-height: 14px; word-break: break-all; user-select: text; }
+  @media (max-width: 480px) {
+    .file-share-head { align-items: flex-start; flex-direction: column; }
+  }
   .chat-layout { display: flex; flex-direction: column; }
   .messages { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 14px; }
   .message { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 13px; animation: message-in 180ms ease; }
@@ -485,6 +556,8 @@
   .section-title { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; font-size: 14px; font-weight: 700; }
   .social-input { width: 100%; min-height: 40px; margin-bottom: 9px; padding: 8px 11px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface); color: var(--md-on-surface); outline: none; user-select: text; }
   .social-input:focus { border-color: var(--md-primary); }
+  .voice-nickname { margin-bottom: 10px; padding: 9px 11px; border-radius: 12px; background: var(--md-primary-06); color: var(--md-on-surface-variant); font-size: 12px; }
+  .voice-nickname strong { color: var(--md-primary); }
   .create-options { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 12px; }
   .create-options label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--md-on-surface-variant); }
   .full-btn { width: 100%; }

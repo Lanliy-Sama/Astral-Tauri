@@ -1087,39 +1087,11 @@ html.liquid-glass .mini-card {
   --lg-rest: 0;
 }
 
-/* ---- 字体衬底 chip 隐形化（背景逐像素同图伪装） ----
- * 浮动标签/下拉标签骑在输入框 1px 边框线上，chip 的存在意义是遮住那段
- * 边框。半透明仍读作"方框"（用户反馈），这里把 chip 背景画成与
- * .main-screen 完全一致的合成（surface 底 + 自定义背景图 fixed center/cover
- * + 50% surface 渐变）—— fixed 相对视口，与 .main-screen 的 cover/center
- * 逐像素对齐（与玻璃边缘折射带同一原理），chip 视觉上完全隐形，等效于
- * Flutter OutlineInputBorder 在 label 处的边框缺口。 ---- */
-html.liquid-glass .md-text-field.float-label .tf-label.floated {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--md-surface) 50%, transparent),
-      color-mix(in srgb, var(--md-surface) 50%, transparent)
-    ),
-    var(--astral-bg-image, none) fixed center / cover no-repeat,
-    var(--md-surface);
-}
-html.liquid-glass .md-dropdown .dd-label.dd-label {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--md-surface) 50%, transparent),
-      color-mix(in srgb, var(--md-surface) 50%, transparent)
-    ),
-    var(--astral-bg-image, none) fixed center / cover no-repeat,
-    var(--md-surface);
-}
+/* 浮动标签不绘制矩形衬底，文字直接融入卡片/背景。 */
+html.liquid-glass .md-text-field.float-label .tf-label.floated,
+html.liquid-glass .md-dropdown .dd-label.dd-label,
 html.liquid-glass .rf-label {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--md-surface) 50%, transparent),
-      color-mix(in srgb, var(--md-surface) 50%, transparent)
-    ),
-    var(--astral-bg-image, none) fixed center / cover no-repeat,
-    var(--md-surface);
+  background: transparent;
 }
 /* 快捷网络配置行背景（30% surface 补丁）→ 全透，仅留 1px 分组线 */
 html.liquid-glass .switch-row {

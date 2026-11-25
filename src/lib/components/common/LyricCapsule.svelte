@@ -11,11 +11,14 @@
   } from '../../services/BgmPlayer.svelte';
   import { isTauri } from '../../utils/Platform.svelte';
   import { voiceService } from '../../services/VoiceService.svelte';
+  import FullscreenLyricsPage from './FullscreenLyricsPage.svelte';
+  import { pushPage } from '../../router/PageRouter.svelte';
 
   let lineIdx = $state(-1);
   let expanded = $state(false);
   let volumeVisible = $state(false);
   let volumeTimer = 0;
+  let clickTimer = 0;
 
   const invitation = $derived(voiceService.invites[0] || null);
   const hasTrack = $derived(!!sm.bgmState.onlineTrack || !!sm.bgmState.trackId);
@@ -110,11 +113,14 @@
 
   onMount(() => {
     voiceService.start();
-    return () => clearTimeout(volumeTimer);
+    return () => {
+      clearTimeout(volumeTimer);
+      clearTimeout(clickTimer);
+    };
   });
 
   const currentLine = $derived(lineIdx >= 0 && lineIdx < lines.length ? lines[lineIdx].l : '');
-  const show = $derived(!!invitation || volumeVisible || (active && label !== ''));
+  const show = $derived(!sm.bgmState.lyricsFullScreen && (!!invitation || volumeVisible || (active && label !== '')));
 
   function toggleExpanded() {
     if (invitation) return;
@@ -123,6 +129,19 @@
       volumeVisible = false;
       expanded = true;
     }
+  }
+
+  function onCapsuleClick() {
+    if (invitation) return;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(toggleExpanded, 230);
+  }
+
+  function openFullscreenLyrics() {
+    clearTimeout(clickTimer);
+    expanded = false;
+    volumeVisible = false;
+    pushPage(FullscreenLyricsPage);
   }
 
   async function acceptCurrentInvite() {
@@ -144,7 +163,8 @@
     tabindex={active && !invitation ? 0 : -1}
     aria-expanded={expanded}
     aria-label={invitation ? '语音频道邀请' : active ? '展开音乐控制' : '背景音乐音量'}
-    onclick={toggleExpanded}
+    onclick={onCapsuleClick}
+    ondblclick={openFullscreenLyrics}
     onkeydown={(e) => {
       if (active && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
@@ -226,7 +246,8 @@
     cursor: pointer;
     transform-origin: top center;
     animation: island-in 260ms cubic-bezier(0.05, 0.7, 0.1, 1);
-    transition: border-radius 220ms ease, box-shadow 180ms ease;
+    transition: border-radius 280ms cubic-bezier(0.05, 0.7, 0.1, 1),
+      box-shadow 240ms ease, padding 280ms cubic-bezier(0.05, 0.7, 0.1, 1);
   }
   .lyric-capsule.expanded {
     border-radius: 26px;
@@ -301,8 +322,14 @@
     justify-content: center;
     gap: 22px;
     padding: 7px 20px 3px;
-    animation: controls-in 180ms ease;
+    overflow: hidden;
+    animation: controls-expand 340ms cubic-bezier(0.05, 0.7, 0.1, 1);
   }
+  .controls .control-btn {
+    animation: control-button-in 300ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+  }
+  .controls .control-btn:nth-child(2) { animation-delay: 35ms; }
+  .controls .control-btn:nth-child(3) { animation-delay: 70ms; }
   .control-btn {
     width: 38px;
     height: 38px;
@@ -321,7 +348,14 @@
   .control-btn.primary { background: #fff; color: #18181b; width: 42px; height: 42px; }
   .control-btn .ms { width: 25px; height: 25px; font-size: 25px; }
   @keyframes island-in { from { opacity: 0; transform: translate(-50%, -12px) scale(0.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
-  @keyframes controls-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes controls-expand {
+    from { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(-8px) scale(0.96); }
+    to { max-height: 76px; opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes control-button-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
   @media (max-width: 480px) {
     .lyr-body { max-width: 42vw; }
     .lyr-volume.visible { width: 142px; max-width: 142px; }
