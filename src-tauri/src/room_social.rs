@@ -394,7 +394,7 @@ pub fn room_file_download(peer: String, stream_port: u16, stream_id: String, fil
     if path.exists() {
         let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "download".into());
         let ext = path.extension().map(|s| s.to_string_lossy().to_string());
-        path = directory.join(format!("{stem}-{}{}", uuid::Uuid::new_v4().simple().to_string().chars().take(8).collect::<String>(), ext.map(|e| format!(".{e}")).unwrap_or_default());
+        path = directory.join(format!("{stem}-{}{}", uuid::Uuid::new_v4().simple().to_string().chars().take(8).collect::<String>(), ext.map(|e| format!(".{e}")).unwrap_or_default()));
     }
     let mut file = std::fs::File::create_new(&path).map_err(|e| e.to_string())?;
     let written = std::io::copy(&mut remote, &mut file).map_err(|e| e.to_string())?;
