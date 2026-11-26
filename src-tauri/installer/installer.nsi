@@ -81,6 +81,8 @@ Var OldMainBinaryName
 Var WelcomeDialog
 Var WelcomeBg
 Var WelcomeIcon
+Var WelcomeBgImage
+Var WelcomeIconImage
 Var InstallButton
 
 Name "${PRODUCTNAME}"
@@ -437,10 +439,6 @@ Function AstralWelcome
   File "/oname=$PLUGINSDIR\astral-bg.bmp" "${ASTRAL_INSTALLER_ASSETS}\background.bmp"
   File "/oname=$PLUGINSDIR\astral-icon.bmp" "${ASTRAL_INSTALLER_ASSETS}\app-icon.bmp"
 
-  nsDialogs::Create 1018
-  Pop $WelcomeDialog
-  nsDialogs::SetSize 640 460
-
   ; 隐藏传统导航按钮，只保留页面中的主安装按钮
   GetDlgItem $R0 $HWNDPARENT 1
   ShowWindow $R0 ${SW_HIDE}
@@ -448,30 +446,35 @@ Function AstralWelcome
   ShowWindow $R0 ${SW_HIDE}
   GetDlgItem $R0 $HWNDPARENT 3
   ShowWindow $R0 ${SW_HIDE}
+  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i 0, i 0, i 660, i 520, i 0x0016)'
 
-  nsDialogs::CreateBitmap 0 0 640 460
+  nsDialogs::Create 1018
+  Pop $WelcomeDialog
+
+  ${NSD_CreateBitmap} 0 0 100% 100% ""
   Pop $WelcomeBg
-  nsDialogs::SetImage $WelcomeBg "$PLUGINSDIR\astral-bg.bmp"
-  nsDialogs::CreateBitmap 272 54 96 96
+  ${NSD_SetImage} $WelcomeBg "$PLUGINSDIR\astral-bg.bmp" $WelcomeBgImage
+  ${NSD_CreateBitmap} 272 54 96 96 ""
   Pop $WelcomeIcon
-  nsDialogs::SetImage $WelcomeIcon "$PLUGINSDIR\astral-icon.bmp"
+  ${NSD_SetImage} $WelcomeIcon "$PLUGINSDIR\astral-icon.bmp" $WelcomeIconImage
 
-  nsDialogs::CreateControl "STATIC" 0x50000001 0 170 164 300 34 "Astral"
+  ${NSD_CreateLabel} 170 164 300 34 "Astral"
   Pop $R0
+  ${NSD_AddStyle} $R0 ${SS_CENTER}
   SetCtlColors $R0 0x183B63 TRANSPARENT
   CreateFont $R1 "Segoe UI" 22 600
   SendMessage $R0 0x0030 $R1 1
-  nsDialogs::CreateControl "STATIC" 0x50000001 0 120 204 400 28 "安全、自由、简洁的联机体验"
+  ${NSD_CreateLabel} 120 204 400 28 "安全、自由、简洁的联机体验"
   Pop $R0
+  ${NSD_AddStyle} $R0 ${SS_CENTER}
   SetCtlColors $R0 0x52718C TRANSPARENT
   CreateFont $R1 "Microsoft YaHei UI" 11 400
   SendMessage $R0 0x0030 $R1 1
 
-  nsDialogs::CreateButton 210 282 220 50
+  ${NSD_CreateButton} 210 282 220 50 "立即安装"
   Pop $InstallButton
   SetCtlColors $InstallButton 0xFFFFFF 0x1890FF
-  nsDialogs::SetText $InstallButton "立即安装"
-  nsDialogs::OnClick $InstallButton AstralStartInstall
+  ${NSD_OnClick} $InstallButton AstralStartInstall
 
   nsDialogs::Show
 FunctionEnd
