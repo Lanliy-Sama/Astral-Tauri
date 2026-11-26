@@ -147,6 +147,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ASTRAL_ROOT: ${{ github.workspace }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"
@@ -275,6 +276,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ASTRAL_ROOT: ${{ github.workspace }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"

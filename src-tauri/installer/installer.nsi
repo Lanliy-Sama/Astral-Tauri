@@ -71,6 +71,7 @@ ${StrLoc}
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
+!define ASTRAL_INSTALLER_ASSETS "$%ASTRAL_ROOT%\src-tauri\installer\assets"
 
 Var PassiveMode
 Var UpdateMode
@@ -172,7 +173,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
-Page custom AstralWelcome "" SkipIfPassive
+Page custom AstralWelcome
 
 ; 2. License Page (if defined)
 !if "${LICENSE}" != ""
@@ -431,9 +432,10 @@ Var AppStartMenuFolder
 !insertmacro MUI_PAGE_FINISH
 
 Function AstralWelcome
+  ${IfThen} $PassiveMode = 1 ${|} Abort ${|}
   InitPluginsDir
-  File "/oname=$PLUGINSDIR\astral-bg.bmp" "../../../../installer/assets/background.bmp"
-  File "/oname=$PLUGINSDIR\astral-icon.bmp" "../../../../installer/assets/app-icon.bmp"
+  File "/oname=$PLUGINSDIR\astral-bg.bmp" "${ASTRAL_INSTALLER_ASSETS}\background.bmp"
+  File "/oname=$PLUGINSDIR\astral-icon.bmp" "${ASTRAL_INSTALLER_ASSETS}\app-icon.bmp"
 
   nsDialogs::Create 1018
   Pop $WelcomeDialog
