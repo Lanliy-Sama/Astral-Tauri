@@ -4,6 +4,7 @@
   import Icon from '../common/Icon.svelte';
   import Switch from '../common/Switch.svelte';
   import { roomSocial } from '../../services/RoomSocial.svelte';
+  import { sm } from '../../services/ServiceManager.svelte';
   import { voiceService } from '../../services/VoiceService.svelte';
   import { watchService } from '../../services/WatchService.svelte';
   import { desktopService } from '../../services/RemoteDesktopService.svelte';
@@ -125,8 +126,8 @@
       <Icon name="podcasts" size={19} />{t('voice')}
       {#if voiceService.invites.length}<span class="tab-badge">{voiceService.invites.length}</span>{/if}
     </button>
-    <button class:selected={tab === 'watch'} onclick={() => (tab = 'watch')} role="tab">
-      <Icon name="live_tv" size={19} />{t('watch_together')}
+    <button class:selected={tab === 'desktop'} onclick={() => (tab = 'desktop')} role="tab">
+      <Icon name="desktop_windows" size={19} />远控
     </button>
     <button class:selected={tab === 'files'} onclick={() => (tab = 'files')} role="tab">
       <Icon name="folder_shared" size={19} />{t('files')}
@@ -229,11 +230,6 @@
                   <div class="member-row">
                     <span class="member-name">{member.nickname}{member.peer === channel.owner ? '（频道主）' : ''}</span>
                     {#if member.muted}<Icon name="mic_off" size={17} color="var(--md-error)" />{/if}
-                    {#if member.peer !== roomSocial.localIp}
-                      <button class="md-icon-btn compact" data-tip={t('request_desktop', { name: member.nickname })} onclick={() => desktopService.request(member)}>
-                        <Icon name="desktop_windows" size={18} color="var(--md-primary)" />
-                      </button>
-                    {/if}
                     {#if voiceService.isOwner(channel) && member.peer !== roomSocial.localIp}
                       <button class="md-icon-btn compact" data-tip={member.muted ? t('unmute') : t('mute')} onclick={() => voiceService.setMemberMuted(channel.id, member.peer, !member.muted)}>
                         <Icon name={member.muted ? 'mic' : 'mic_off'} size={18} />
@@ -283,8 +279,62 @@
           {/each}
         </div>
 
+        <section class="watch-section">
+          {#if watchService.incoming}
+            <section class="social-card watch-request">
+              <Icon name="live_tv" size={30} color="var(--md-primary)" />
+              <div class="watch-request-copy">
+                <strong>{watchService.incoming.session.host} 发起一起看</strong>
+                <span>{watchService.incoming.session.platform} · 仅接收画面，不可交互</span>
+              </div>
+              <div class="request-actions">
+                <button class="md-btn md-filled-btn" onclick={() => watchService.accept()}>同意加入</button>
+                <button class="md-btn md-text-btn" onclick={() => watchService.decline()}>拒绝</button>
+              </div>
+            </section>
+          {/if}
+
+          {#if watchService.joined && !watchService.hosting}
+            <section class="watch-stage">
+              <video bind:this={videoEl} autoplay playsinline tabindex="-1" aria-label="共享主机实时画面"></video>
+              {#if !watchService.remoteUrl}
+                <div class="video-loading"><span class="ms">cast_connected</span>正在接收共享主机画面…</div>
+              {/if}
+              <div class="watch-status">由 {watchService.session?.host} 控制 · 你只能观看，无法操作画面或视频进度</div>
+              <button class="md-btn md-text-btn" onclick={() => watchService.stop()}>退出一起看</button>
+            </section>
+          {:else if watchService.hosting}
+            <section class="social-card hosting-card">
+              <Icon name="cast" size={38} color="var(--md-primary)" />
+              <div class="hosting-title">你正在共享 {watchService.session?.platform}</div>
+              <p>请在系统采集选择器中选择刚打开的网站窗口或标签页。只有同意加入的房员能收到画面。</p>
+              <div class="guest-count">{watchService.guests.length} 位房员正在观看</div>
+              {#each watchService.guests as guest (guest.peer)}<div class="guest-row">{guest.nickname}</div>{/each}
+              <button class="md-btn md-filled-btn" onclick={() => watchService.stop()}>结束共享</button>
+            </section>
+          {:else}
+            <section class="social-card">
+              <div class="section-title"><Icon name="live_tv" size={20} />发起一起看</div>
+              <div class="site-tabs">
+                {#each videoSites as site (site.url)}
+                  <button class:selected={watchUrl === site.url} onclick={() => (watchUrl = site.url)}>{site.name}</button>
+                {/each}
+              </div>
+              <input class="social-input" bind:value={watchUrl} placeholder="https://…" aria-label="视频网站地址" />
+              <p class="watch-note">你将作为共享主机。应用打开 HTTPS 网站后，由你明确选择要采集的窗口或标签页；房员同意后才会收到实时只读画面。</p>
+              <button class="md-btn md-tonal-btn full-btn" disabled={watchService.starting || !watchUrl.startsWith('https://')} onclick={startWatch}>
+                {watchService.starting ? '等待画面采集授权…' : '申请发起一起看'}
+              </button>
+            </section>
+          {/if}
+          {#if watchService.error}<div class="error-text">{watchService.error}</div>{/if}
+          <div class="watch-disclaimer">不转发网站登录态、Cookie、DOM 或输入事件。DRM 视频和浏览器保护内容可能无法采集；同步精度取决于 TCP 媒体通道的网络状况。</div>
+        </section>
+      </div>
+    {:else if tab === 'desktop'}
+      <div class="desktop-layout">
         <section class="social-card desktop-section">
-          <div class="section-title"><Icon name="desktop_windows" size={20} />频道内远程桌面</div>
+          <div class="section-title"><Icon name="desktop_windows" size={20} />远程桌面控制</div>
           {#if desktopService.incoming}
             <div class="desktop-request">
               <strong>{desktopService.incoming.requester} 请求控制你的桌面</strong>
@@ -382,7 +432,19 @@
               <div class="desktop-control-hint">你正在共享并允许对方控制。结束会话会立即停止画面与全部输入权限。</div>
             {/if}
           {:else}
-            <p class="desktop-help">点击频道成员旁的桌面图标发起请求。只有对方手动同意后才会建立一对一控制连接。</p>
+            <p class="desktop-help">选择房员发起一对一请求。只有对方手动同意并选择采集画面后，才会共享画面与控制权限。</p>
+            <div class="desktop-member-list">
+              {#each roomSocial.members as member (member.peer)}
+                <div class="desktop-member-row">
+                  <span class="member-name">{member.nickname}</span>
+                  <button class="md-btn md-tonal-btn compact-btn" onclick={() => desktopService.request(member)}>
+                    <Icon name="desktop_windows" size={18} />请求远控
+                  </button>
+                </div>
+              {:else}
+                <div class="empty-state"><Icon name="desktop_windows" size={40} color="var(--md-outline)" /><span>暂无可请求远控的房员</span></div>
+              {/each}
+            </div>
           {/if}
           {#if desktopService.error}<div class="error-text">{desktopService.error}</div>{/if}
         </section>
@@ -430,58 +492,6 @@
           {/each}
         </div>
       </div>
-    {:else}
-      <div class="watch-layout">
-        {#if watchService.incoming}
-          <section class="social-card watch-request">
-            <Icon name="live_tv" size={30} color="var(--md-primary)" />
-            <div class="watch-request-copy">
-              <strong>{watchService.incoming.session.host} 发起一起看</strong>
-              <span>{watchService.incoming.session.platform} · 仅接收画面，不可交互</span>
-            </div>
-            <div class="request-actions">
-              <button class="md-btn md-filled-btn" onclick={() => watchService.accept()}>同意加入</button>
-              <button class="md-btn md-text-btn" onclick={() => watchService.decline()}>拒绝</button>
-            </div>
-          </section>
-        {/if}
-
-        {#if watchService.joined && !watchService.hosting}
-          <section class="watch-stage">
-            <video bind:this={videoEl} autoplay playsinline tabindex="-1" aria-label="共享主机实时画面"></video>
-            {#if !watchService.remoteUrl}
-              <div class="video-loading"><span class="ms">cast_connected</span>正在接收共享主机画面…</div>
-            {/if}
-            <div class="watch-status">由 {watchService.session?.host} 控制 · 你只能观看，无法操作画面或视频进度</div>
-            <button class="md-btn md-text-btn" onclick={() => watchService.stop()}>退出一起看</button>
-          </section>
-        {:else if watchService.hosting}
-          <section class="social-card hosting-card">
-            <Icon name="cast" size={38} color="var(--md-primary)" />
-            <div class="hosting-title">你正在共享 {watchService.session?.platform}</div>
-            <p>请在系统采集选择器中选择刚打开的网站窗口或标签页。只有同意加入的房员能收到画面。</p>
-            <div class="guest-count">{watchService.guests.length} 位房员正在观看</div>
-            {#each watchService.guests as guest (guest.peer)}<div class="guest-row">{guest.nickname}</div>{/each}
-            <button class="md-btn md-filled-btn" onclick={() => watchService.stop()}>结束共享</button>
-          </section>
-        {:else}
-          <section class="social-card">
-            <div class="section-title"><Icon name="live_tv" size={20} />发起一起看</div>
-            <div class="site-tabs">
-              {#each videoSites as site (site.url)}
-                <button class:selected={watchUrl === site.url} onclick={() => (watchUrl = site.url)}>{site.name}</button>
-              {/each}
-            </div>
-            <input class="social-input" bind:value={watchUrl} placeholder="https://…" aria-label="视频网站地址" />
-            <p class="watch-note">你将作为共享主机。应用打开 HTTPS 网站后，由你明确选择要采集的窗口或标签页；房员同意后才会收到实时只读画面。</p>
-            <button class="md-btn md-tonal-btn full-btn" disabled={watchService.starting || !watchUrl.startsWith('https://')} onclick={startWatch}>
-              {watchService.starting ? '等待画面采集授权…' : '申请发起一起看'}
-            </button>
-          </section>
-        {/if}
-        {#if watchService.error}<div class="error-text">{watchService.error}</div>{/if}
-        <div class="watch-disclaimer">不转发网站登录态、Cookie、DOM 或输入事件。DRM 视频和浏览器保护内容可能无法采集；同步精度取决于 TCP 媒体通道的网络状况。</div>
-      </div>
     {/if}
   </div>
 </aside>
@@ -527,7 +537,7 @@
   .social-tabs button.selected { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
   .tab-badge { min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 9px; background: var(--md-error); color: var(--md-on-error); font-size: 10px; }
   .panel-body { flex: 1; min-height: 0; overflow: hidden; }
-  .chat-layout, .voice-layout, .watch-layout, .files-layout { height: 100%; }
+  .chat-layout, .voice-layout, .desktop-layout, .files-layout { height: 100%; }
   .files-layout { overflow-y: auto; padding: 2px 12px 20px; }
   .file-share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .file-share-head p { margin: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: 16px; }
@@ -552,7 +562,8 @@
   .chat-compose { display: flex; align-items: flex-end; gap: 10px; padding: 10px 14px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--md-outline-variant); }
   .chat-compose textarea { flex: 1; min-width: 0; height: 54px; max-height: 110px; resize: vertical; padding: 10px 12px; border: 1px solid var(--md-outline-variant); border-radius: 15px; background: var(--md-surface-container-low); outline: none; user-select: text; }
   .chat-compose textarea:focus { border-color: var(--md-primary); }
-  .voice-layout, .watch-layout { overflow-y: auto; padding: 2px 12px 20px; }
+  .voice-layout, .desktop-layout { overflow-y: auto; padding: 2px 12px 20px; }
+  .watch-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--md-outline-variant); }
   .social-card { padding: 14px; margin-bottom: 10px; border: 1px solid var(--md-outline-variant); border-radius: 18px; background: color-mix(in srgb, var(--md-surface-container-low) 88%, transparent); }
   .section-title { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; font-size: 14px; font-weight: 700; }
   .social-input { width: 100%; min-height: 40px; margin-bottom: 9px; padding: 8px 11px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface); color: var(--md-on-surface); outline: none; user-select: text; }
@@ -586,7 +597,10 @@
   .site-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
   .site-tabs button { height: 34px; border: 1px solid var(--md-outline-variant); border-radius: 11px; background: transparent; color: var(--md-on-surface); cursor: pointer; }
   .site-tabs button.selected { background: var(--md-secondary-container); border-color: transparent; }
-  .desktop-section { margin-top: 14px; }
+  .desktop-section { margin-top: 0; }
+  .desktop-member-list { margin-top: 12px; }
+  .desktop-member-row { min-height: 48px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--md-outline-variant); }
+  .desktop-member-row .md-btn { display: inline-flex; align-items: center; gap: 5px; }
   .desktop-request strong, .desktop-session-head strong { font-size: 13px; line-height: 19px; }
   .desktop-request p, .desktop-help { margin: 8px 0 12px; color: var(--md-on-surface-variant); font-size: 11px; line-height: 18px; }
   .desktop-pending { padding: 8px 0; color: var(--md-primary); font-size: 12px; }

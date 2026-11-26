@@ -65,6 +65,7 @@
         "type": "downloadBootstrapper"
       },
       "nsis": {
+        "template": "installer/installer.nsi",
         "installMode": "perMachine",
         "installerIcon": "icons/icon.ico",
         "headerImage": "resources/installer/header.bmp",
