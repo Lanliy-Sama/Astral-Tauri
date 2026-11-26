@@ -68,8 +68,6 @@
         "template": "installer/installer.nsi",
         "installMode": "perMachine",
         "installerIcon": "icons/icon.ico",
-        "headerImage": "resources/installer/header.bmp",
-        "sidebarImage": "resources/installer/sidebar.bmp",
         "languages": [
           "SimpChinese"
         ],

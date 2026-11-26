@@ -7,30 +7,72 @@ $root = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $output = Join-Path $root 'src-tauri/installer/assets'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 
+# Clean pastel canvas with restrained decorative shapes.
 $background = [System.Drawing.Bitmap]::new(640, 460, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
 $graphics = [System.Drawing.Graphics]::FromImage($background)
+$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 $rectangle = [System.Drawing.Rectangle]::new(0, 0, 640, 460)
 $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
   $rectangle,
-  [System.Drawing.Color]::FromArgb(255, 255, 244, 236),
-  [System.Drawing.Color]::FromArgb(232, 248, 255),
+  [System.Drawing.Color]::FromArgb(255, 246, 251, 255),
+  [System.Drawing.Color]::FromArgb(255, 246, 241, 253),
   [System.Drawing.Drawing2D.LinearGradientMode]::ForwardDiagonal
 )
 $graphics.FillRectangle($brush, $rectangle)
-$background.Save((Join-Path $output 'background.bmp'), [System.Drawing.Imaging.ImageFormat]::Bmp)
 $brush.Dispose()
+
+$glow = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(52, 80, 210, 235))
+$graphics.FillEllipse($glow, 430, -145, 350, 350)
+$glow.Dispose()
+$glow = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(36, 150, 116, 230))
+$graphics.FillEllipse($glow, -175, 295, 380, 260)
+$glow.Dispose()
+$glow = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(24, 35, 190, 180))
+$graphics.FillEllipse($glow, 45, 52, 12, 12)
+$graphics.FillEllipse($glow, 574, 342, 9, 9)
+$graphics.FillEllipse($glow, 530, 78, 6, 6)
+$glow.Dispose()
+$background.Save((Join-Path $output 'background.bmp'), [System.Drawing.Imaging.ImageFormat]::Bmp)
 $graphics.Dispose()
 $background.Dispose()
 
-$source = [System.Drawing.Image]::FromFile((Join-Path $root 'app-icon.png'))
+# Redraw the application mark as a rounded teal-to-blue tile.
 $icon = [System.Drawing.Bitmap]::new(96, 96, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
 $graphics = [System.Drawing.Graphics]::FromImage($icon)
-$graphics.Clear([System.Drawing.Color]::Black)
-$graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$graphics.DrawImage($source, 0, 0, 96, 96)
+$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$graphics.Clear([System.Drawing.Color]::FromArgb(244, 248, 253))
+
+$path = [System.Drawing.Drawing2D.GraphicsPath]::new()
+$path.AddArc(8, 8, 36, 36, 180, 90)
+$path.AddArc(52, 8, 36, 36, 270, 90)
+$path.AddArc(52, 52, 36, 36, 0, 90)
+$path.AddArc(8, 52, 36, 36, 90, 90)
+$path.CloseFigure()
+$iconRectangle = [System.Drawing.Rectangle]::new(8, 8, 80, 80)
+$iconBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+  $iconRectangle,
+  [System.Drawing.Color]::FromArgb(255, 26, 190, 177),
+  [System.Drawing.Color]::FromArgb(255, 55, 108, 235),
+  [System.Drawing.Drawing2D.LinearGradientMode]::ForwardDiagonal
+)
+$graphics.FillPath($iconBrush, $path)
+$iconBrush.Dispose()
+$path.Dispose()
+
+$pen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(235, 255, 255, 255), 4.5)
+$pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+$pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+$graphics.DrawLine($pen, 48, 35, 31, 65)
+$graphics.DrawLine($pen, 48, 35, 66, 65)
+$pen.Dispose()
+$node = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+$graphics.FillEllipse($node, 37, 23, 23, 23)
+$graphics.FillEllipse($node, 21, 55, 20, 20)
+$graphics.FillEllipse($node, 56, 55, 20, 20)
+$node.Dispose()
+
 $icon.Save((Join-Path $output 'app-icon.bmp'), [System.Drawing.Imaging.ImageFormat]::Bmp)
 $graphics.Dispose()
 $icon.Dispose()
-$source.Dispose()
 
 Write-Host "Astral NSIS assets generated in $output"

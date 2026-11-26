@@ -86,7 +86,7 @@ Var WelcomeIconImage
 Var InstallButton
 
 Name "${PRODUCTNAME}"
-BrandingText "${COPYRIGHT}"
+BrandingText "Astral"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -454,28 +454,36 @@ Function AstralWelcome
   ${NSD_CreateBitmap} 0 0 100% 100% ""
   Pop $WelcomeBg
   ${NSD_SetImage} $WelcomeBg "$PLUGINSDIR\astral-bg.bmp" $WelcomeBgImage
-  ${NSD_CreateBitmap} 272 54 96 96 ""
+  ${NSD_CreateBitmap} 272 44 96 96 ""
   Pop $WelcomeIcon
   ${NSD_SetImage} $WelcomeIcon "$PLUGINSDIR\astral-icon.bmp" $WelcomeIconImage
 
-  ${NSD_CreateLabel} 170 164 300 34 "Astral"
+  ${NSD_CreateLabel} 170 152 300 40 "Astral"
   Pop $R0
   ${NSD_AddStyle} $R0 ${SS_CENTER}
-  SetCtlColors $R0 0x183B63 TRANSPARENT
-  CreateFont $R1 "Segoe UI" 22 600
+  SetCtlColors $R0 0x17324D TRANSPARENT
+  CreateFont $R1 "Segoe UI" 25 600
   SendMessage $R0 0x0030 $R1 1
-  ${NSD_CreateLabel} 120 204 400 28 "安全、自由、简洁的联机体验"
+  ${NSD_CreateLabel} 120 202 400 28 "安全、自由、简洁的联机体验"
   Pop $R0
   ${NSD_AddStyle} $R0 ${SS_CENTER}
-  SetCtlColors $R0 0x52718C TRANSPARENT
+  SetCtlColors $R0 0x60758A TRANSPARENT
   CreateFont $R1 "Microsoft YaHei UI" 11 400
   SendMessage $R0 0x0030 $R1 1
 
-  ${NSD_CreateButton} 210 282 220 50 "立即安装"
+  ${NSD_CreateButton} 210 270 220 50 "立即安装"
   Pop $InstallButton
-  SetCtlColors $InstallButton 0xFFFFFF 0x1890FF
+  System::Call 'uxtheme::SetWindowTheme(p $InstallButton, w " ", w " ")'
+  SetCtlColors $InstallButton 0xFFFFFF 0x1677E8
+  CreateFont $R1 "Microsoft YaHei UI" 12 600
+  SendMessage $InstallButton 0x0030 $R1 1
+  ShowWindow $InstallButton ${SW_SHOW}
+  EnableWindow $InstallButton 1
   ${NSD_OnClick} $InstallButton AstralStartInstall
 
+  ; 背景必须置于最底层，否则会遮住图标、文字和安装按钮
+  System::Call 'user32::SetWindowPos(p $WelcomeBg, p 1, i 0, i 0, i 0, i 0, i 0x0013)'
+  System::Call 'user32::BringWindowToTop(p $InstallButton)'
   nsDialogs::Show
 FunctionEnd
 
