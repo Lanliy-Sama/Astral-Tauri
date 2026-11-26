@@ -211,6 +211,7 @@ export class BgmState {
   lyricLines = $state(null);      // 当前曲目歌词 [{t,l}]（在线曲目从平台拉取）
   lyricFound = $state(false);
   lyricsFullScreen = $state(false);
+  playbackMode = $state('sequence'); // sequence / random / loop
   smtcEnabled = $state(true); // 系统媒体控制（SMTC / MPRIS / Now Playing）
   /* 房间音乐账号权限：仅共享搜索/播放能力，不共享登录凭据 */
   roomShare = $state({ netease: true, qq: true, kugou: true });
@@ -940,6 +941,7 @@ class ServiceManager {
     this.bgmState.enabled = s.bgmEnabled === true;
     this.bgmState.lyricCapsuleEnabled = s.lyricCapsuleEnabled !== false;
     this.bgmState.smtcEnabled = s.smtcEnabled !== false;
+    this.bgmState.playbackMode = ['sequence', 'random', 'loop'].includes(s.playbackMode) ? s.playbackMode : 'sequence';
     this.bgmState.roomShare = {
       netease: s.roomShare?.netease !== false,
       qq: s.roomShare?.qq !== false,
@@ -1008,6 +1010,12 @@ class ServiceManager {
   async updateSmtcEnabled(v) {
     this.bgmState.smtcEnabled = v;
     await this._persistSettings({ smtcEnabled: v });
+  }
+
+  async updatePlaybackMode(mode) {
+    if (!['sequence', 'random', 'loop'].includes(mode)) return;
+    this.bgmState.playbackMode = mode;
+    await this._persistSettings({ playbackMode: mode });
   }
 
   async updateMusicShare(platform, enabled) {

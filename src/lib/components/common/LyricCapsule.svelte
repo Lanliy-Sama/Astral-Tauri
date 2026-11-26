@@ -13,6 +13,7 @@
   import { voiceService } from '../../services/VoiceService.svelte';
   import FullscreenLyricsPage from './FullscreenLyricsPage.svelte';
   import { pushPage } from '../../router/PageRouter.svelte';
+  import { t } from '../../i18n/I18n.svelte';
 
   let lineIdx = $state(-1);
   let expanded = $state(false);
@@ -33,6 +34,14 @@
     const local = sm.bgmState.tracks.find((x) => x.trackId === sm.bgmState.trackId);
     return local ? local.name : '';
   });
+
+  const modeLabel = $derived(sm.bgmState.playbackMode === 'random' ? t('mode_random') : sm.bgmState.playbackMode === 'loop' ? t('mode_loop') : t('mode_sequence'));
+  const modeIcon = $derived(sm.bgmState.playbackMode === 'random' ? 'shuffle' : sm.bgmState.playbackMode === 'loop' ? 'repeat_one' : 'repeat');
+
+  function cyclePlaybackMode() {
+    const next = sm.bgmState.playbackMode === 'sequence' ? 'random' : sm.bgmState.playbackMode === 'random' ? 'loop' : 'sequence';
+    sm.updatePlaybackMode(next);
+  }
 
   $effect(() => {
     const track = sm.bgmState.onlineTrack;
@@ -213,14 +222,14 @@
 
     {#if expanded && active && !invitation}
       <div class="controls" onclick={(e) => e.stopPropagation()}>
-        <button class="control-btn" data-tip="上一首" aria-label="上一首" onclick={bgmPrevious}>
+        <button class="control-btn" data-tip={t('previous')} aria-label={t('previous')} onclick={bgmPrevious}>
           <span class="ms filled">skip_previous</span>
         </button>
-        <button class="control-btn primary" aria-label={sm.bgmState.playing ? '暂停' : '播放'} onclick={bgmToggleAny}>
+        <button class="control-btn primary" aria-label={sm.bgmState.playing ? t('pause') : t('play')} onclick={bgmToggleAny}>
           <span class="ms filled">{sm.bgmState.playing ? 'pause' : 'play_arrow'}</span>
         </button>
-        <button class="control-btn" data-tip="下一首" aria-label="下一首" onclick={bgmNext}>
-          <span class="ms filled">skip_next</span>
+        <button class="control-btn" data-tip={modeLabel} aria-label={modeLabel} onclick={cyclePlaybackMode}>
+          <span class="ms filled">{modeIcon}</span>
         </button>
       </div>
     {/if}

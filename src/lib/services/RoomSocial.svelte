@@ -327,6 +327,7 @@
           platform: track.platform, key: track.key, id: track.id,
           mediaMid: track.mediaMid || '', title: track.title || '',
           artists: track.artists || [], durationMs: track.durationMs || 0,
+          vip: track.vip === true,
           cover: track.cover || '', albumId: track.albumId || '', albumAudioId: track.albumAudioId || '',
         },
       }, 35000);

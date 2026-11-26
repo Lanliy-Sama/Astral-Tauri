@@ -330,5 +330,9 @@
   "desktop_rejected": "对方拒绝了远程桌面请求",
   "desktop_ended": "远程桌面会话已结束",
   "watch_ended": "共享主机已结束一起看",
-  "unsupported_remote_input": "当前平台暂不支持远程桌面输入"
+  "unsupported_remote_input": "当前平台暂不支持远程桌面输入",
+  "playback_mode": "播放模式",
+  "mode_sequence": "列表顺序",
+  "mode_random": "列表随机",
+  "mode_loop": "单曲循环"
 }

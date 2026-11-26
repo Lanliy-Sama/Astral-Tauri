@@ -330,5 +330,9 @@
   "desktop_rejected": "The remote desktop request was rejected",
   "desktop_ended": "Remote desktop session ended",
   "watch_ended": "The host ended Watch Together",
-  "unsupported_remote_input": "Remote desktop input is not supported on this platform"
+  "unsupported_remote_input": "Remote desktop input is not supported on this platform",
+  "playback_mode": "Playback Mode",
+  "mode_sequence": "Sequential",
+  "mode_random": "Shuffle",
+  "mode_loop": "Repeat One"
 }

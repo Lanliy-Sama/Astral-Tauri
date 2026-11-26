@@ -8,7 +8,6 @@
   import PortWhitelistPage from './PortWhitelistPage.svelte';
   import NatTestPage from '$lib/components/nat/NatTestPage.svelte';
   import PersonalizationSection from './PersonalizationSection.svelte';
-  import MusicPlatformPage from '$lib/components/settings/MusicPlatformPage.svelte';
   import { pushPage } from '$lib/router/PageRouter.svelte';
   import { isWindows } from '$lib/utils/Platform.svelte';
   import { t } from '$lib/i18n/I18n.svelte';
@@ -111,23 +110,6 @@
     >{t('personalization')}</div>
 
     <PersonalizationSection />
-
-    <div
-      class="md-card tool-card"
-      role="button"
-      tabindex="0"
-      onclick={go(MusicPlatformPage)}
-      onkeydown={(e) => onCardKeydown(e, MusicPlatformPage)}
-    >
-      <div class="md-list-tile two-line tool-tile">
-        <span class="tile-leading"><Icon name="album" size={24} color="var(--md-primary)" /></span>
-        <span class="tile-content">
-          <span class="tile-title" style="font-weight:500">{t('room_music')}</span>
-          <span class="tile-subtitle" style="font-size:12px; line-height:16px">{t('room_music_desc')}</span>
-        </span>
-        <span class="tile-trailing"><Icon name="chevron_right" color="var(--md-on-surface-variant)" /></span>
-      </div>
-    </div>
 
     <div class="end-spacer"></div>
   </div>

@@ -14,6 +14,13 @@
   const title = $derived(online?.title || local?.name || t('no_music_playing'));
   const artist = $derived(online?.artists?.join(' / ') || (local ? t('local_music') : t('select_song_to_play')));
   const cover = $derived(online?.cover || '');
+  const modeLabel = $derived(sm.bgmState.playbackMode === 'random' ? t('mode_random') : sm.bgmState.playbackMode === 'loop' ? t('mode_loop') : t('mode_sequence'));
+  const modeIcon = $derived(sm.bgmState.playbackMode === 'random' ? 'shuffle' : sm.bgmState.playbackMode === 'loop' ? 'repeat_one' : 'repeat');
+
+  function cyclePlaybackMode() {
+    const next = sm.bgmState.playbackMode === 'sequence' ? 'random' : sm.bgmState.playbackMode === 'random' ? 'loop' : 'sequence';
+    sm.updatePlaybackMode(next);
+  }
   const lines = $derived(sm.bgmState.lyricLines || []);
 
   function updateLine() {
@@ -80,6 +87,10 @@
           <Icon name={sm.bgmState.playing ? 'pause' : 'play_arrow'} size={34} filled />
         </button>
         <button class="md-icon-btn" aria-label={t('next')} onclick={bgmNext}><Icon name="skip_next" filled /></button>
+        <button class="mode-toggle" data-tip={modeLabel} aria-label={modeLabel} onclick={cyclePlaybackMode}>
+          <Icon name={modeIcon} size={20} filled />
+          <span>{modeLabel}</span>
+        </button>
       </div>
     </section>
 
@@ -127,6 +138,9 @@
   .track-artist { margin-top: 6px; color: var(--md-on-surface-variant); font-size: 13px; }
   .fullscreen-controls { display: flex; align-items: center; gap: 24px; }
   .play-toggle { width: 62px; height: 62px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--md-primary); color: var(--md-on-primary); cursor: pointer; box-shadow: 0 6px 20px var(--md-primary-02); transition: transform 180ms ease, box-shadow 180ms ease; }
+  .mode-toggle { height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--md-outline-variant); border-radius: 999px; background: transparent; color: var(--md-primary); cursor: pointer; font-size: 11px; transition: background 160ms ease, transform 160ms ease; }
+  .mode-toggle:hover { background: var(--md-primary-06); }
+  .mode-toggle:active { transform: scale(0.95); }
   .play-toggle:hover { transform: scale(1.06); }
   .play-toggle:active { transform: scale(0.94); }
   .lyrics-scroll { min-height: 0; overflow-y: auto; padding: 0 clamp(20px, 5vw, 70px); scroll-behavior: smooth; }

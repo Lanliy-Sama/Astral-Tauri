@@ -83,6 +83,13 @@
     }, 60);
   }
 
+  function randomQueueIndex(length, current) {
+    if (length <= 1) return 0;
+    let index = Math.floor(Math.random() * length);
+    if (index === current) index = (index + 1) % length;
+    return index;
+  }
+
   function ensureAudio() {
     if (audioEl) return audioEl;
     audioEl = new Audio();
@@ -94,6 +101,29 @@
     // 播完自动切下一首（一起听成员先请求主机，普通播放使用本地队列）
     audioEl.addEventListener('ended', () => {
       import('./RoomListen.svelte').then(({ roomListen }) => {
+        if (sm.bgmState.playbackMode === 'loop') {
+          if (sm.bgmState.onlineTrack) {
+            bgmPlayOnlineTrack(sm.bgmState.onlineTrack);
+          } else {
+            const current = sm.bgmState.tracks.findIndex((t) => t.trackId === sm.bgmState.trackId);
+            if (current >= 0) bgmPlayTrack(current);
+          }
+          return;
+        }
+        if (sm.bgmState.playbackMode === 'random') {
+          if (sm.bgmState.onlineTrack) {
+            const queue = sm.bgmState.onlineQueue;
+            if (queue.length) {
+              const index = randomQueueIndex(queue.length, sm.bgmState.onlineIndex);
+              sm.bgmState.onlineIndex = index;
+              bgmPlayOnlineTrack(queue[index]);
+            }
+          } else if (sm.bgmState.tracks.length) {
+            const current = sm.bgmState.tracks.findIndex((t) => t.trackId === sm.bgmState.trackId);
+            bgmPlayTrack(randomQueueIndex(sm.bgmState.tracks.length, current));
+          }
+          return;
+        }
         if (roomListen.handleLocalAction('next')) return;
         if (sm.bgmState.onlineTrack) {
           bgmPlayOnlineNext();
@@ -286,7 +316,9 @@
       sm.bgmState.playing = false;
       return;
     }
-    const next = (sm.bgmState.onlineIndex + 1) % queue.length;
+    const next = sm.bgmState.playbackMode === 'random'
+      ? randomQueueIndex(queue.length, sm.bgmState.onlineIndex)
+      : (sm.bgmState.onlineIndex + 1) % queue.length;
     sm.bgmState.onlineIndex = next;
     await bgmPlayOnlineTrack(queue[next]);
   }
@@ -326,7 +358,10 @@
     }
     const tracks = sm.bgmState.tracks;
     if (!tracks.length) return;
-    await bgmPlayTrack((bgmCurrentIndex() + 1 + tracks.length) % tracks.length);
+    const next = sm.bgmState.playbackMode === 'random'
+      ? randomQueueIndex(tracks.length, bgmCurrentIndex())
+      : (bgmCurrentIndex() + 1 + tracks.length) % tracks.length;
+    await bgmPlayTrack(next);
   }
 
   export async function bgmPrevious() {
@@ -339,14 +374,19 @@
     if (sm.bgmState.onlineTrack) {
       const queue = sm.bgmState.onlineQueue;
       if (!queue.length) return;
-      const previous = (sm.bgmState.onlineIndex - 1 + queue.length) % queue.length;
+      const previous = sm.bgmState.playbackMode === 'random'
+        ? randomQueueIndex(queue.length, sm.bgmState.onlineIndex)
+        : (sm.bgmState.onlineIndex - 1 + queue.length) % queue.length;
       sm.bgmState.onlineIndex = previous;
       await bgmPlayOnlineTrack(queue[previous]);
       return;
     }
     const tracks = sm.bgmState.tracks;
     if (!tracks.length) return;
-    await bgmPlayTrack((bgmCurrentIndex() - 1 + tracks.length) % tracks.length);
+    const previous = sm.bgmState.playbackMode === 'random'
+      ? randomQueueIndex(tracks.length, bgmCurrentIndex())
+      : (bgmCurrentIndex() - 1 + tracks.length) % tracks.length;
+    await bgmPlayTrack(previous);
   }
 
   /** 关闭在线播放（切回本地歌单模式时清状态） */

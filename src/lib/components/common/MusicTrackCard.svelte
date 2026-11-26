@@ -12,7 +12,10 @@
     const seconds = Math.floor((track.durationMs || 0) / 1000);
     return seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : '';
   });
-  const platformName = $derived(({ netease: '网易云', qq: 'QQ 音乐', kugou: '酷狗', local: '本地' })[track.platform] || track.platform || '音乐');
+  const platformName = $derived.by(() => {
+    const base = ({ netease: '网易云', qq: 'QQ 音乐', kugou: '酷狗', local: '本地' })[track.platform] || track.platform || '音乐';
+    return track.vip ? `${base}VIP` : base;
+  });
 
   $effect(() => {
     void track.cover;
@@ -50,7 +53,7 @@
         <Icon name={track.platform === 'local' ? 'audio_file' : 'album'} size={54} color="rgba(255,255,255,.9)" />
       </div>
     {/if}
-    <span class="platform-chip">{platformName}</span>
+    <span class="platform-chip" class:vip={track.vip}>{platformName}</span>
     {#if duration}<span class="duration-chip">{duration}</span>{/if}
     <span class="card-play">
       <Icon name={isCurrent && sm.bgmState.playing ? 'pause' : 'play_arrow'} size={30} color="#fff" filled />
@@ -96,6 +99,7 @@
   .placeholder-ring { position: absolute; width: 68%; aspect-ratio: 1; border: 1px solid rgb(255 255 255 / 0.18); border-radius: 50%; box-shadow: 0 0 0 28px rgb(255 255 255 / 0.04), 0 0 0 58px rgb(255 255 255 / 0.03); }
   .platform-chip, .duration-chip { position: absolute; top: 10px; padding: 4px 8px; border-radius: 9px; background: rgb(15 15 20 / 0.55); color: #fff; font-size: 10px; backdrop-filter: blur(10px); }
   .platform-chip { left: 10px; }
+  .platform-chip.vip { background: rgb(142 82 0 / 0.76); color: #fff3c4; }
   .duration-chip { right: 10px; font-variant-numeric: tabular-nums; }
   .card-play { position: absolute; right: 12px; bottom: 12px; width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid rgb(255 255 255 / 0.45); border-radius: 50%; background: rgb(20 20 25 / 0.48); box-shadow: 0 5px 18px rgb(0 0 0 / 0.25), inset 0 1px 1px rgb(255 255 255 / 0.35); backdrop-filter: blur(12px); opacity: 0.9; transform: scale(0.94); transition: transform 180ms ease, opacity 180ms ease; }
   .music-track-card:hover .card-play, .music-track-card.current .card-play { opacity: 1; transform: scale(1); }

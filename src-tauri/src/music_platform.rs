@@ -529,6 +529,8 @@ mod netease {
             "id": id.to_string(),
             "title": v["name"].as_str().unwrap_or_default(),
             "artists": artists,
+            "vip": v["fee"].as_i64().map(|fee| matches!(fee, 1 | 4)).unwrap_or(false)
+                || v["payed"].as_i64().unwrap_or(0) > 0,
             "durationMs": v["duration"].as_i64().or_else(|| v["dt"].as_i64()).unwrap_or(0),
             "cover": v["album"]["picUrl"].as_str()
                 .or_else(|| v["al"]["picUrl"].as_str())
@@ -786,6 +788,10 @@ mod qq {
                     .or_else(|| s["album"]["mid"].as_str())
                     .unwrap_or_default()
                     .to_string();
+                let vip = s["pay"]["payplay"].as_i64().unwrap_or(0) > 0
+                    || s["pay"]["payplay_vip"].as_i64().unwrap_or(0) > 0
+                    || s["pay"]["payplay_down"].as_i64().unwrap_or(0) > 0
+                    || s["vip"].as_bool().unwrap_or(false);
                 out.push(json!({
                     "key": format!("qq:{mid}"),
                     "platform": "qq",
@@ -793,6 +799,7 @@ mod qq {
                     "mediaMid": media_mid,
                     "title": s["songname"].as_str().unwrap_or_default(),
                     "artists": artists,
+                    "vip": vip,
                     "durationMs": s["interval"].as_i64().unwrap_or(0) * 1000,
                     "cover": if album_mid.is_empty() { String::new() } else {
                         format!("https://y.gtimg.cn/music/photo_new/T002R300x300M000{album_mid}.jpg")
@@ -2195,12 +2202,17 @@ mod kugou {
                     .or_else(|| s["trans_param"]["sizable_cover"].as_str())
                     .unwrap_or_default()
                     .replace("{size}", "300");
+                let vip = s["pay_type"].as_i64().unwrap_or(0) > 0
+                    || s["privilege"].as_i64().unwrap_or(0) > 0
+                    || s["vip"].as_bool().unwrap_or(false)
+                    || s["trans_param"]["pay_type"].as_i64().unwrap_or(0) > 0;
                 out.push(json!({
                     "key": format!("kugou:{hash}"),
                     "platform": "kugou",
                     "id": hash,
                     "title": title,
                     "artists": artists,
+                    "vip": vip,
                     "durationMs": ms,
                     "cover": cover,
                     "albumId": album_id,
