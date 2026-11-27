@@ -22,6 +22,21 @@
     sm.updatePlaybackMode(next);
   }
   const lines = $derived(sm.bgmState.lyricLines || []);
+  const currentPlatform = $derived(online?.platform || 'netease');
+  const qualityOptions = $derived.by(() => {
+    const options = [
+      { value: 'standard', label: t('quality_standard') },
+      { value: 'high', label: t('quality_high') },
+      { value: 'lossless', label: t('quality_lossless') },
+    ];
+    const vipRequired = currentPlatform === 'qq' ? ['high', 'lossless'] : ['lossless'];
+    return sm.bgmState.accountVip[currentPlatform] === true ? options : options.filter((option) => !vipRequired.includes(option.value));
+  });
+
+  function auxiliary(line, key) {
+    if (!line || /[\u3400-\u9fff]/.test(line.l || '')) return '';
+    return line[key] || '';
+  }
 
   function updateLine() {
     if (!lines.length) { lineIdx = -1; return; }
@@ -92,6 +107,18 @@
           <span>{modeLabel}</span>
         </button>
       </div>
+      {#if sm.appSettingsState.experimentalFeatures}
+        <label class="quality-setting">
+          <Icon name="high_quality" size={20} color="var(--md-primary)" />
+          <span>{t('audio_quality')}</span>
+          <select value={sm.musicQualityFor(currentPlatform)} onchange={(event) => sm.updateMusicQuality(event.currentTarget.value, currentPlatform)}>
+            {#each qualityOptions as option (option.value)}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
+          <small>{t('quality_next_track')}</small>
+        </label>
+      {/if}
     </section>
 
     <section class="lyrics-scroll" aria-label={t('scroll_lyrics')} bind:this={lyricsScrollEl}>
@@ -104,7 +131,11 @@
             class:passed={index < lineIdx}
             data-active={index === lineIdx}
             onclick={() => bgmSeek(line.t / 1000)}
-          >{line.l}</button>
+          >
+            <span class="lyric-original">{line.l}</span>
+            {#if auxiliary(line, 'tr')}<span class="lyric-aux">{auxiliary(line, 'tr')}</span>{/if}
+            {#if auxiliary(line, 'ro')}<span class="lyric-aux romanized">{auxiliary(line, 'ro')}</span>{/if}
+          </button>
         {/each}
         <div class="lyrics-spacer"></div>
       {:else}
@@ -149,6 +180,12 @@
   .lyric-row:hover { background: var(--md-primary-06); }
   .lyric-row.active { color: var(--md-primary); font-weight: 700; transform: translateX(8px); background: var(--md-primary-06); }
   .lyric-row.passed { opacity: 0.48; }
+  .lyric-original, .lyric-aux { display: block; }
+  .lyric-aux { margin-top: 2px; font-size: .62em; line-height: 1.45; font-weight: 400; opacity: .72; }
+  .lyric-aux.romanized { font-size: .56em; opacity: .58; }
+  .quality-setting { max-width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7px; color: var(--md-on-surface-variant); font-size: 12px; }
+  .quality-setting select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--md-outline-variant); border-radius: 10px; background: var(--md-surface-container-low); color: var(--md-on-surface); }
+  .quality-setting small { flex-basis: 100%; text-align: center; font-size: 10px; opacity: .72; }
   .no-lyrics { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--md-on-surface-variant); }
   .no-lyrics small { opacity: 0.7; }
   @keyframes vinyl-spin { to { transform: rotate(360deg); } }

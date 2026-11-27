@@ -168,7 +168,7 @@
         try {
           const status = await invoke('music_status', { platform });
           if (status?.loggedIn) {
-            list.push({ platform, nickname: status.nickname || sm.playerState.playerName || PLATFORM_LABELS[platform] });
+            list.push({ platform, nickname: status.nickname || sm.playerState.playerName || PLATFORM_LABELS[platform], vip: status.vip === true });
           }
         } catch { /* 未登录平台不广播 */ }
       }
@@ -258,6 +258,7 @@
           owner: message.sender || '房员',
           accountName: a.nickname || message.sender || PLATFORM_LABELS[a.platform],
           platform: a.platform,
+          accountVip: a.vip === true,
           label: PLATFORM_LABELS[a.platform] || a.platform,
           lastSeen: now,
         }));
@@ -353,6 +354,7 @@
           mediaMid: track.mediaMid || '', title: track.title || '',
           artists: track.artists || [], durationMs: track.durationMs || 0,
           vip: track.vip === true,
+          quality: sm.musicQualityFor(track.platform, track.sourceAccount?.accountVip),
           cover: track.cover || '', albumId: track.albumId || '', albumAudioId: track.albumAudioId || '',
         },
       }, 35000);

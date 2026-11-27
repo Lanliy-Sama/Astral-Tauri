@@ -33,7 +33,19 @@ export function platformSync() {
 }
 
 export async function initPlatform() {
-  return detectPlatform();
+  const platform = await detectPlatform();
+  if (isTauri()) {
+    try {
+      const { hostname } = await import('@tauri-apps/plugin-os');
+      window.__astralHostname = await hostname();
+    } catch {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        window.__astralHostname = await invoke('plugin:os|hostname');
+      } catch { /* 保留浏览器/默认设备名 */ }
+    }
+  }
+  return platform;
 }
 
 export function isWindows() {
@@ -76,7 +88,7 @@ export function localHostname() {
       window.__astralHostname ||
       (navigator.userAgentData && navigator.userAgentData.platform) ||
       'localhost'
-    ).toLowerCase();
+    ).toString();
   } catch {
     return 'localhost';
   }

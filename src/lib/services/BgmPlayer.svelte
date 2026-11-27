@@ -283,7 +283,7 @@
       const res = await invoke('music_play_url', {
         platform: track.platform,
         key: track.key,
-        track,
+        track: { ...track, quality: sm.musicQualityFor(track.platform, track.sourceAccount?.accountVip) },
       });
       url = res?.url || '';
     }

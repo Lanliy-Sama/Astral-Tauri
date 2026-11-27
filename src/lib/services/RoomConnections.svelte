@@ -56,15 +56,16 @@
     async _waitUntilConnected(roomId) {
       const session = this.sessions[roomId];
       if (!session) return false;
-      for (let attempt = 0; attempt < 20; attempt++) {
+      let lastError = '';
+      for (let attempt = 0; attempt < 45; attempt++) {
         if (this.sessions[roomId] !== session || session.status !== 'connecting') return false;
         try {
           const raw = await rust.getRunningInfoFor(session.instanceId);
           if (raw && raw !== 'null') {
-            const info = JSON.parse(raw);
+            const info = typeof raw === 'string' ? JSON.parse(raw) : raw;
             const address = info?.my_node_info?.virtual_ipv4?.address?.addr;
             if (address != null && Number(address) !== 0) {
-              session.ipv4 = intToIp(address);
+              session.ipv4 = typeof address === 'string' && address.includes('.') ? address : intToIp(address);
               session.status = 'connected';
               // 虚拟 IP 已就绪即表示 ET 启动成功；成员状态可在监控中重试，
               // 初始桥接查询失败不应把已有连接改判为失败并关闭实例。
@@ -76,13 +77,13 @@
               return true;
             }
           }
-        } catch {
-          // 实例刚创建时运行信息尚未就绪。
+        } catch (error) {
+          lastError = String(error?.message || error);
         }
         await delay(1000);
       }
       session.status = 'error';
-      session.error = '等待虚拟 IP 超时';
+      session.error = lastError ? `获取虚拟 IP 失败：${lastError}` : '获取虚拟 IP 超时，请检查 DHCP、TUN 驱动和房间配置';
       this.setActiveRoom(roomId);
       return false;
     }
@@ -124,9 +125,10 @@
         } catch (error) {
           session.attempts += 1;
           if (session.attempts >= 6) {
-            session.status = 'error';
+            // 状态桥接的瞬时失败不等于 ET 已断线；保留连接并继续重试。
             session.error = String(error?.message || error);
-            this._stopMonitor(roomId);
+            session.attempts = 0;
+            sm.pushLog(`[multi-room] ${session.room.name} 成员状态刷新重试中：${session.error}`);
             if (this.activeRoomId === roomId) this._mirror(session);
           }
         }

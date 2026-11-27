@@ -9,6 +9,7 @@
    */
   import MainScreen from './lib/components/MainScreen.svelte';
   import LiquidGlass from './lib/components/common/LiquidGlass.svelte';
+  import DesktopLyricsPage from './lib/components/common/DesktopLyricsPage.svelte';
   import { sm } from './lib/services/ServiceManager.svelte';
   import { buildSchemes, applyTheme } from './lib/theme/Material3.svelte';
   import { initPlatform, isTauri } from './lib/utils/Platform.svelte';
@@ -17,6 +18,7 @@
   import { snackError, snackSuccess, snackInfo } from './lib/components/common/SnackbarStore.svelte';
 
   let ready = $state(false);
+  const desktopLyricsMode = new URLSearchParams(location.search).has('desktopLyrics');
 
   function suppressWebViewContextMenu(event) {
     if (isTauri()) event.preventDefault();
@@ -141,13 +143,13 @@
         await initI18n();
         applyDebugThemeOverride();
         initThemeEngine();
-        await sm.init();
+        if (!desktopLyricsMode) await sm.init();
       } catch (e) {
         console.error('ServiceManager 初始化失败:', e);
       }
       if (!cancelled) {
         ready = true;
-        initAppLinks();
+        if (!desktopLyricsMode) initAppLinks();
       }
     })();
     return () => {
@@ -187,7 +189,11 @@
 <svelte:window oncontextmenu={suppressWebViewContextMenu} />
 
 {#if ready}
-  <MainScreen />
+  {#if desktopLyricsMode}
+    <DesktopLyricsPage />
+  {:else}
+    <MainScreen />
+  {/if}
 {:else}
   <div class="boot">Astral</div>
 {/if}

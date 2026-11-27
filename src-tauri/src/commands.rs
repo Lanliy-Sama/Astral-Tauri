@@ -495,6 +495,37 @@ pub fn close_watch_window(label: String, app: AppHandle) -> Result<(), String> {
 
 /// 外部链接打开兜底（优先使用 opener 插件）。
 #[tauri::command]
+pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), String> {
+    const LABEL: &str = "desktop-lyrics";
+    if !enabled {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            window.close().map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+    if app.get_webview_window(LABEL).is_some() {
+        return Ok(());
+    }
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        LABEL,
+        tauri::WebviewUrl::App("index.html?desktopLyrics=1".into()),
+    )
+    .title("Astral 桌面歌词")
+    .inner_size(880.0, 128.0)
+    .min_inner_size(420.0, 86.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(true);
+    #[cfg(desktop)]
+    let builder = builder.center();
+    builder.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn open_external(url: String) -> Result<(), String> {
     open_url_fallback(&url)
 }

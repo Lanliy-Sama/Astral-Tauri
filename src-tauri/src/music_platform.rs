@@ -156,6 +156,15 @@ pub struct Account {
     pub cookie: String,
 }
 
+fn vip_flag(profile: &Value, keys: &[&str]) -> bool {
+    keys.iter().any(|key| {
+        let value = &profile[*key];
+        value.as_bool().unwrap_or(false)
+            || value.as_i64().unwrap_or(0) > 0
+            || value.as_str().map(|text| !matches!(text.to_lowercase().as_str(), "" | "0" | "false" | "none")).unwrap_or(false)
+    })
+}
+
 static ACCOUNTS: OnceLock<Mutex<HashMap<String, Account>>> = OnceLock::new();
 
 fn accounts() -> &'static Mutex<HashMap<String, Account>> {
@@ -475,6 +484,7 @@ mod netease {
             "loggedIn": true,
             "nickname": o["profile"]["nickname"].as_str().unwrap_or_default(),
             "avatar": o["profile"]["avatarUrl"].as_str().unwrap_or_default(),
+            "vip": super::vip_flag(&o["profile"], &["vipType", "viptype", "isVIP", "vip", "redVipLevel"]),
         }))
     }
 
@@ -667,21 +677,26 @@ mod netease {
 
     /* ---- 播放地址（登录走 eapi v1，未登录走旧码率接口，最后外链兜底） ---- */
 
-    pub fn song_url(app: &tauri::AppHandle, id: &str) -> Result<Value, String> {
+    pub fn song_url(app: &tauri::AppHandle, id: &str, quality: &str) -> Result<Value, String> {
         let id_num: i64 = id.parse().map_err(|_| "无效的歌曲 ID".to_string())?;
         let account = super::load_account("netease", app);
+        let (level, bitrate, encoding) = match quality {
+            "standard" => ("standard", 128000, "mp3"),
+            "lossless" => ("lossless", 999000, "flac"),
+            _ => ("exhigh", 320000, "mp3"),
+        };
         let mut payload = json!({ "ids": json!(format!("[{id_num}]")) });
         if account.is_some() {
-            payload["level"] = json!("exhigh");
-            payload["encodeType"] = json!("mp3");
+            payload["level"] = json!(level);
+            payload["encodeType"] = json!(encoding);
         } else {
-            payload["br"] = json!(192000);
+            payload["br"] = json!(bitrate);
         }
         let attempts: Vec<(&str, String)> = vec![
             ("v1", payload.to_string()),
             (
                 "legacy",
-                json!({ "ids": json!(format!("[{id_num}]")), "br": 192000 }).to_string(),
+                json!({ "ids": json!(format!("[{id_num}]")), "br": bitrate }).to_string(),
             ),
         ];
         for (stage, body) in attempts {
@@ -693,7 +708,7 @@ mod netease {
                 )
             } else {
                 get_json_auth(
-                    &format!("https://music.163.com/api/song/enhance/player/url?ids=[{id_num}]&br=192000"),
+                    &format!("https://music.163.com/api/song/enhance/player/url?ids=[{id_num}]&br={bitrate}"),
                     account.as_ref(),
                 )
             };
@@ -737,7 +752,9 @@ mod netease {
             return Ok(json!({ "found": false, "lines": [] }));
         }
         let trans = super::lyrics_util::parse_lrc(translated);
+        let romanized = super::lyrics_util::parse_lrc(o["romalrc"]["lyric"].as_str().unwrap_or_default());
         let merged = super::lyrics_util::merge_translation(&lines, &trans);
+        let merged = super::lyrics_util::merge_romanization(&merged, &romanized);
         Ok(json!({ "found": true, "lines": merged }))
     }
 }
@@ -811,6 +828,19 @@ mod qq {
         Ok(json!({ "tracks": out }))
     }
 
+    fn decode_lyric_field(raw: &str) -> String {
+        if raw.contains('[') && raw.contains(':') {
+            return raw.to_string();
+        }
+        base64::engine::general_purpose::STANDARD
+            .decode(raw.trim())
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| raw.to_string())
+            .trim_start_matches('\u{feff}')
+            .to_string()
+    }
+
     pub fn lyrics(mid: &str) -> Result<Value, String> {
         // 纯 LRC 行级歌词（公开接口）；QRC 逐字歌词需要专用 DES 解码，暂不启用
         let url = format!(
@@ -818,39 +848,34 @@ mod qq {
             urlencode(mid)
         );
         let o = http_get_json(&url, REFERER, "")?;
-        let raw = o["lyric"].as_str().unwrap_or_default();
-        // 部分 QQ 歌曲即使 nobase64=1 仍返回 Base64 LRC；同时兼容普通文本，
-        // 避免前端把 Base64 当作无时间轴歌词而始终只显示曲名。
-        let decoded;
-        let lyric_text = if raw.contains('[') && raw.contains(':') {
-            raw
-        } else {
-            decoded = base64::engine::general_purpose::STANDARD
-                .decode(raw.trim())
-                .ok()
-                .and_then(|bytes| String::from_utf8(bytes).ok())
-                .unwrap_or_else(|| raw.to_string());
-            decoded.trim_start_matches('\u{feff}')
-        };
-        let lines = super::lyrics_util::parse_lrc(lyric_text);
+        let lyric_text = decode_lyric_field(o["lyric"].as_str().unwrap_or_default());
+        let lines = super::lyrics_util::parse_lrc(&lyric_text);
+        let translated = super::lyrics_util::parse_lrc(&decode_lyric_field(o["trans"].as_str().unwrap_or_default()));
+        let romanized = super::lyrics_util::parse_lrc(&decode_lyric_field(o["roma"].as_str().unwrap_or_default()));
+        let lines = super::lyrics_util::merge_translation(&lines, &translated);
+        let lines = super::lyrics_util::merge_romanization(&lines, &romanized);
         Ok(json!({ "found": !lines.is_empty(), "lines": lines }))
     }
 
-    pub fn song_url(media_mid: &str, song_mid: &str) -> Result<Value, String> {
+    pub fn song_url(media_mid: &str, song_mid: &str, quality: &str) -> Result<Value, String> {
         // 游客通道（未登录或登录后由调用方 song_url_logged 优先）
         let guid: String = rand_digits(10);
         let media = if media_mid.is_empty() { song_mid.to_string() } else { media_mid.to_string() };
         // 免登录两通道：桌面（ct19/cv2201 + UrlGetVkey）优先，web（CgiGetVkey
         // + loginflag/platform）兜底；filename 高→低三档，midurlinfo 里第一
         // 个有 purl 的就是能拿到的最高档（实测桌面通道才给免费歌地址）
-        let files: [(&str, &str); 3] = [("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")];
+        let files: Vec<(&str, &str)> = match quality {
+            "standard" => vec![("M500", "mp3")],
+            "lossless" => vec![("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")],
+            _ => vec![("M800", "mp3"), ("M500", "mp3")],
+        };
         let mut last_err = String::new();
         for desktop in [true, false] {
             let mut param = json!({
                 "guid": guid, "uin": "0", "ctx": 0,
                 "filename": files.iter().map(|(p, e)| format!("{p}{media}.{e}")).collect::<Vec<_>>(),
-                "songmid": [song_mid, song_mid, song_mid],
-                "songtype": [0, 0, 0],
+                "songmid": files.iter().map(|_| song_mid).collect::<Vec<_>>(),
+                "songtype": files.iter().map(|_| 0).collect::<Vec<_>>(),
             });
             let (module, method, ct, cv) = if desktop {
                 ("music.vkey.GetVkey", "UrlGetVkey", 19, 2201)
@@ -1181,7 +1206,11 @@ mod qq {
                 let (code, profile) = verify_session(&a.user_id, &a.token, login_type).unwrap_or((-1, Value::Null));
                 if code == 0 {
                     let nickname = profile_str(&profile, &["nick", "nickname", "nickName"]);
-                    Ok(json!({ "loggedIn": true, "nickname": if nickname.is_empty() { a.nickname } else { nickname } }))
+                    Ok(json!({
+                        "loggedIn": true,
+                        "nickname": if nickname.is_empty() { a.nickname } else { nickname },
+                        "vip": super::vip_flag(&profile, &["vip", "is_vip", "vip_status", "vipFlag", "greenvip", "svip", "year_vip"]),
+                    }))
                 } else {
                     // musickey 失效（三天未续）：视为未登录
                     Ok(json!({ "loggedIn": false, "note": "QQ 登录已过期，请重新扫码" }))
@@ -1192,10 +1221,14 @@ mod qq {
     }
 
     /// 登录后的 GetVkey：comm 带 uin/authst/g_tk，purl 覆盖面远大于游客通道
-    pub fn song_url_logged(account: &super::Account, media_mid: &str, song_mid: &str) -> Result<Value, String> {
+    pub fn song_url_logged(account: &super::Account, media_mid: &str, song_mid: &str, quality: &str) -> Result<Value, String> {
         let guid: String = rand_digits(10);
         let media = if media_mid.is_empty() { song_mid.to_string() } else { media_mid.to_string() };
-        let files: [(&str, &str); 3] = [("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")];
+        let files: Vec<(&str, &str)> = match quality {
+            "standard" => vec![("M500", "mp3")],
+            "lossless" => vec![("F000", "flac"), ("M800", "mp3"), ("M500", "mp3")],
+            _ => vec![("M800", "mp3"), ("M500", "mp3")],
+        };
         let login_type = if account.token.starts_with("W_X") { 1 } else { 2 };
         let payload = json!({
             "comm": {
@@ -1208,8 +1241,8 @@ mod qq {
                 "param": {
                     "guid": guid, "uin": account.user_id, "ctx": 0,
                     "filename": files.iter().map(|(p, e)| format!("{p}{media}.{e}")).collect::<Vec<_>>(),
-                    "songmid": [song_mid, song_mid, song_mid],
-                    "songtype": [0, 0, 0],
+                    "songmid": files.iter().map(|_| song_mid).collect::<Vec<_>>(),
+                    "songtype": files.iter().map(|_| 0).collect::<Vec<_>>(),
                 }
             },
         });
@@ -2134,10 +2167,19 @@ mod kugou {
     pub fn account(app: &tauri::AppHandle) -> Result<Value, String> {
         let account = super::load_account("kugou", app);
         match account {
-            Some(a) if !a.token.is_empty() => Ok(json!({
-                "loggedIn": true,
-                "nickname": a.nickname,
-            })),
+            Some(a) if !a.token.is_empty() => {
+                let url = format!(
+                    "https://t.kugou.com/v5/getuserinfo?token={}&userid={}",
+                    urlencode(&a.token),
+                    urlencode(&a.user_id)
+                );
+                let info = http_get_json(&url, "https://www.kugou.com/", "").unwrap_or(Value::Null);
+                Ok(json!({
+                    "loggedIn": true,
+                    "nickname": a.nickname,
+                    "vip": super::vip_flag(&info["data"], &["vip", "is_vip", "vip_type", "svip", "vip_level", "user_type"]),
+                }))
+            },
             _ => Ok(json!({ "loggedIn": false })),
         }
     }
@@ -2355,26 +2397,34 @@ pub mod lyrics_util {
         out
     }
 
-    /// 把翻译按时间对齐进主歌词（{l: 主, tr: 翻译}）
-    pub fn merge_translation(main: &[Value], translation: &[Value]) -> Vec<Value> {
-        if translation.is_empty() {
+    /// 把翻译按时间对齐进主歌词（{l: 主, tr: 翻译, ro: 音译}）
+    fn merge_field(main: &[Value], auxiliary: &[Value], field: &str) -> Vec<Value> {
+        if auxiliary.is_empty() {
             return main.to_vec();
         }
         main.iter()
             .map(|line| {
                 let t = line["t"].as_i64().unwrap_or(0);
-                let nearest = translation
+                let nearest = auxiliary
                     .iter()
                     .min_by_key(|x| (x["t"].as_i64().unwrap_or(0) - t).abs());
                 let mut out = line.clone();
-                if let Some(tr) = nearest {
-                    if (tr["t"].as_i64().unwrap_or(0) - t).abs() < 3000 {
-                        out["tr"] = json!(tr["l"].as_str().unwrap_or_default());
+                if let Some(value) = nearest {
+                    if (value["t"].as_i64().unwrap_or(0) - t).abs() < 3000 {
+                        out[field] = json!(value["l"].as_str().unwrap_or_default());
                     }
                 }
                 out
             })
             .collect()
+    }
+
+    pub fn merge_translation(main: &[Value], translation: &[Value]) -> Vec<Value> {
+        merge_field(main, translation, "tr")
+    }
+
+    pub fn merge_romanization(main: &[Value], romanization: &[Value]) -> Vec<Value> {
+        merge_field(main, romanization, "ro")
     }
 }
 
@@ -2505,7 +2555,7 @@ pub fn music_play_url(
     match platform.as_str() {
         "netease" => {
             let id = track["id"].as_str().unwrap_or_default().to_string();
-            music_platform::netease::song_url(&app, &id)
+            music_platform::netease::song_url(&app, &id, track["quality"].as_str().unwrap_or("high"))
         }
         "qq" => {
             let media = track["mediaMid"].as_str().unwrap_or_default().to_string();
@@ -2513,14 +2563,14 @@ pub fn music_play_url(
             // 登录态优先（会员歌可放），失败退游客通道
             if let Some(account) = load_account("qq", &app) {
                 if !account.token.is_empty() {
-                    if let Ok(url) = music_platform::qq::song_url_logged(&account, &media, &mid) {
+                    if let Ok(url) = music_platform::qq::song_url_logged(&account, &media, &mid, track["quality"].as_str().unwrap_or("high")) {
                         if !url["url"].as_str().unwrap_or_default().is_empty() {
                             return Ok(url);
                         }
                     }
                 }
             }
-            music_platform::qq::song_url(&media, &mid)
+            music_platform::qq::song_url(&media, &mid, track["quality"].as_str().unwrap_or("high"))
         }
         "kugou" => music_platform::kugou::song_url(&app, &track),
         _ => Err("不支持的平台".into()),

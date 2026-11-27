@@ -17,7 +17,7 @@
     bgApplyVolume,
     syncBgmSmtc,
   } from '$lib/services/BgmPlayer.svelte';
-  import { isTauri } from '$lib/utils/Platform.svelte';
+  import { isTauri, isAndroid } from '$lib/utils/Platform.svelte';
   import { onMount, untrack } from 'svelte';
   import { t } from '$lib/i18n/I18n.svelte';
 
@@ -44,6 +44,15 @@
   const visiblePlatforms = $derived(PLATFORMS.filter((p) => sm.appSettingsState.experimentalFeatures || !['qq', 'kugou'].includes(p.key)));
   const sharedAccounts = $derived(sm.appSettingsState.experimentalFeatures ? roomSocial.accounts.filter((a) => a.platform === platform) : []);
   const selectedSharedAccount = $derived(sharedAccounts.find((a) => a.peer === sourcePeer) || null);
+  const qualityOptions = $derived.by(() => {
+    const options = [
+      { value: 'standard', label: t('quality_standard') },
+      { value: 'high', label: t('quality_high') },
+      { value: 'lossless', label: t('quality_lossless') },
+    ];
+    const vipRequired = platform === 'qq' ? ['high', 'lossless'] : ['lossless'];
+    return sm.bgmState.accountVip[platform] === true ? options : options.filter((option) => !vipRequired.includes(option.value));
+  });
 
   const AUDIO_EXTS = ['mp3', 'mp4', 'm4a', 'aac', 'flac', 'wav', 'ogg', 'oga', 'opus', 'weba', 'webm'];
   const AUDIO_ACCEPT = 'audio/*,' + AUDIO_EXTS.map((ext) => `.${ext}`).join(',');
@@ -144,8 +153,10 @@
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       status = await invoke('music_status', { platform: p });
+      sm.bgmState.accountVip[p] = status?.vip === true;
     } catch {
       status = { loggedIn: false };
+      sm.bgmState.accountVip[p] = false;
     }
   }
 
@@ -448,6 +459,33 @@
         </div>
         <Switch value={sm.bgmState.lyricCapsuleEnabled} onChange={(value) => sm.updateLyricCapsuleEnabled(value)} />
       </div>
+      {#if sm.appSettingsState.experimentalFeatures && !isAndroid()}
+        <div class="md-switch-list-tile no-cursor">
+          <div class="tile-content">
+            <div class="tile-title">{t('desktop_lyrics')}</div>
+            <div class="tile-subtitle">{t('desktop_lyrics_desc')}</div>
+          </div>
+          <Switch
+            value={sm.bgmState.desktopLyricsEnabled}
+            onChange={(value) => sm.updateDesktopLyricsEnabled(value)}
+          />
+        </div>
+      {/if}
+      {#if sm.appSettingsState.experimentalFeatures && platform !== 'local'}
+        <div class="default-quality">
+          <span>{t('default_quality')}</span>
+          <select value={sm.musicQualityFor(platform)} onchange={(event) => sm.updateMusicQuality(event.currentTarget.value, platform)}>
+            {#each qualityOptions as option (option.value)}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
+          <small>
+            {status.loggedIn
+              ? (sm.bgmState.accountVip[platform] ? t('vip_detected') : t('vip_not_detected'))
+              : t('vip_login_hint')}
+          </small>
+        </div>
+      {/if}
       <div class="volume-setting">
         <Icon name="volume_up" size={22} color="var(--md-primary)" />
         <input
@@ -715,6 +753,9 @@
     color: var(--md-error);
     font-size: 13px;
   }
+  .default-quality { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 18px; color: var(--md-on-surface-variant); font-size: 13px; }
+  .default-quality select { min-width: 130px; height: 36px; padding: 0 28px 0 10px; border: 1px solid var(--md-outline-variant); border-radius: 10px; background: var(--md-surface-container-low); color: var(--md-on-surface); }
+  .default-quality small { flex-basis: 100%; font-size: 10px; line-height: 15px; opacity: .75; }
   .volume-setting {
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 36px;

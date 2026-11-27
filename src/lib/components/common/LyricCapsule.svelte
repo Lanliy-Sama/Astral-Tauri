@@ -83,9 +83,22 @@
     };
   });
 
+  function syncDesktopLyrics() {
+    if (!sm.bgmState.desktopLyricsEnabled) return;
+    const line = lineIdx >= 0 && lineIdx < lines.length ? lines[lineIdx] : null;
+    import('@tauri-apps/api/event')
+      .then(({ emit }) => emit('desktop-lyrics-update', {
+        title: label,
+        playing: sm.bgmState.playing,
+        line: line ? { l: line.l, tr: line.tr || '', ro: line.ro || '' } : null,
+      }))
+      .catch(() => {});
+  }
+
   function tick() {
     if (!lines.length) {
       lineIdx = -1;
+      syncDesktopLyrics();
       return;
     }
     const pos = bgmPosition() * 1000;
@@ -98,10 +111,12 @@
     }
     const idx = low - 1;
     if (idx !== lineIdx) lineIdx = idx;
+    syncDesktopLyrics();
   }
 
   $effect(() => {
     void lines.length;
+    void sm.bgmState.desktopLyricsEnabled;
     tick();
   });
 
@@ -125,9 +140,15 @@
   });
 
   onMount(() => {
+    let unlistenDesktop = null;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('desktop-lyrics-close-request', () => sm.updateDesktopLyricsEnabled(false)))
+      .then((dispose) => (unlistenDesktop = dispose))
+      .catch(() => {});
     return () => {
       clearTimeout(volumeTimer);
       clearTimeout(clickTimer);
+      unlistenDesktop?.();
     };
   });
 

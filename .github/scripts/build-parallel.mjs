@@ -19,6 +19,7 @@ try { inheritedConfig = JSON.parse(process.env.TAURI_CONFIG || '{}'); } catch { 
 const env = {
   ...process.env,
   RUSTUP_TOOLCHAIN: 'nightly',
+  RUSTFLAGS: `${process.env.RUSTFLAGS || ''} -Z threads=16`.trim(),
   TAURI_CONFIG: JSON.stringify({
     ...inheritedConfig,
     build: { ...(inheritedConfig.build || {}), beforeBuildCommand: '' },
