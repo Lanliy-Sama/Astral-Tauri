@@ -17,6 +17,7 @@
   import RoomSocialPanel from './RoomSocialPanel.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { isServerNode } from '$lib/utils/Network.svelte';
+  import { t } from '$lib/i18n/I18n.svelte';
   import {
     UserSortOption,
     UserSortOrder,
@@ -28,6 +29,9 @@
   let showTopology = $state(false);
   let settingsOpen = $state(false);
   let socialOpen = $state(false);
+  $effect(() => {
+    if (!sm.appSettingsState.experimentalFeatures && socialOpen) socialOpen = false;
+  });
 
   /* 断点宽度（MediaQuery.of(context).size.width → window.innerWidth） */
   let windowWidth = $state(window.innerWidth);
@@ -118,14 +122,16 @@
 
   <!-- FAB 列（右下角，16px 间距） -->
   <div class="fabs">
-    <button
-      class="md-fab"
-      class:active={socialOpen}
-      data-tip="聊天室 · 语音频道 · 一起看"
-      onclick={() => (socialOpen = !socialOpen)}
-    >
-      <Icon name="forum" size={24} />
-    </button>
+    {#if sm.appSettingsState.experimentalFeatures}
+      <button
+        class="md-fab"
+        class:active={socialOpen}
+        data-tip={t('room_collaboration')}
+        onclick={() => (socialOpen = !socialOpen)}
+      >
+        <Icon name="forum" size={24} />
+      </button>
+    {/if}
     <div class="fab-gap"></div>
     <button
       class="md-fab"
@@ -141,7 +147,9 @@
   </div>
 
   <RoomSettingsSheet bind:open={settingsOpen} />
-  <RoomSocialPanel bind:open={socialOpen} />
+  {#if sm.appSettingsState.experimentalFeatures}
+    <RoomSocialPanel bind:open={socialOpen} />
+  {/if}
 </div>
 
 <style>

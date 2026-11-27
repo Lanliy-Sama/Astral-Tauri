@@ -79,9 +79,7 @@ Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
 Var WelcomeDialog
-Var WelcomeBg
 Var WelcomeIcon
-Var WelcomeBgImage
 Var WelcomeIconImage
 Var InstallButton
 
@@ -436,7 +434,6 @@ Var AppStartMenuFolder
 Function AstralWelcome
   ${IfThen} $PassiveMode = 1 ${|} Abort ${|}
   InitPluginsDir
-  File "/oname=$PLUGINSDIR\astral-bg.bmp" "${ASTRAL_INSTALLER_ASSETS}\background.bmp"
   File "/oname=$PLUGINSDIR\astral-icon.bmp" "${ASTRAL_INSTALLER_ASSETS}\app-icon.bmp"
 
   ; 隐藏传统导航按钮，只保留页面中的主安装按钮
@@ -446,32 +443,30 @@ Function AstralWelcome
   ShowWindow $R0 ${SW_HIDE}
   GetDlgItem $R0 $HWNDPARENT 3
   ShowWindow $R0 ${SW_HIDE}
-  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i 0, i 0, i 660, i 520, i 0x0016)'
-
   nsDialogs::Create 1018
   Pop $WelcomeDialog
+  SetCtlColors $WelcomeDialog 0x17324D 0xF5F8FC
 
-  ${NSD_CreateBitmap} 0 0 100% 100% ""
-  Pop $WelcomeBg
-  ${NSD_SetImage} $WelcomeBg "$PLUGINSDIR\astral-bg.bmp" $WelcomeBgImage
-  ${NSD_CreateBitmap} 272 44 96 96 ""
+  ; 全部使用对话框单位与百分比，避免高 DPI 下定位漂移或按钮超出页面
+  ${NSD_CreateBitmap} 0 4u 100% 50u ""
   Pop $WelcomeIcon
+  ${NSD_AddStyle} $WelcomeIcon 0x00000200
   ${NSD_SetImage} $WelcomeIcon "$PLUGINSDIR\astral-icon.bmp" $WelcomeIconImage
 
-  ${NSD_CreateLabel} 170 152 300 40 "Astral"
+  ${NSD_CreateLabel} 10% 58u 80% 24u "Astral"
   Pop $R0
   ${NSD_AddStyle} $R0 ${SS_CENTER}
   SetCtlColors $R0 0x17324D TRANSPARENT
-  CreateFont $R1 "Segoe UI" 25 600
+  CreateFont $R1 "Segoe UI" 24 600
   SendMessage $R0 0x0030 $R1 1
-  ${NSD_CreateLabel} 120 202 400 28 "安全、自由、简洁的联机体验"
+  ${NSD_CreateLabel} 10% 84u 80% 18u "安全、自由、简洁的联机体验"
   Pop $R0
   ${NSD_AddStyle} $R0 ${SS_CENTER}
   SetCtlColors $R0 0x60758A TRANSPARENT
   CreateFont $R1 "Microsoft YaHei UI" 11 400
   SendMessage $R0 0x0030 $R1 1
 
-  ${NSD_CreateButton} 210 270 220 50 "立即安装"
+  ${NSD_CreateButton} 25% 116u 50% 30u "立即安装"
   Pop $InstallButton
   System::Call 'uxtheme::SetWindowTheme(p $InstallButton, w " ", w " ")'
   SetCtlColors $InstallButton 0xFFFFFF 0x1677E8
@@ -480,9 +475,6 @@ Function AstralWelcome
   ShowWindow $InstallButton ${SW_SHOW}
   EnableWindow $InstallButton 1
   ${NSD_OnClick} $InstallButton AstralStartInstall
-
-  ; 背景必须置于最底层，否则会遮住图标、文字和安装按钮
-  System::Call 'user32::SetWindowPos(p $WelcomeBg, p 1, i 0, i 0, i 0, i 0, i 0x0013)'
   System::Call 'user32::BringWindowToTop(p $InstallButton)'
   nsDialogs::Show
 FunctionEnd

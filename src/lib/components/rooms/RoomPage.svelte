@@ -37,7 +37,7 @@
   const selectedRoom = $derived(sm.roomState.selectedRoom);
 
   $effect(() => {
-    const room = isConnected ? selectedRoom : null;
+    const room = sm.appSettingsState.experimentalFeatures && isConnected ? selectedRoom : null;
     if (room) roomSocial.start(room);
     else if (roomSocial.connected) roomSocial.stop();
   });

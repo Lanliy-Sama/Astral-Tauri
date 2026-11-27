@@ -189,6 +189,7 @@ export class AppSettingsState {
   maxRetryCount = $state(3);
   reduceAnimationUpdates = $state(false);
   liquidGlass = $state(false);
+  experimentalFeatures = $state(false);
   /* 自定义背景（data URL，null = 默认纯色背景）：存独立 app_assets 表 */
   customBackground = $state(null);
   logs = $state([]);
@@ -784,6 +785,7 @@ class ServiceManager {
     this.appSettingsState.reduceAnimationUpdates =
       s.reduceAnimationUpdates === true;
     this.appSettingsState.liquidGlass = s.liquidGlass === true;
+    this.appSettingsState.experimentalFeatures = s.experimentalFeatures === true;
 
     /* 自定义背景（v2.6）：Tauri = 磁盘文件（astralbg:// 自定义协议服务，
      * SoftwareSettingsPage 分块写入）；兼容 v2.5 及更早存于 app_assets 的
@@ -929,6 +931,10 @@ class ServiceManager {
   async updateLiquidGlass(v) {
     this.appSettingsState.liquidGlass = v;
     await this._persistSettings({ liquidGlass: v });
+  }
+  async updateExperimentalFeatures(v) {
+    this.appSettingsState.experimentalFeatures = v === true;
+    await this._persistSettings({ experimentalFeatures: this.appSettingsState.experimentalFeatures });
   }
 
 

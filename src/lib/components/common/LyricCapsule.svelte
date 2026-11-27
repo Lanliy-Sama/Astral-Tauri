@@ -21,7 +21,7 @@
   let volumeTimer = 0;
   let clickTimer = 0;
 
-  const invitation = $derived(voiceService.invites[0] || null);
+  const invitation = $derived(sm.appSettingsState.experimentalFeatures ? voiceService.invites[0] || null : null);
   const hasTrack = $derived(!!sm.bgmState.onlineTrack || !!sm.bgmState.trackId);
   const active = $derived(sm.bgmState.lyricCapsuleEnabled && hasTrack);
   const lines = $derived(sm.bgmState.lyricLines || []);
@@ -120,8 +120,11 @@
     volumeTimer = setTimeout(() => (volumeVisible = false), 1600);
   });
 
+  $effect(() => {
+    if (sm.appSettingsState.experimentalFeatures) voiceService.start();
+  });
+
   onMount(() => {
-    voiceService.start();
     return () => {
       clearTimeout(volumeTimer);
       clearTimeout(clickTimer);

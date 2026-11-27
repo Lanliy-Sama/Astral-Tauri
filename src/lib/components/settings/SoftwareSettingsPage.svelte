@@ -330,6 +330,22 @@
           onChange={(v) => sm.updateReduceAnimationUpdates(v)}
         />
       </div>
+
+      <div
+        class="md-switch-list-tile"
+        onclick={(e) => {
+          if (!e.target.closest('.md-switch')) sm.updateExperimentalFeatures(!sm.appSettingsState.experimentalFeatures);
+        }}
+      >
+        <div class="tile-content">
+          <div class="tile-title">{t('experimental_features')}</div>
+          <div class="tile-subtitle">{t('experimental_features_desc')}</div>
+        </div>
+        <Switch
+          value={sm.appSettingsState.experimentalFeatures}
+          onChange={(v) => sm.updateExperimentalFeatures(v)}
+        />
+      </div>
     </SettingsCard>
 
     <div class="gap-16"></div>

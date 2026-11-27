@@ -41,7 +41,8 @@
   let loadingTracks = $state(false);
   let sourcePeer = $state('local');
 
-  const sharedAccounts = $derived(roomSocial.accounts.filter((a) => a.platform === platform));
+  const visiblePlatforms = $derived(PLATFORMS.filter((p) => sm.appSettingsState.experimentalFeatures || !['qq', 'kugou'].includes(p.key)));
+  const sharedAccounts = $derived(sm.appSettingsState.experimentalFeatures ? roomSocial.accounts.filter((a) => a.platform === platform) : []);
   const selectedSharedAccount = $derived(sharedAccounts.find((a) => a.peer === sourcePeer) || null);
 
   const AUDIO_EXTS = ['mp3', 'mp4', 'm4a', 'aac', 'flac', 'wav', 'ogg', 'oga', 'opus', 'weba', 'webm'];
@@ -315,6 +316,7 @@
   });
 
   $effect(() => {
+    if (!sm.appSettingsState.experimentalFeatures && ['qq', 'kugou'].includes(platform)) platform = 'netease';
     if (sourcePeer !== 'local' && !selectedSharedAccount) sourcePeer = 'local';
   });
 
@@ -355,7 +357,7 @@
       </div>
       <div class="md-divider"></div>
       <div class="platform-tabs">
-        {#each PLATFORMS as p (p.key)}
+        {#each visiblePlatforms as p (p.key)}
           <button
             class="platform-tab {platform === p.key ? 'selected' : ''}"
             onclick={() => (platform = p.key)}
@@ -406,7 +408,7 @@
           <button class="md-btn md-tonal-btn" onclick={startLogin}>{t('qr_login')}</button>
         </div>
       {/if}
-      {#if platform !== 'local' && status.loggedIn}
+      {#if sm.appSettingsState.experimentalFeatures && platform !== 'local' && status.loggedIn}
         <div class="md-divider"></div>
         <div class="md-switch-list-tile no-cursor">
           <div class="tile-content">
@@ -463,7 +465,7 @@
 
     <div class="gap-16"></div>
 
-    {#if roomSocial.connected}
+    {#if sm.appSettingsState.experimentalFeatures && roomSocial.connected}
       <SettingsCard>
         {#if roomListen.incoming}
           <div class="listen-invite">
@@ -502,7 +504,7 @@
 
     <!-- 搜索 -->
     <SettingsCard>
-      {#if platform !== 'local' && roomSocial.connected}
+      {#if sm.appSettingsState.experimentalFeatures && platform !== 'local' && roomSocial.connected}
         <div class="account-source">
           <span class="source-label">{t('account_source')}</span>
           <select bind:value={sourcePeer} aria-label={t('account_source')}>

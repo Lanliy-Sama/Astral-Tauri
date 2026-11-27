@@ -270,6 +270,8 @@
   "unmute": "Unmute",
   "kick": "Kick from channel",
   "request_desktop": "Request desktop control of {name}",
+  "experimental_features": "Experimental Features",
+  "experimental_features_desc": "Off by default. Enable to show room collaboration, QQ Music, and Kugou Music.",
   "music_platform": "Music Platform",
   "music_platform_desc": "Local and online music in one place; account sharing is available on online platforms",
   "import_music": "Import Music",

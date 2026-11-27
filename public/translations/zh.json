@@ -270,6 +270,8 @@
   "unmute": "取消静音",
   "kick": "踢出频道",
   "request_desktop": "请求控制 {name} 的桌面",
+  "experimental_features": "实验性功能开关",
+  "experimental_features_desc": "默认关闭；开启后显示房间协作、QQ 音乐和酷狗音乐入口",
   "music_platform": "音乐平台",
   "music_platform_desc": "本地音乐与在线平台统一播放；在线平台支持房间账号能力共享",
   "import_music": "导入音乐",

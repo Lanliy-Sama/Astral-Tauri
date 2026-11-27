@@ -102,12 +102,14 @@
     audioEl.addEventListener('ended', () => {
       import('./RoomListen.svelte').then(({ roomListen }) => {
         if (sm.bgmState.playbackMode === 'loop') {
-          if (sm.bgmState.onlineTrack) {
-            bgmPlayOnlineTrack(sm.bgmState.onlineTrack);
-          } else {
-            const current = sm.bgmState.tracks.findIndex((t) => t.trackId === sm.bgmState.trackId);
-            if (current >= 0) bgmPlayTrack(current);
-          }
+          // 单曲循环只重播当前音源，保留歌词与曲目对象；重新走切歌流程会清空
+          // lyricLines，而相同 track 对象又不会再次触发歌词监听。
+          const current = ensureAudio();
+          current.currentTime = 0;
+          current.play().catch((e) => {
+            sm.bgmState.playing = false;
+            sm.pushLog(`[bgm] 单曲循环重播失败: ${e?.message ?? e}`);
+          });
           return;
         }
         if (sm.bgmState.playbackMode === 'random') {
