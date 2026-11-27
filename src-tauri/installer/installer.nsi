@@ -432,7 +432,8 @@ Var AppStartMenuFolder
 !insertmacro MUI_PAGE_FINISH
 
 Function AstralWelcomeShow
-  SetDlgItemText $HWNDPARENT 1 "立即安装"
+  GetDlgItem $R0 $HWNDPARENT 1
+  SendMessage $R0 0x000C 0 "STR:立即安装"
 FunctionEnd
 
 Function RunMainBinary
