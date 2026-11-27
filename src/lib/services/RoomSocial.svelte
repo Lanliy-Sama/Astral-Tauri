@@ -35,6 +35,7 @@
     accounts = $state([]);
     members = $state([]);
     ownAccounts = $state([]);
+    ownLanGames = $state([]);
     messages = $state([]);
     error = $state('');
     localIp = $state('');
@@ -49,7 +50,7 @@
 
     async _resolveLocalIp() {
       this.localIp = sm.networkConfigState.ipv4 || this.localIp;
-      if (!isTauri()) return;
+      if (this.localIp || !isTauri()) return;
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const raw = await invoke('get_running_info');
@@ -119,6 +120,7 @@
       this._roomId = '';
       this.accounts = [];
       this.members = [];
+      this.ownLanGames = [];
       this.peers = [];
       for (const pending of this._pending.values()) {
         clearTimeout(pending.timer);
@@ -174,6 +176,23 @@
       return list;
     }
 
+    async _localLanGames() {
+      if (!isTauri()) return [];
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const games = await invoke('minecraft_lan_games');
+        this.ownLanGames = (Array.isArray(games) ? games : []).slice(0, 16).map((game) => ({
+          ip: this.localIp || game.ip,
+          port: Number(game.port),
+          motd: String(game.motd || '').slice(0, 512),
+          cover: typeof game.cover === 'string' && game.cover.startsWith('data:image/png;base64,') ? game.cover : '',
+        })).filter((game) => game.ip && game.port > 0 && game.port <= 65535);
+      } catch {
+        this.ownLanGames = [];
+      }
+      return this.ownLanGames;
+    }
+
     async _sendOne(peer, kind, payload = {}) {
       if (!this.connected || !peer) throw new Error('房间协作尚未连接');
       const { invoke } = await import('@tauri-apps/api/core');
@@ -196,7 +215,7 @@
     }
 
     async broadcastPresence(replyTo = '') {
-      const payload = { accounts: this.ownAccounts, reply: !!replyTo };
+      const payload = { accounts: this.ownAccounts, reply: !!replyTo, lanGames: await this._localLanGames() };
       if (replyTo) await this._sendOne(replyTo, 'presence', payload);
       else await this.broadcast('presence', payload);
     }
@@ -223,9 +242,15 @@
       const payload = message.payload || {};
       if (kind === 'presence') {
         const now = Date.now();
+        const lanGames = (Array.isArray(payload.lanGames) ? payload.lanGames : []).slice(0, 16).map((game) => ({
+          ip: peer,
+          port: Number(game.port),
+          motd: String(game.motd || '').slice(0, 512),
+          cover: typeof game.cover === 'string' && game.cover.startsWith('data:image/png;base64,') && game.cover.length <= 300000 ? game.cover : '',
+        })).filter((game) => game.port > 0 && game.port <= 65535);
         this.members = [
           ...this.members.filter((m) => m.peer !== peer),
-          { peer, nickname: message.sender || '房员', lastSeen: now },
+          { peer, nickname: message.sender || '房员', lastSeen: now, lanGames },
         ];
         this.accounts = this.accounts.filter((a) => a.peer !== peer);
         const additions = (payload.accounts || []).map((a) => ({

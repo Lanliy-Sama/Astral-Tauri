@@ -5,6 +5,7 @@
    * 点击复制 IP。NAT 走游戏化等级文案（natMiniInfo）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
+  import MinecraftLanSection from './MinecraftLanSection.svelte';
   import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
@@ -86,6 +87,7 @@
       <span class="text">{formatTunnelProto(player.tunnelProto)}</span>
     {/if}
   </div>
+  <MinecraftLanSection {player} playerName={displayName} compact={true} />
 </div>
 
 <style>

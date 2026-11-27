@@ -15,6 +15,8 @@
   import RoomSettingsSheet from './RoomSettingsSheet.svelte';
   import NetworkTopologyView from './topology/NetworkTopologyView.svelte';
   import RoomSocialPanel from './RoomSocialPanel.svelte';
+  import MinecraftLanSheet from './MinecraftLanSheet.svelte';
+  import GrassBlockIcon from './cards/GrassBlockIcon.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { isServerNode } from '$lib/utils/Network.svelte';
   import { t } from '$lib/i18n/I18n.svelte';
@@ -29,8 +31,17 @@
   let showTopology = $state(false);
   let settingsOpen = $state(false);
   let socialOpen = $state(false);
+  let lanSheetOpen = $state(false);
   $effect(() => {
-    if (!sm.appSettingsState.experimentalFeatures && socialOpen) socialOpen = false;
+    if (!sm.appSettingsState.experimentalFeatures) {
+      if (socialOpen) socialOpen = false;
+      if (lanSheetOpen) lanSheetOpen = false;
+    }
+  });
+  $effect(() => {
+    const openLanSheet = () => (lanSheetOpen = true);
+    window.addEventListener('astral-open-lan-sheet', openLanSheet);
+    return () => window.removeEventListener('astral-open-lan-sheet', openLanSheet);
   });
 
   /* 断点宽度（MediaQuery.of(context).size.width → window.innerWidth） */
@@ -132,6 +143,12 @@
         <Icon name="forum" size={24} />
       </button>
     {/if}
+    {#if sm.appSettingsState.experimentalFeatures}
+      <div class="fab-gap"></div>
+      <button class="md-fab lan-fab" data-tip="Minecraft 局域网列表" onclick={() => (lanSheetOpen = true)}>
+        <GrassBlockIcon size={26} />
+      </button>
+    {/if}
     <div class="fab-gap"></div>
     <button
       class="md-fab"
@@ -149,6 +166,7 @@
   <RoomSettingsSheet bind:open={settingsOpen} />
   {#if sm.appSettingsState.experimentalFeatures}
     <RoomSocialPanel bind:open={socialOpen} />
+    <MinecraftLanSheet bind:open={lanSheetOpen} />
   {/if}
 </div>
 

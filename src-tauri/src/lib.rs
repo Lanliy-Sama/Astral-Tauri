@@ -7,6 +7,7 @@ pub mod commands;
 mod music_platform;
 mod room_social;
 mod media_controls;
+mod minecraft_lan;
 
 /// closeMinimize 共享状态（由前端 set_close_minimize 同步）
 pub struct CloseMinimizeState(pub std::sync::Mutex<bool>);
@@ -653,6 +654,7 @@ pub fn run() {
             room_social::room_media_listener_start,
             room_social::room_media_send,
             media_controls::smtc_update,
+            minecraft_lan::minecraft_lan_games,
         ])
         .setup(|app| {
             // panic 钩子：release GUI 无 stderr，panic 信息落 %TEMP%\astral-panic.log。
@@ -676,6 +678,7 @@ pub fn run() {
 
             // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
             astral_core::api::simple::preinit_runtime();
+            minecraft_lan::init();
 
                 // --selftest：后端全链路自测（构建配置 -> create_server -> 核心启动检查），
                 // 结果写入 %TEMP%\\astral-cmd.log 后自动退出。绕开 UI，用于确定性交付验证。
