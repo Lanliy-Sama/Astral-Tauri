@@ -22,7 +22,7 @@ const env = {
   RUSTFLAGS: `${process.env.RUSTFLAGS || ''} -Z threads=16`.trim(),
   TAURI_CONFIG: JSON.stringify({
     ...inheritedConfig,
-    build: { ...(inheritedConfig.build || {}), beforeBuildCommand: '' },
+    build: { ...(inheritedConfig.build || {}), beforeBuildCommand: 'node --version' },
   }),
 };
 
