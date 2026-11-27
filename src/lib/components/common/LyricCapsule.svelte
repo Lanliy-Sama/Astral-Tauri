@@ -231,6 +231,9 @@
         <button class="control-btn primary" aria-label={sm.bgmState.playing ? t('pause') : t('play')} onclick={bgmToggleAny}>
           <span class="ms filled">{sm.bgmState.playing ? 'pause' : 'play_arrow'}</span>
         </button>
+        <button class="control-btn" data-tip={t('next')} aria-label={t('next')} onclick={bgmNext}>
+          <span class="ms filled">skip_next</span>
+        </button>
         <button class="control-btn" data-tip={modeLabel} aria-label={modeLabel} onclick={cyclePlaybackMode}>
           <span class="ms filled">{modeIcon}</span>
         </button>
@@ -342,6 +345,7 @@
   }
   .controls .control-btn:nth-child(2) { animation-delay: 35ms; }
   .controls .control-btn:nth-child(3) { animation-delay: 70ms; }
+  .controls .control-btn:nth-child(4) { animation-delay: 105ms; }
   .control-btn {
     width: 38px;
     height: 38px;

@@ -71,17 +71,12 @@ ${StrLoc}
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
-!define ASTRAL_INSTALLER_ASSETS "$%ASTRAL_ROOT%\src-tauri\installer\assets"
 
 Var PassiveMode
 Var UpdateMode
 Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
-Var WelcomeDialog
-Var WelcomeIcon
-Var WelcomeIconImage
-Var InstallButton
 
 Name "${PRODUCTNAME}"
 BrandingText "Astral"
@@ -173,7 +168,12 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
-Page custom AstralWelcome
+!define MUI_WELCOMEPAGE_TITLE "Astral"
+!define MUI_WELCOMEPAGE_TITLE_3LINES
+!define MUI_WELCOMEPAGE_TEXT "安全、自由、简洁的联机体验$\r$\n$\r$\n点击“立即安装”开始安装 Astral。"
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW AstralWelcomeShow
+!insertmacro MUI_PAGE_WELCOME
 
 ; 2. License Page (if defined)
 !if "${LICENSE}" != ""
@@ -431,62 +431,8 @@ Var AppStartMenuFolder
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
 
-Function AstralWelcome
-  ${IfThen} $PassiveMode = 1 ${|} Abort ${|}
-  InitPluginsDir
-  File "/oname=$PLUGINSDIR\astral-icon.bmp" "${ASTRAL_INSTALLER_ASSETS}\app-icon.bmp"
-
-  ; 隐藏传统导航按钮，只保留页面中的主安装按钮
-  GetDlgItem $R0 $HWNDPARENT 1
-  ShowWindow $R0 ${SW_HIDE}
-  GetDlgItem $R0 $HWNDPARENT 2
-  ShowWindow $R0 ${SW_HIDE}
-  GetDlgItem $R0 $HWNDPARENT 3
-  ShowWindow $R0 ${SW_HIDE}
-  nsDialogs::Create 1018
-  Pop $WelcomeDialog
-  SetCtlColors $WelcomeDialog 0x17324D 0xF5F8FC
-
-  ; 全部使用对话框单位与百分比，避免高 DPI 下定位漂移或按钮超出页面
-  ${NSD_CreateBitmap} 0 4u 100% 50u ""
-  Pop $WelcomeIcon
-  ${NSD_AddStyle} $WelcomeIcon 0x00000200
-  ${NSD_SetImage} $WelcomeIcon "$PLUGINSDIR\astral-icon.bmp" $WelcomeIconImage
-
-  ${NSD_CreateLabel} 10% 58u 80% 24u "Astral"
-  Pop $R0
-  ${NSD_AddStyle} $R0 ${SS_CENTER}
-  SetCtlColors $R0 0x17324D TRANSPARENT
-  CreateFont $R1 "Segoe UI" 24 600
-  SendMessage $R0 0x0030 $R1 1
-  ${NSD_CreateLabel} 10% 84u 80% 18u "安全、自由、简洁的联机体验"
-  Pop $R0
-  ${NSD_AddStyle} $R0 ${SS_CENTER}
-  SetCtlColors $R0 0x60758A TRANSPARENT
-  CreateFont $R1 "Microsoft YaHei UI" 11 400
-  SendMessage $R0 0x0030 $R1 1
-
-  ${NSD_CreateButton} 25% 116u 50% 30u "立即安装"
-  Pop $InstallButton
-  System::Call 'uxtheme::SetWindowTheme(p $InstallButton, w " ", w " ")'
-  SetCtlColors $InstallButton 0xFFFFFF 0x1677E8
-  CreateFont $R1 "Microsoft YaHei UI" 12 600
-  SendMessage $InstallButton 0x0030 $R1 1
-  ShowWindow $InstallButton ${SW_SHOW}
-  EnableWindow $InstallButton 1
-  ${NSD_OnClick} $InstallButton AstralStartInstall
-  System::Call 'user32::BringWindowToTop(p $InstallButton)'
-  nsDialogs::Show
-FunctionEnd
-
-Function AstralStartInstall
-  GetDlgItem $R0 $HWNDPARENT 1
-  ShowWindow $R0 ${SW_SHOW}
-  GetDlgItem $R0 $HWNDPARENT 2
-  ShowWindow $R0 ${SW_SHOW}
-  GetDlgItem $R0 $HWNDPARENT 3
-  ShowWindow $R0 ${SW_SHOW}
-  SendMessage $HWNDPARENT 0x0111 1 0
+Function AstralWelcomeShow
+  SetDlgItemText $HWNDPARENT 1 "立即安装"
 FunctionEnd
 
 Function RunMainBinary

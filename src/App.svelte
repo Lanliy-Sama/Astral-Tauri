@@ -1227,7 +1227,7 @@ a {
  *   · 主页面容器转透明 → 图像直达内容层；
  *   · 侧边栏 / 底部导航半透明 → 液态玻璃组件的 backdrop-filter
  *     直接折射/模糊背后的图像，玻璃质感最大化；
- *   · 子页（route-overlay / sub-page）高不透明度 surface → 轻微透出。
+ *   · 子页保持透明，由 main-screen 统一提供背景与可读性遮罩。
  * ============================================================ */
 html.has-custom-bg body {
   background: var(--md-surface); /* 遮罩之外兜底 */
@@ -1257,11 +1257,14 @@ html.has-custom-bg .bottom-nav {
   background: color-mix(in srgb, var(--md-surface-container-low) 66%, transparent);
 }
 /* 子页路由层 + 子页外壳：高不透明度 surface，可读性优先、轻微透出图像 */
-html.has-custom-bg .route-overlay {
-  background: color-mix(in srgb, var(--md-surface) 84%, transparent);
-}
+html.has-custom-bg .route-overlay,
 html.has-custom-bg .sub-page {
-  background: color-mix(in srgb, var(--md-surface) 88%, transparent);
+  /* main-screen 已承载图像与可读性遮罩；子页不能再叠加两层实色，
+   * 否则 84% × 88% 的遮罩会让背景只剩约 2% 可见。 */
+  background: transparent;
+}
+html.has-custom-bg .sub-app-bar {
+  background: color-mix(in srgb, var(--md-surface) 62%, transparent);
 }
   }
 </style>

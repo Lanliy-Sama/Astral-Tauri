@@ -290,7 +290,8 @@ html.liquid-glass .mini-card {
   --lg-edge: 18px; /* 边缘折射带宽度（各组件按尺寸覆盖） */
   --lg-blur: 9px; /* 中心磨砂半径 */
   --lg-spec-r: 110px; /* 镜面高光半径 */
-  --lg-bright: 1; /* 中心亮度抬升（纯色背景可读性的关键） */
+  --lg-bright: 1;
+  --lg-saturate: 1.35;
   --lg-tint: transparent; /* 中心色调（渐变或颜色） */
   --lg-tint-edge: transparent; /* 边缘透镜上的附加色调 */
   position: relative;
@@ -395,8 +396,8 @@ html.liquid-glass .mini-card::after {
   border-radius: inherit;
   z-index: -1;
   pointer-events: none;
-  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(1.7) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
-  backdrop-filter: blur(var(--lg-blur)) saturate(1.7) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(calc(var(--lg-bright) - 0.06 * var(--lg-press)));
   background:
     /* 按压变暗层：玻璃被压入表面 → 变厚变暗（浅色背景下清晰可读的按压反馈）
      * 注：浅色背景上“提亮”会裁剪到白色而不可见，Apple 液态玻璃按压缩果同样是变暗 */
@@ -412,7 +413,7 @@ html.liquid-glass .mini-card::after {
       rgb(255 255 255 / var(--lg-sheen)),
       rgb(255 255 255 / calc(var(--lg-sheen) * 0.22)) 36%,
       transparent 50%,
-      rgb(0 0 0 / 0.028) 84%
+      rgb(0 0 0 / calc(var(--lg-sheen) * 0.1)) 84%
     ),
     /* 静息光：顶面反光 + 底部地面反射（--lg-rest=0 时完全清除，卡片中心全透） */
     linear-gradient(
@@ -583,25 +584,19 @@ html.liquid-glass .user-page .scroll {
 html.liquid-glass .md-card,
 html.liquid-glass .home-box:not(.borderless) {
   --lg-edge: 16px;
-  --lg-blur: 8px;
+  --lg-blur: 4px;
   --lg-spec-r: 150px;
-  --lg-bright: 1.03;
-  --lg-sheen: 0.12;
-  --lg-rest: 0.45;
-  /* 中心清澈但有真实玻璃材质：设置页纯色背景下也能看见厚度，
-   * 不再用全透明 + 零静息光导致“完全没有玻璃效果”。 */
-  --lg-tint:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--md-surface-container-low) 72%, transparent),
-      color-mix(in srgb, var(--md-surface-container-low) 58%, transparent) 58%,
-      color-mix(in srgb, var(--md-surface-container-low) 66%, transparent)
-    );
+  --lg-bright: 1;
+  --lg-saturate: 1.08;
+  --lg-sheen: 0;
+  --lg-rest: 0;
+  /* 中心不再铺实色或白色渐变；只保留背景透视、轻微模糊和边缘折射。 */
+  --lg-tint: transparent;
 }
 html.liquid-glass .settings-card > .md-card {
   border-radius: 16px;
   --lg-edge: 17px;
-  --lg-blur: 9px;
+  --lg-blur: 4px;
 }
 /* hover 描边回归组件语义（HomeBox.hovered = primary） */
 html.liquid-glass .home-box:not(.borderless).hovered {
