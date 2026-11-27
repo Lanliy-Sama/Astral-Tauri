@@ -5,7 +5,6 @@
    * hover bg primary@0.06；底边框 outlineVariant@0.5（非最后）；点击复制 IP。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import MinecraftLanSection from './MinecraftLanSection.svelte';
   import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import { writeClipboard } from '$lib/rust/Api.svelte';
   import {
@@ -47,26 +46,22 @@
     }
   }}
 >
-  <div class="list-main">
-    <Icon name="person" size={18} color="var(--md-primary)" />
-    <span class="name">{displayName}</span>
-    <span class="badge" style="background:{typeColor}">{connectionType}</span>
-    {#if connectionType !== '本机'}
-      <span class="latency" style="color:{latColor}">{(player.latencyMs ?? 0).toFixed(0)}ms</span>
-      <span class="loss" style="color:{lossCol}">{(player.lossRate ?? 0).toFixed(1)}%</span>
-    {/if}
-    {#if hasIp}
-      <span class="ip">{player.ipv4}</span>
-    {/if}
-  </div>
-  <MinecraftLanSection {player} playerName={displayName} compact={true} />
+  <Icon name="person" size={18} color="var(--md-primary)" />
+  <span class="name">{displayName}</span>
+  <span class="badge" style="background:{typeColor}">{connectionType}</span>
+  {#if connectionType !== '本机'}
+    <span class="latency" style="color:{latColor}">{(player.latencyMs ?? 0).toFixed(0)}ms</span>
+    <span class="loss" style="color:{lossCol}">{(player.lossRate ?? 0).toFixed(1)}%</span>
+  {/if}
+  {#if hasIp}
+    <span class="ip">{player.ipv4}</span>
+  {/if}
 </div>
 
 <style>
   .list-user-card {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     margin-bottom: 5px;
     padding: 10px 12px;
     border: 1px solid transparent;
@@ -77,7 +72,6 @@
   .list-user-card:hover {
     background: var(--md-primary-06);
   }
-  .list-main { display: flex; align-items: center; width: 100%; min-width: 0; }
   .list-user-card.divider {
     border-bottom: 1px solid color-mix(in srgb, var(--md-outline-variant) 50%, transparent);
   }

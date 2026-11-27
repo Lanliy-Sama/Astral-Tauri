@@ -7,7 +7,6 @@
    * 点击整卡复制 IP（注意原版此处 snack 文案为 'IP: '，与列表/简约卡的 'IP地址: ' 不同）。
    */
   import Icon from '$lib/components/common/Icon.svelte';
-  import MinecraftLanSection from './MinecraftLanSection.svelte';
   import { sm } from '$lib/services/ServiceManager.svelte';
   import { snackSuccess } from '$lib/components/common/SnackbarStore.svelte';
   import { writeClipboard } from '$lib/rust/Api.svelte';
@@ -248,7 +247,6 @@
         </div>
       {/if}
     </div>
-    <MinecraftLanSection {player} playerName={displayName} />
   </div>
 </div>
 
