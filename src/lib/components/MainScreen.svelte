@@ -191,7 +191,7 @@
   }
 </script>
 
-<div class="main-screen">
+<div class="main-screen" class:route-open={routeStack.length > 0}>
   {#if !isSmallWindow}
     <StatusBar />
   {/if}
@@ -277,6 +277,11 @@
     font-weight: 700;
     color: var(--md-on-primary-container);
     flex-shrink: 0;
+  }
+  .main-screen.route-open > :global(.status-bar),
+  .main-screen.route-open > .body,
+  .main-screen.route-open > :global(.bottom-nav) {
+    visibility: hidden;
   }
   .route-overlay {
     position: absolute;

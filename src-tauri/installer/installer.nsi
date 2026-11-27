@@ -71,12 +71,17 @@ ${StrLoc}
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
+!define ASTRAL_INSTALLER_ASSETS "$%ASTRAL_ROOT%\src-tauri\installer\assets"
 
 Var PassiveMode
 Var UpdateMode
 Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
+Var WelcomeDialog
+Var WelcomeBg
+Var WelcomeBgImage
+Var InstallButton
 
 Name "${PRODUCTNAME}"
 BrandingText "Astral"
@@ -167,13 +172,8 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
 ; Installer pages, must be ordered as they appear
-; 1. Welcome Page
-!define MUI_WELCOMEPAGE_TITLE "Astral"
-!define MUI_WELCOMEPAGE_TITLE_3LINES
-!define MUI_WELCOMEPAGE_TEXT "安全、自由、简洁的联机体验$\r$\n$\r$\n点击“立即安装”开始安装 Astral。"
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
-!define MUI_PAGE_CUSTOMFUNCTION_SHOW AstralWelcomeShow
-!insertmacro MUI_PAGE_WELCOME
+; 1. Branded welcome page; native directory page follows directly.
+Page custom AstralWelcome
 
 ; 2. License Page (if defined)
 !if "${LICENSE}" != ""
@@ -190,7 +190,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; 4. Custom page to ask user if he wants to reinstall/uninstall
 ;    only if a previous installation was detected
 Var ReinstallPageCheck
-Page custom PageReinstall PageLeaveReinstall
+; Existing installations are updated in place without an uninstall-choice page.
 Function PageReinstall
   ; Uninstall previous WiX installation if exists.
   ;
@@ -399,8 +399,9 @@ Function PageLeaveReinstall
   reinst_done:
 FunctionEnd
 
-; 5. Install directory is selected automatically on the simplified welcome page
-!define MUI_PAGE_CUSTOMFUNCTION_PRE Skip
+; 5. Choose install directory directly after the welcome page
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW AstralDirectoryShow
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; 6. Start menu shortcut page
@@ -431,7 +432,52 @@ Var AppStartMenuFolder
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
 
-Function AstralWelcomeShow
+Function AstralWelcome
+  ${IfThen} $PassiveMode = 1 ${|} Abort ${|}
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\astral-bg.bmp" "${ASTRAL_INSTALLER_ASSETS}\background.bmp"
+
+  GetDlgItem $R0 $HWNDPARENT 1
+  ShowWindow $R0 ${SW_HIDE}
+  GetDlgItem $R0 $HWNDPARENT 2
+  ShowWindow $R0 ${SW_HIDE}
+  GetDlgItem $R0 $HWNDPARENT 3
+  ShowWindow $R0 ${SW_HIDE}
+
+  nsDialogs::Create 1018
+  Pop $WelcomeDialog
+  SetCtlColors $WelcomeDialog 0x17324D 0xF5F8FC
+
+  ; 图片承载全部装饰与文案，SS_REALSIZECONTROL 让它随页面和 DPI 缩放。
+  ${NSD_CreateBitmap} 0 0 100% 100% ""
+  Pop $WelcomeBg
+  ${NSD_AddStyle} $WelcomeBg 0x00000040
+  ${NSD_SetImage} $WelcomeBg "$PLUGINSDIR\astral-bg.bmp" $WelcomeBgImage
+
+  ${NSD_CreateButton} 25% 68% 50% 30u "立即安装"
+  Pop $InstallButton
+  System::Call 'uxtheme::SetWindowTheme(p $InstallButton, w " ", w " ")'
+  SetCtlColors $InstallButton 0xFFFFFF 0x1677E8
+  CreateFont $R1 "Microsoft YaHei UI" 12 600
+  SendMessage $InstallButton 0x0030 $R1 1
+  ${NSD_OnClick} $InstallButton AstralStartInstall
+
+  System::Call 'user32::SetWindowPos(p $WelcomeBg, p 1, i 0, i 0, i 0, i 0, i 0x0013)'
+  System::Call 'user32::BringWindowToTop(p $InstallButton)'
+  nsDialogs::Show
+FunctionEnd
+
+Function AstralStartInstall
+  GetDlgItem $R0 $HWNDPARENT 1
+  ShowWindow $R0 ${SW_SHOW}
+  GetDlgItem $R0 $HWNDPARENT 2
+  ShowWindow $R0 ${SW_SHOW}
+  GetDlgItem $R0 $HWNDPARENT 3
+  ShowWindow $R0 ${SW_SHOW}
+  SendMessage $HWNDPARENT 0x0111 1 0
+FunctionEnd
+
+Function AstralDirectoryShow
   GetDlgItem $R0 $HWNDPARENT 1
   SendMessage $R0 0x000C 0 "STR:立即安装"
 FunctionEnd

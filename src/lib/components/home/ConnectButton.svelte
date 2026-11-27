@@ -18,6 +18,7 @@
   import { showSnackbar } from '../common/SnackbarStore.svelte';
   import { openExternal, hasNpcapDriver } from '../../rust/Api.svelte';
   import { isWindows, isTauri } from '../../utils/Platform.svelte';
+  import { roomConnections } from '../../services/RoomConnections.svelte';
 
   let npcapOpen = $state(false);
   let progressKey = $state(0); // 每次进入 connecting 重置 15s 动画
@@ -108,9 +109,10 @@
     /* 3. 发起连接 */
     const result = await sm.connect({ isManual: true });
     if (result === false) {
+      const detail = roomConnections.sessions[sm.roomState.selectedRoom?.id]?.error;
       showSnackbar({
         title: '连接失败',
-        message: '请检查网络后重试，并确认房间与服务器配置无误',
+        message: detail || '请检查网络后重试，并确认房间与服务器配置无误',
         type: 'error',
         duration: 4000,
       });

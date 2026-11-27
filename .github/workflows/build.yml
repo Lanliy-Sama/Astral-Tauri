@@ -132,6 +132,11 @@ jobs:
       - name: 🖼️ 从原图重新生成图标（恢复圆角）
         run: npx tauri icon app-icon.png
 
+      - name: 🎨 生成 Astral 品牌安装侧栏
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: pwsh -NoProfile -File .github/scripts/generate-installer-assets.ps1
+
       - name: 🧰 预热 NSIS 工具链（Windows，带重试防 GitHub 504）
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -142,6 +147,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ASTRAL_ROOT: ${{ github.workspace }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"
@@ -270,6 +276,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ASTRAL_ROOT: ${{ github.workspace }}
         run: |
           CFG=""
           VERSION="${{ inputs.version }}"

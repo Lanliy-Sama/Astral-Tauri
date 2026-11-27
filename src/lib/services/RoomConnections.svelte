@@ -36,7 +36,9 @@
       this.sessions[room.id] = session;
       this.setActiveRoom(room.id);
       try {
-        if (!(await sm.isNpcapReady())) throw new Error('Npcap 未就绪，请先完成驱动安装');
+        const needsNpcap = (room.servers || []).some((url) => String(url).toLowerCase().startsWith('faketcp://'))
+          || enabledServers.some((server) => server.faketcp === true || String(server.url).toLowerCase().startsWith('faketcp://'));
+        if (needsNpcap && !(await sm.isNpcapReady())) throw new Error('Npcap 未就绪，请先完成驱动安装');
         const config = sm._buildServerConfig(room);
         if (isAndroid()) config.flag.noTun = true;
         session.instanceId = await rust.createServerWithId(config);
@@ -64,7 +66,9 @@
             if (address != null && Number(address) !== 0) {
               session.ipv4 = intToIp(address);
               session.status = 'connected';
-              session.netStatus = await rust.getNetworkStatusFor(session.instanceId);
+              // 虚拟 IP 已就绪即表示 ET 启动成功；成员状态可在监控中重试，
+              // 初始桥接查询失败不应把已有连接改判为失败并关闭实例。
+              session.netStatus = await rust.getNetworkStatusFor(session.instanceId).catch(() => null);
               session.attempts = 0;
               await this._configureAndroidTun(session.ipv4);
               this.setActiveRoom(roomId);
