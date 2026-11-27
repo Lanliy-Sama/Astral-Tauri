@@ -514,13 +514,16 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     .title("Astral 桌面歌词")
     .inner_size(880.0, 128.0)
     .min_inner_size(420.0, 86.0)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
     .resizable(true);
     #[cfg(desktop)]
-    let builder = builder.center();
+    let builder = builder
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .center();
+    #[cfg(not(desktop))]
+    return Err("桌面歌词仅支持桌面端".into());
     builder.build().map_err(|e| e.to_string())?;
     Ok(())
 }

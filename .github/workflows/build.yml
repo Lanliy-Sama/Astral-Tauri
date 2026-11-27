@@ -94,12 +94,29 @@ jobs:
           sudo unzip -o -q /tmp/protoc.zip -d /usr/local
           protoc --version
 
-      - name: 📦 安装 protoc（Windows）
+      - name: 📦 安装 protoc（Windows 官方 ZIP）
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          choco install protoc -y --no-progress
-          protoc --version
+          $version = '27.3'
+          $zip = Join-Path $env:RUNNER_TEMP 'protoc-win64.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'protoc-win64'
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 6 -and -not $downloaded; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 90
+              $downloaded = $true
+            } catch {
+              if ($attempt -eq 6) { throw }
+              Start-Sleep -Seconds 10
+            }
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $destination -Force
+          $protoc = Join-Path $destination 'bin/protoc.exe'
+          & $protoc --version
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+          [System.IO.File]::AppendAllText($env:GITHUB_PATH, "$(Join-Path $destination 'bin')`n", $utf8NoBom)
 
       - name: 📦 安装 Npcap SDK（Windows 链接 Packet.lib / wpcap.lib）
         if: matrix.platform == 'windows-latest'
