@@ -18,6 +18,10 @@
 
   let ready = $state(false);
 
+  function suppressWebViewContextMenu(event) {
+    if (isTauri()) event.preventDefault();
+  }
+
   /* ============ 主题引擎（原 theme-engine.svelte.js） ============ */
   let mediaQuery = null;
 
@@ -180,6 +184,7 @@
 
 <!-- 液态玻璃系统：全局材质样式 + SVG 折射滤镜 + 指针高光跟随（自包含组件） -->
 <LiquidGlass />
+<svelte:window oncontextmenu={suppressWebViewContextMenu} />
 
 {#if ready}
   <MainScreen />
