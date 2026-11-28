@@ -1,13 +1,14 @@
 //! Stellaris 桌面应用 —— Tauri 2 库入口（桌面 + 移动端共用）。
 //! 窗口参数对应原版 window_manager.dart：960×540，最小 200×300，无系统标题栏。
 
-use tauri::{Manager, WindowEvent};
+use tauri::{Listener, Manager, WindowEvent};
 
 pub mod commands;
 mod music_platform;
 mod room_social;
 mod media_controls;
 mod minecraft_lan;
+mod desktop_lyrics_native;
 
 /// closeMinimize 共享状态（由前端 set_close_minimize 同步）
 pub struct CloseMinimizeState(pub std::sync::Mutex<bool>);
@@ -681,6 +682,15 @@ pub fn run() {
             // 预热 astral-core 的 tokio 运行时（曾在命令线程首次初始化时卡死）
             astral_core::api::simple::preinit_runtime();
             minecraft_lan::init();
+            #[cfg(windows)]
+            {
+                desktop_lyrics_native::init();
+                app.listen_global("desktop-lyrics-update", |event| {
+                    if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
+                        desktop_lyrics_native::update(&payload);
+                    }
+                });
+            }
 
                 // --selftest：后端全链路自测（构建配置 -> create_server -> 核心启动检查），
                 // 结果写入 %TEMP%\\astral-cmd.log 后自动退出。绕开 UI，用于确定性交付验证。

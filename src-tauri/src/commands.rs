@@ -495,53 +495,30 @@ pub fn close_watch_window(label: String, app: AppHandle) -> Result<(), String> {
 
 /// 外部链接打开兜底（优先使用 opener 插件）。
 #[tauri::command]
-pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), String> {
-    const LABEL: &str = "desktop-lyrics";
-    if !enabled {
-        if let Some(window) = app.get_webview_window(LABEL) {
-            window.close().map_err(|e| e.to_string())?;
-        }
-        return Ok(());
+pub fn set_desktop_lyrics_enabled(enabled: bool, _app: AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        crate::desktop_lyrics_native::set_enabled(enabled);
+        Ok(())
     }
-    if app.get_webview_window(LABEL).is_some() {
-        return Ok(());
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+        Err("桌面歌词目前仅支持 Windows".into())
     }
-    let builder = tauri::WebviewWindowBuilder::new(
-        &app,
-        LABEL,
-        tauri::WebviewUrl::App("index.html?desktopLyrics=1".into()),
-    )
-    .title("Stellaris 桌面歌词")
-    .inner_size(880.0, 128.0)
-    .min_inner_size(420.0, 86.0)
-    .resizable(true);
-    #[cfg(desktop)]
-    let builder = builder
-        .decorations(false)
-        .transparent(true)
-        .always_on_top(true)
-        .center();
-    #[cfg(not(desktop))]
-    return Err("桌面歌词仅支持桌面端".into());
-    builder.build().map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 #[tauri::command]
-pub fn set_desktop_lyrics_click_through(enabled: bool, app: AppHandle) -> Result<(), String> {
-    #[cfg(desktop)]
+pub fn set_desktop_lyrics_click_through(enabled: bool, _app: AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
     {
-        if let Some(window) = app.get_webview_window("desktop-lyrics") {
-            window
-                .set_ignore_cursor_events(enabled)
-                .map_err(|e| e.to_string())?;
-        }
-        return Ok(());
+        crate::desktop_lyrics_native::set_click_through(enabled);
+        Ok(())
     }
-    #[cfg(not(desktop))]
+    #[cfg(not(windows))]
     {
-        let _ = (enabled, app);
-        Err("桌面歌词仅支持桌面端".into())
+        let _ = enabled;
+        Err("桌面歌词目前仅支持 Windows".into())
     }
 }
 
