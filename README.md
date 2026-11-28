@@ -7,7 +7,7 @@
   ![Platforms](https://img.shields.io/badge/平台-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue?style=flat-square)
   ![Languages](https://img.shields.io/badge/多语言支持-中文%7C英文%7C德文%7C西班牙文%7C法文%7C日文%7C韩文%7C俄文-orange?style=flat-square)
   
-  ![访问次数](https://count.getloli.com/@Astral-Tauri?theme=cat-girls-yay&padding=7&offset=0&align=center&scale=1.1&pixelated=1&darkmode=auto)
+  ![访问次数](https://count.getloli.com/@Stellaris?theme=cat-girls-yay&padding=7&offset=0&align=center&scale=1.1&pixelated=1&darkmode=auto)
   
   ![Repobeats](https://repobeats.axiom.co/api/embed/c8f00565120b9bd12bd4e50050e44b3515acb1cb.svg "Repobeats analytics image")
 </div>
@@ -15,12 +15,12 @@
 > [!CAUTION]
 > **100% AI 生成的项目**
 >
-> Astral-Tauri 的源代码与文档**100% 由 AI 在人类指导下生成**。请将其视为实验性实现：在依赖它之前，先审计代码并在你自己的硬件上测试。
+> Stellaris 的源代码与文档**100% 由 AI 在人类指导下生成**。请将其视为实验性实现：在依赖它之前，先审计代码并在你自己的硬件上测试。
 
 > [!NOTE]
 > 本仓库是 Stellaris 的 **Tauri 分支**，而后者基于原始项目 [ldoubil/Stellaris](https://github.com/ldoubil/astral)开发。Tauri端的设计与实现全部归功于原项目。本分支聚焦于**Tauri轻量前端的移植与修复**。
 >
-> Astral-Tauri 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
+> Stellaris 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
 
 ## ✨ 主要特性
 

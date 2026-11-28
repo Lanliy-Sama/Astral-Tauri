@@ -80,4 +80,4 @@ strip = true
 # 多个编译成运行时陷阱（issue #171）——连接房间首次解析 JSON 数字即
 # panic=abort 静默退出。重定向到 Easytier 分支里打补丁的标量版 zmij fork。
 [patch.crates-io]
-zmij = { git = "https://github.com/Lanliy-Sama/Astral-Tauri", branch = "Easytier" }
+zmij = { git = "https://github.com/Lanliy-Sama/Stellaris", branch = "Easytier" }

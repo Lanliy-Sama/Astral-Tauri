@@ -22,7 +22,7 @@
   /* GitHubProxySelector 常量 */
   const MIRRORS = ['https://gh.xmly.dev/', 'https://gh-proxy.org/', 'https://ghfast.top/'];
   const NET_DISK_URL = 'https://astral.fan/quick-start/download-install/';
-  const RELEASES_PAGE = 'https://github.com/Lanliy-Sama/Astral-Tauri/releases';
+  const RELEASES_PAGE = 'https://github.com/Lanliy-Sama/Stellaris/releases';
 
   /* SwitchListTile 整行可点；点 Switch 本体时避免与 tile 冒泡双触发 */
   function switchTileClick(e, current, update) {
@@ -164,7 +164,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
     try {
-      await fetch(prefix + 'Lanliy-Sama/Astral-Tauri', {
+      await fetch(prefix + 'Lanliy-Sama/Stellaris', {
         method: 'HEAD',
         signal: controller.signal,
         mode: 'no-cors',

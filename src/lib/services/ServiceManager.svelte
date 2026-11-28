@@ -283,15 +283,15 @@ export class ServerStatusState {
 }
 
 /* ============ 常量 ============ */
-/* 更新源：本仓库（Astral-Tauri fork 自行发布 Release） */
+/* 更新源：本仓库（Stellaris fork 自行发布 Release） */
 const ANDROID_PACKAGE = 'com.kevin.astral';
 const GITHUB_OWNER = 'Lanliy-Sama';
-const GITHUB_REPO = 'Astral-Tauri';
+const GITHUB_REPO = 'Stellaris';
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
 const RELEASE_PAGE = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 const NET_DISK_URL = 'https://astral.fan/quick-start/download-install/';
 const MIRRORS = ['https://gh.xmly.dev/', 'https://gh-proxy.org/', 'https://ghfast.top/'];
-const SPEED_TEST_URL = 'https://github.com/Lanliy-Sama/Astral-Tauri';
+const SPEED_TEST_URL = 'https://github.com/Lanliy-Sama/Stellaris';
 
 /* ============ 应用版本 ============ */
 /* 浏览器预览兜底常量；Tauri 模式下 _initVersion 从应用元数据读真实
@@ -495,6 +495,14 @@ class ServiceManager {
     // 清理废弃域名（ServerDao.init 逻辑）
     let changed = false;
     for (const s of servers) {
+      if ((s.url || '').toLowerCase() === 'js.629957.xyz:11012') {
+        s.name = '上海电信[可中转]';
+        s.url = '225284.xyz:11010';
+        s.tcp = true;
+        await db.putRow('servers', s);
+        changed = true;
+        continue;
+      }
       if (isDeprecatedServer(s.url)) {
         await db.deleteRow('servers', s.id);
         changed = true;
@@ -505,8 +513,8 @@ class ServiceManager {
     if (servers.length === 0) {
       const seeded = await db.putRow('servers', {
         id: null,
-        name: '[小探][可中转A]',
-        url: 'js.629957.xyz:11012',
+        name: '上海电信[可中转]',
+        url: '225284.xyz:11010',
         enable: false,
         tcp: true,
         faketcp: false,

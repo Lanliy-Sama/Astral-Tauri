@@ -76,7 +76,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-          pattern: astral-*
+          pattern: stellaris-*
 
       - name: 📤 创建 Release 并上传产物
         env:
