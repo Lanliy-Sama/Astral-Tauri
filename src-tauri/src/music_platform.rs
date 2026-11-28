@@ -2545,13 +2545,15 @@ pub fn music_login_state() -> Value {
 }
 
 #[tauri::command]
-pub fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
-    match platform.as_str() {
+pub async fn music_status(platform: String, app: tauri::AppHandle) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || match platform.as_str() {
         "netease" => music_platform::netease::account(&app),
         "qq" => music_platform::qq::account(&app),
         "kugou" => music_platform::kugou::account(&app),
         _ => Err("不支持的平台".into()),
-    }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2578,13 +2580,15 @@ pub fn music_playlist_tracks(platform: String, id: String, app: tauri::AppHandle
 }
 
 #[tauri::command]
-pub fn music_search(platform: String, query: String) -> Result<Value, String> {
-    match platform.as_str() {
+pub async fn music_search(platform: String, query: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || match platform.as_str() {
         "netease" => music_platform::netease::search(&query),
         "qq" => music_platform::qq::search(&query),
         "kugou" => music_platform::kugou::search(&query),
         _ => Err("不支持的平台".into()),
-    }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

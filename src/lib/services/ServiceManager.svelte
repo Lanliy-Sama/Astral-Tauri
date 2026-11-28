@@ -1092,7 +1092,9 @@ class ServiceManager {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('set_desktop_lyrics_enabled', { enabled: this.bgmState.desktopLyricsEnabled });
-        await invoke('set_desktop_lyrics_click_through', { enabled: this.bgmState.desktopLyricsClickThrough });
+        if (this.bgmState.desktopLyricsClickThrough) {
+          await invoke('set_desktop_lyrics_click_through', { enabled: true });
+        }
       } catch (e) {
         console.warn('桌面歌词窗口同步失败:', e);
       }

@@ -234,6 +234,16 @@
     }
   }
 
+  function withTimeout(promise, timeoutMs = 25000) {
+    let timer = 0;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('搜索超时，请检查网络后重试')), timeoutMs);
+      }),
+    ]).finally(() => clearTimeout(timer));
+  }
+
   async function doSearch() {
     const q = query.trim();
     if (!q || !isTauri()) return;
@@ -247,7 +257,7 @@
         results = await roomSocial.search(selectedSharedAccount, q);
       } else {
         const { invoke } = await import('@tauri-apps/api/core');
-        const res = await invoke('music_search', { platform, query: q });
+        const res = await withTimeout(invoke('music_search', { platform, query: q }));
         results = res.tracks || [];
       }
       sm.bgmState.onlineQueue = results;

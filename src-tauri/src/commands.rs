@@ -509,7 +509,7 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     let builder = tauri::WebviewWindowBuilder::new(
         &app,
         LABEL,
-        tauri::WebviewUrl::App("index.html#desktopLyrics".into()),
+        tauri::WebviewUrl::App("index.html?desktopLyrics=1".into()),
     )
     .title("Stellaris 桌面歌词")
     .inner_size(880.0, 128.0)
@@ -520,7 +520,6 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
-        .skip_taskbar(true)
         .center();
     #[cfg(not(desktop))]
     return Err("桌面歌词仅支持桌面端".into());
