@@ -223,7 +223,7 @@ pub fn handle_event(mut events: EventBusSubscriber, instance_id: uuid::Uuid) -> 
                         }
                         GlobalCtxEvent::DhcpIpv4Changed(old, new) => {
                             if let Some(ip) = new.clone() {
-                                DHCP_IPS.write().await.insert(instance_id, ip);
+                                DHCP_IPS.write().await.insert(instance_id, ip.into());
                             } else {
                                 DHCP_IPS.write().await.remove(&instance_id);
                             }
