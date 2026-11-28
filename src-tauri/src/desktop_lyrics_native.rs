@@ -30,9 +30,15 @@ mod platform {
         romanization: String,
         playing: bool,
         click_through: bool,
+        color: u32,
+        aux_color: u32,
     }
 
-    static STATE: LazyLock<Mutex<LyricState>> = LazyLock::new(|| Mutex::new(LyricState::default()));
+    static STATE: LazyLock<Mutex<LyricState>> = LazyLock::new(|| Mutex::new(LyricState {
+        color: 0x00ff_ffff,
+        aux_color: 0x00e6_c7b3,
+        ..LyricState::default()
+    }));
     static WINDOW: LazyLock<Mutex<isize>> = LazyLock::new(|| Mutex::new(0));
     static STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -61,6 +67,26 @@ mod platform {
             state.click_through = enabled;
         }
         post(WM_LYRICS_CLICK_THROUGH, usize::from(enabled));
+    }
+
+    pub fn set_colors(main: &str, auxiliary: &str) {
+        if let Ok(mut state) = STATE.lock() {
+            state.color = parse_color(main).unwrap_or(state.color);
+            state.aux_color = parse_color(auxiliary).unwrap_or(state.aux_color);
+        }
+        post(WM_LYRICS_UPDATE, 0);
+    }
+
+    fn parse_color(text: &str) -> Option<u32> {
+        let hex = text.strip_prefix('#').unwrap_or(text);
+        if hex.len() != 6 {
+            return None;
+        }
+        let value = u32::from_str_radix(hex, 16).ok()?;
+        let r = (value >> 16) & 0xff;
+        let g = (value >> 8) & 0xff;
+        let b = value & 0xff;
+        Some(r | (g << 8) | (b << 16))
     }
 
     pub fn update(payload: &Value) {
@@ -114,7 +140,7 @@ mod platform {
                 WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
                 class.lpszClassName,
                 PCWSTR(wide("Stellaris 桌面歌词").as_ptr()),
-                WS_POPUP,
+                WS_POPUP | WS_THICKFRAME,
                 0,
                 0,
                 880,
@@ -197,9 +223,19 @@ mod platform {
                 SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
                 LRESULT(0)
             }
+            WM_GETMINMAXINFO => {
+                let info = &mut *(lparam.0 as *mut MINMAXINFO);
+                info.ptMinTrackSize.x = 420;
+                info.ptMinTrackSize.y = 86;
+                LRESULT(0)
+            }
             WM_NCHITTEST => {
                 let click_through = STATE.lock().map(|state| state.click_through).unwrap_or(false);
-                if click_through { LRESULT(HTTRANSPARENT as isize) } else { LRESULT(HTCAPTION as isize) }
+                if click_through { LRESULT(HTTRANSPARENT as isize) } else { resize_hit_test(hwnd, lparam) }
+            }
+            WM_SIZE => {
+                let _ = InvalidateRect(hwnd, None, true);
+                LRESULT(0)
             }
             WM_PAINT => {
                 paint(hwnd);
@@ -210,6 +246,32 @@ mod platform {
                 LRESULT(0)
             }
             _ => DefWindowProcW(hwnd, message, wparam, lparam),
+        }
+    }
+
+    fn resize_hit_test(hwnd: HWND, lparam: LPARAM) -> LRESULT {
+        unsafe {
+            let x = (lparam.0 & 0xffff) as i16 as i32;
+            let y = ((lparam.0 >> 16) & 0xffff) as i16 as i32;
+            let mut rect = RECT::default();
+            let _ = GetWindowRect(hwnd, &mut rect);
+            const BORDER: i32 = 9;
+            let left = x < rect.left + BORDER;
+            let right = x >= rect.right - BORDER;
+            let top = y < rect.top + BORDER;
+            let bottom = y >= rect.bottom - BORDER;
+            let code = match (left, right, top, bottom) {
+                (true, false, true, false) => HTTOPLEFT,
+                (false, true, true, false) => HTTOPRIGHT,
+                (true, false, false, true) => HTBOTTOMLEFT,
+                (false, true, false, true) => HTBOTTOMRIGHT,
+                (true, false, false, false) => HTLEFT,
+                (false, true, false, false) => HTRIGHT,
+                (false, false, true, false) => HTTOP,
+                (false, false, false, true) => HTBOTTOM,
+                _ => HTCAPTION,
+            };
+            LRESULT(code as isize)
         }
     }
 
@@ -228,21 +290,21 @@ mod platform {
             let text = if state.original.is_empty() { state.title.as_str() } else { state.original.as_str() };
             let has_aux = !state.translation.is_empty() || !state.romanization.is_empty();
             if has_aux {
-                draw_text(hdc, text, &client, 5, 35, 26, true);
+                draw_text(hdc, text, &client, 5, 35, 26, true, state.color);
                 if !state.translation.is_empty() {
-                    draw_text(hdc, &state.translation, &client, 42, 20, 16, false);
+                    draw_text(hdc, &state.translation, &client, 42, 20, 16, false, state.aux_color);
                 }
                 if !state.romanization.is_empty() {
-                    draw_text(hdc, &state.romanization, &client, 64, 18, 13, false);
+                    draw_text(hdc, &state.romanization, &client, 64, 18, 13, false, state.aux_color);
                 }
             } else {
-                draw_text(hdc, text, &client, 0, client.bottom - client.top, 26, true);
+                draw_text(hdc, text, &client, 0, client.bottom - client.top, 26, true, state.color);
             }
             let _ = EndPaint(hwnd, &paint);
         }
     }
 
-    unsafe fn draw_text(hdc: windows::Win32::Graphics::Gdi::HDC, text: &str, client: &RECT, top: i32, height: i32, size: i32, bold: bool) {
+    unsafe fn draw_text(hdc: windows::Win32::Graphics::Gdi::HDC, text: &str, client: &RECT, top: i32, height: i32, size: i32, bold: bool, color: u32) {
         if text.is_empty() {
             return;
         }
@@ -263,7 +325,7 @@ mod platform {
             PCWSTR(wide("Segoe UI").as_ptr()),
         );
         let _ = SelectObject(hdc, font);
-        let _ = SetTextColor(hdc, COLORREF(0x00ff_ffff));
+        let _ = SetTextColor(hdc, COLORREF(color));
         let mut rect = RECT { left: 16, top, right: client.right - 16, bottom: top + height };
         let mut text = text.encode_utf16().collect::<Vec<_>>();
         DrawTextW(hdc, &mut text, &mut rect, DRAW_TEXT_FORMAT(0x1 | 0x4 | 0x20 | 0x8000));
@@ -272,12 +334,14 @@ mod platform {
 }
 
 #[cfg(windows)]
-pub use platform::{init, set_click_through, set_enabled, update};
+pub use platform::{init, set_click_through, set_enabled, set_colors, update};
 
 #[cfg(not(windows))]
 pub fn init() {}
 #[cfg(not(windows))]
 pub fn set_enabled(_enabled: bool) {}
+#[cfg(not(windows))]
+pub fn set_colors(_main: &str, _auxiliary: &str) {}
 #[cfg(not(windows))]
 pub fn set_click_through(_enabled: bool) {}
 #[cfg(not(windows))]

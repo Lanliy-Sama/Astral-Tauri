@@ -523,6 +523,20 @@ pub fn set_desktop_lyrics_click_through(enabled: bool, _app: AppHandle) -> Resul
 }
 
 #[tauri::command]
+pub fn set_desktop_lyrics_colors(main: String, auxiliary: String, _app: AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        crate::desktop_lyrics_native::set_colors(&main, &auxiliary);
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (main, auxiliary);
+        Err("桌面歌词目前仅支持 Windows".into())
+    }
+}
+
+#[tauri::command]
 pub fn open_external(url: String) -> Result<(), String> {
     open_url_fallback(&url)
 }

@@ -238,6 +238,8 @@ export class BgmState {
   accountVip = $state({ netease: false, qq: false, kugou: false });
   desktopLyricsEnabled = $state(false);
   desktopLyricsClickThrough = $state(false);
+  desktopLyricsTextColor = $state('#FFFFFF');
+  desktopLyricsAuxColor = $state('#B3C7E6');
   smtcEnabled = $state(true); // 系统媒体控制（SMTC / MPRIS / Now Playing）
   /* 房间音乐账号权限：仅共享搜索/播放能力，不共享登录凭据 */
   roomShare = $state({ netease: true, qq: true, kugou: true });
@@ -991,6 +993,8 @@ class ServiceManager {
     }
     this.bgmState.desktopLyricsEnabled = s.desktopLyricsEnabled === true;
     this.bgmState.desktopLyricsClickThrough = s.desktopLyricsClickThrough === true;
+    if (/^#[0-9a-f]{6}$/i.test(s.desktopLyricsTextColor || '')) this.bgmState.desktopLyricsTextColor = s.desktopLyricsTextColor.toUpperCase();
+    if (/^#[0-9a-f]{6}$/i.test(s.desktopLyricsAuxColor || '')) this.bgmState.desktopLyricsAuxColor = s.desktopLyricsAuxColor.toUpperCase();
     this.bgmState.roomShare = {
       netease: s.roomShare?.netease !== false,
       qq: s.roomShare?.qq !== false,
@@ -1109,6 +1113,31 @@ class ServiceManager {
         console.warn('桌面歌词鼠标穿透同步失败:', e);
       }
     }
+  }
+
+  async syncDesktopLyricsColors() {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_desktop_lyrics_colors', {
+        main: this.bgmState.desktopLyricsTextColor,
+        auxiliary: this.bgmState.desktopLyricsAuxColor,
+      });
+    } catch (e) {
+      console.warn('桌面歌词颜色同步失败:', e);
+    }
+  }
+
+  async updateDesktopLyricsColor(kind, color) {
+    if (!/^#[0-9a-f]{6}$/i.test(color || '') || !['main', 'aux'].includes(kind)) return;
+    const normalized = color.toUpperCase();
+    if (kind === 'main') this.bgmState.desktopLyricsTextColor = normalized;
+    else this.bgmState.desktopLyricsAuxColor = normalized;
+    await this._persistSettings({
+      desktopLyricsTextColor: this.bgmState.desktopLyricsTextColor,
+      desktopLyricsAuxColor: this.bgmState.desktopLyricsAuxColor,
+    });
+    await this.syncDesktopLyricsColors();
   }
 
   async updateMusicShare(platform, enabled) {

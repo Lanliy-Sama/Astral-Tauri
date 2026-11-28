@@ -492,6 +492,18 @@
               : t('vip_login_hint')}
           </small>
         </div>
+      {/if}
+      {#if sm.appSettingsState.experimentalFeatures && !isAndroid()}
+        <div class="lyrics-color-setting">
+          <label>
+            <span>{t('lyrics_primary_color')}</span>
+            <input type="color" value={sm.bgmState.desktopLyricsTextColor} onchange={(event) => sm.updateDesktopLyricsColor('main', event.currentTarget.value)} />
+          </label>
+          <label>
+            <span>{t('lyrics_auxiliary_color')}</span>
+            <input type="color" value={sm.bgmState.desktopLyricsAuxColor} onchange={(event) => sm.updateDesktopLyricsColor('aux', event.currentTarget.value)} />
+          </label>
+        </div>
         <div class="md-switch-list-tile no-cursor">
           <div class="tile-content">
             <div class="tile-title">{t('desktop_lyrics_click_through')}</div>
@@ -770,6 +782,10 @@
     color: var(--md-error);
     font-size: 13px;
   }
+  .lyrics-color-setting { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px 18px; }
+  .lyrics-color-setting label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--md-on-surface-variant); font-size: 12px; }
+  .lyrics-color-setting input { width: 44px; height: 30px; padding: 2px; border: 1px solid var(--md-outline-variant); border-radius: 8px; background: var(--md-surface-container-low); cursor: pointer; }
+  @media (max-width: 480px) { .lyrics-color-setting { grid-template-columns: 1fr; } }
   .default-quality { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 18px; color: var(--md-on-surface-variant); font-size: 13px; }
   .default-quality select { min-width: 130px; height: 36px; padding: 0 28px 0 10px; border: 1px solid var(--md-outline-variant); border-radius: 10px; background: var(--md-surface-container-low); color: var(--md-on-surface); }
   .default-quality small { flex-basis: 100%; font-size: 10px; line-height: 15px; opacity: .75; }

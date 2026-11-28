@@ -25,7 +25,10 @@
     // 桌面歌词只能在主窗口和播放器状态都挂载后创建；初始化阶段创建
     // 第二个 WebView 会让应用在启用桌面歌词时永远停在启动页。
     if (sm.bgmState.desktopLyricsEnabled && sm.appSettingsState.experimentalFeatures) {
-      sm.updateDesktopLyricsEnabled(true).catch(() => {});
+      void (async () => {
+        await sm.updateDesktopLyricsEnabled(true);
+        await sm.syncDesktopLyricsColors();
+      })();
     }
   });
 

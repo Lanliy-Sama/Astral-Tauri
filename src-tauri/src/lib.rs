@@ -620,6 +620,7 @@ pub fn run() {
             commands::close_watch_window,
             commands::set_desktop_lyrics_enabled,
             commands::set_desktop_lyrics_click_through,
+            commands::set_desktop_lyrics_colors,
             commands::vpn_prepare,
             commands::vpn_start,
             commands::vpn_stop,

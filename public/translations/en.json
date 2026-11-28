@@ -215,6 +215,8 @@
   "desktop_lyrics_desc": "Show lyrics, translations, and romanization in a floating always-on-top window",
   "desktop_lyrics_click_through": "Desktop Lyrics Click-Through",
   "desktop_lyrics_click_through_desc": "Pass mouse events through lyrics; disable click-through to drag the window",
+  "lyrics_primary_color": "Primary Lyric Color",
+  "lyrics_auxiliary_color": "Translation and Romanization Color",
   "audio_quality": "Audio Quality",
   "quality_standard": "Standard",
   "quality_high": "Very High",
