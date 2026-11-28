@@ -2,7 +2,7 @@
   /** 全屏歌词：旋转胶片 + 进度滚动歌词。 */
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { sm } from '../../services/ServiceManager.svelte';
+  import { sm, QUALITY_PROFILES } from '../../services/ServiceManager.svelte';
   import { bgmPosition, bgmPrevious, bgmNext, bgmToggleAny, bgmSeek } from '../../services/BgmPlayer.svelte';
   import { popPage } from '../../router/PageRouter.svelte';
   import { t } from '../../i18n/I18n.svelte';
@@ -24,13 +24,10 @@
   const lines = $derived(sm.bgmState.lyricLines || []);
   const currentPlatform = $derived(online?.platform || 'netease');
   const qualityOptions = $derived.by(() => {
-    const options = [
-      { value: 'standard', label: t('quality_standard') },
-      { value: 'high', label: t('quality_high') },
-      { value: 'lossless', label: t('quality_lossless') },
-    ];
-    const vipRequired = currentPlatform === 'qq' ? ['high', 'lossless'] : ['lossless'];
-    return sm.bgmState.accountVip[currentPlatform] === true ? options : options.filter((option) => !vipRequired.includes(option.value));
+    const hasVip = sm.bgmState.accountVip[currentPlatform] === true;
+    return (QUALITY_PROFILES[currentPlatform] || [])
+      .filter((option) => hasVip || !option.vip)
+      .map((option) => ({ value: option.value, label: t(option.labelKey) }));
   });
 
   function auxiliary(line, key) {
@@ -107,7 +104,7 @@
           <span>{modeLabel}</span>
         </button>
       </div>
-      {#if sm.appSettingsState.experimentalFeatures}
+      {#if sm.appSettingsState.experimentalFeatures && online}
         <label class="quality-setting">
           <Icon name="high_quality" size={20} color="var(--md-primary)" />
           <span>{t('audio_quality')}</span>

@@ -9,7 +9,6 @@
   import ThemeSelector from './ThemeSelector.svelte';
   import { sm } from '../../services/ServiceManager.svelte';
   import { setLocale, t } from '../../i18n/I18n.svelte';
-  import { isTauri, isDesktopPlatform } from '../../utils/Platform.svelte';
 
   let { isSmallWindow = false } = $props();
 
@@ -58,9 +57,12 @@
     setLocale(locale);
   }
 
-  function startDrag(e) {
-    if (!isDesktopPlatform() && isTauri()) return;
-    // Tauri 通过 data-tauri-drag-region 属性处理；此处无需 JS
+  async function startDrag(event) {
+    if (event.button !== 0 || event.target.closest('button, input, select, a, [role="button"]')) return;
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().startDragging();
+    } catch { /* 浏览器预览不支持窗口拖动 */ }
   }
 </script>
 

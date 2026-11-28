@@ -682,7 +682,9 @@ mod netease {
         let account = super::load_account("netease", app);
         let (level, bitrate, encoding) = match quality {
             "standard" => ("standard", 128000, "mp3"),
+            "medium" => ("higher", 192000, "mp3"),
             "lossless" => ("lossless", 999000, "flac"),
+            "hires" => ("hires", 999000, "flac"),
             _ => ("exhigh", 320000, "mp3"),
         };
         let mut payload = json!({ "ids": json!(format!("[{id_num}]")) });
@@ -2266,36 +2268,82 @@ mod kugou {
         Ok(json!({ "tracks": out }))
     }
 
-    pub fn song_url(_app: &tauri::AppHandle, track: &Value) -> Result<Value, String> {
-        let hash = track["id"].as_str().unwrap_or_default().to_lowercase();
-        // 游客接口（免费歌曲可放；会员歌曲只给试听或失败）
-        let info_url = format!(
+    fn kugou_info(hash: &str) -> Result<Value, String> {
+        let url = format!(
             "https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash={}",
-            urlencode(&hash)
+            urlencode(hash)
         );
-        let o = http_get_json(&info_url, "https://m.kugou.com/", "")?;
-        if o["status"].as_i64() == Some(1) {
-            let data = o.get("data").cloned().unwrap_or(o.clone());
-            for key in ["play_url", "url", "backup_url"] {
-                if let Some(url) = data[key].as_str().filter(|u| u.starts_with("http")) {
-                    for part in url.split(",http") {
-                        let candidate = if part.starts_with("http") {
-                            part.to_string()
-                        } else {
-                            format!("http{part}")
-                        };
-                        let ext_ok = candidate.ends_with(".mp3")
-                            || candidate.ends_with(".flac")
-                            || candidate.contains(".mp3?")
-                            || candidate.contains(".mp3&");
-                        if ext_ok {
-                            return Ok(json!({ "url": candidate, "trial": false, "format": "mp3" }));
-                        }
+        let response = http_get_json(&url, "https://m.kugou.com/", "")?;
+        if response["status"].as_i64() != Some(1) {
+            return Err("酷狗曲目信息读取失败".into());
+        }
+        Ok(response.get("data").cloned().unwrap_or_else(|| response.clone()))
+    }
+
+    fn kugou_quality_hash(data: &Value, quality: &str) -> Option<String> {
+        let keys: &[&str] = match quality {
+            "high" => &["hash_320", "hash320"],
+            "lossless" | "hires" => &["hash_flac", "hashflac"],
+            _ => &["hash_128", "hash128"],
+        };
+        for source in [&data["qualitymap"], &data["extra"], data] {
+            for key in keys {
+                let value = &source[*key];
+                if let Some(hash) = value.as_str().filter(|hash| !hash.is_empty()) {
+                    return Some(hash.to_lowercase());
+                }
+                if let Some(hash) = value["hash"].as_str().filter(|hash| !hash.is_empty()) {
+                    return Some(hash.to_lowercase());
+                }
+            }
+        }
+        None
+    }
+
+    fn kugou_playable(data: &Value) -> Option<(String, String)> {
+        for key in ["play_url", "play_backup_url", "backup_url", "url"] {
+            if let Some(url) = data[key].as_str().filter(|url| url.starts_with("http")) {
+                for part in url.split(",http") {
+                    let candidate = if part.starts_with("http") { part.to_string() } else { format!("http{part}") };
+                    let format = if candidate.contains(".flac") {
+                        "flac"
+                    } else if candidate.contains(".m4a") {
+                        "m4a"
+                    } else {
+                        "mp3"
+                    };
+                    if candidate.contains(".mp3") || candidate.contains(".flac") || candidate.contains(".m4a") {
+                        return Some((candidate, format.to_string()));
                     }
                 }
             }
         }
-        Err("酷狗没有返回可播放的音频（会员歌曲需要登录，登录功能后续开放）".into())
+        None
+    }
+
+    pub fn song_url(_app: &tauri::AppHandle, track: &Value) -> Result<Value, String> {
+        let original_hash = track["id"].as_str().unwrap_or_default().to_lowercase();
+        let quality = track["quality"].as_str().unwrap_or("standard");
+        let original = kugou_info(&original_hash)?;
+        let extension = original["extname"].as_str().unwrap_or("mp3").to_lowercase();
+        let bitrate = original["bit_rate"].as_i64().unwrap_or(0);
+        let already_matches = match quality {
+            "high" => extension == "mp3" && bitrate >= 300,
+            "lossless" | "hires" => extension == "flac",
+            _ => true,
+        };
+        let data = if already_matches {
+            original
+        } else {
+            let hash = kugou_quality_hash(&original, quality)
+                .filter(|hash| !hash.is_empty() && hash != &original_hash)
+                .ok_or("酷狗账号或曲目不提供所选音质")?;
+            kugou_info(&hash)?
+        };
+        if let Some((url, format)) = kugou_playable(&data) {
+            return Ok(json!({ "url": url, "trial": false, "format": format }));
+        }
+        Err("酷狗没有返回所选音质的可播放地址".into())
     }
 
     pub fn lyrics(hash: &str, duration_ms: i64) -> Result<Value, String> {

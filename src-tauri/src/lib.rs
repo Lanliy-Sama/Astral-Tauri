@@ -618,6 +618,7 @@ pub fn run() {
             commands::open_watch_window,
             commands::close_watch_window,
             commands::set_desktop_lyrics_enabled,
+            commands::set_desktop_lyrics_click_through,
             commands::vpn_prepare,
             commands::vpn_start,
             commands::vpn_stop,

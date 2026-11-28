@@ -18,7 +18,7 @@
   import { snackError, snackSuccess, snackInfo } from './lib/components/common/SnackbarStore.svelte';
 
   let ready = $state(false);
-  const desktopLyricsMode = new URLSearchParams(location.search).has('desktopLyrics');
+  const desktopLyricsMode = location.hash === '#desktopLyrics' || new URLSearchParams(location.search).has('desktopLyrics');
 
   function suppressWebViewContextMenu(event) {
     if (isTauri()) event.preventDefault();

@@ -10,6 +10,14 @@
     return line[key] || '';
   }
 
+  async function startDrag(event) {
+    if (event.button !== 0 || event.target.closest('button')) return;
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().startDragging();
+    } catch { /* 鼠标穿透开启时不响应拖动 */ }
+  }
+
   async function closeWindow() {
     const [{ emit }, { getCurrentWebviewWindow }] = await Promise.all([
       import('@tauri-apps/api/event'),
@@ -37,7 +45,7 @@
   </style>
 </svelte:head>
 
-<main class="desktop-lyrics" data-tauri-drag-region>
+<main class="desktop-lyrics" data-tauri-drag-region onpointerdown={startDrag}>
   <div class="lyrics-content" class:playing={state.playing} data-tauri-drag-region aria-live="polite">
     <div class="original" data-tauri-drag-region>{state.line?.l || state.title}</div>
     {#if auxiliary(state.line, 'tr')}
@@ -62,7 +70,7 @@
     padding: 10px 12px 10px 24px;
     border: 1px solid rgb(255 255 255 / 0.14);
     border-radius: 22px;
-    background: rgb(15 18 27 / 0.68);
+    background: rgb(15 18 27 / 0.94);
     box-shadow: 0 12px 36px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 255 255 / 0.1);
     backdrop-filter: blur(18px) saturate(1.2);
     color: #fff;

@@ -509,7 +509,7 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     let builder = tauri::WebviewWindowBuilder::new(
         &app,
         LABEL,
-        tauri::WebviewUrl::App("index.html?desktopLyrics=1".into()),
+        tauri::WebviewUrl::App("index.html#desktopLyrics".into()),
     )
     .title("Astral 桌面歌词")
     .inner_size(880.0, 128.0)
@@ -518,7 +518,6 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     #[cfg(desktop)]
     let builder = builder
         .decorations(false)
-        .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
         .center();
@@ -526,6 +525,24 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     return Err("桌面歌词仅支持桌面端".into());
     builder.build().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_desktop_lyrics_click_through(enabled: bool, app: AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(window) = app.get_webview_window("desktop-lyrics") {
+            window
+                .set_ignore_cursor_events(enabled)
+                .map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = (enabled, app);
+        Err("桌面歌词仅支持桌面端".into())
+    }
 }
 
 #[tauri::command]

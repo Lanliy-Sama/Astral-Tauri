@@ -21,6 +21,26 @@ import {
 } from '../utils/RoomShareCodec.svelte';
 import { localHostname, isTauri, isWindows, isAndroid } from '../utils/Platform.svelte';
 
+export const QUALITY_PROFILES = {
+  netease: [
+    { value: 'standard', labelKey: 'quality_netease_standard', vip: false },
+    { value: 'medium', labelKey: 'quality_netease_medium', vip: false },
+    { value: 'high', labelKey: 'quality_netease_high', vip: false },
+    { value: 'lossless', labelKey: 'quality_netease_lossless', vip: true },
+    { value: 'hires', labelKey: 'quality_netease_hires', vip: true },
+  ],
+  qq: [
+    { value: 'standard', labelKey: 'quality_qq_standard', vip: false },
+    { value: 'high', labelKey: 'quality_qq_high', vip: true },
+    { value: 'lossless', labelKey: 'quality_qq_lossless', vip: true },
+  ],
+  kugou: [
+    { value: 'standard', labelKey: 'quality_kugou_standard', vip: false },
+    { value: 'high', labelKey: 'quality_kugou_high', vip: true },
+    { value: 'lossless', labelKey: 'quality_kugou_lossless', vip: true },
+  ],
+};
+
 /* ============ 状态类（原 src/lib/stores/states.svelte.js，已内联） ============ */
 /**
  * 全部响应式状态（Svelte 5 runes 版 ServiceManager 状态层）。
@@ -217,6 +237,7 @@ export class BgmState {
   musicQualityByPlatform = $state({ netease: 'high', qq: 'high', kugou: 'high' });
   accountVip = $state({ netease: false, qq: false, kugou: false });
   desktopLyricsEnabled = $state(false);
+  desktopLyricsClickThrough = $state(false);
   smtcEnabled = $state(true); // 系统媒体控制（SMTC / MPRIS / Now Playing）
   /* 房间音乐账号权限：仅共享搜索/播放能力，不共享登录凭据 */
   roomShare = $state({ netease: true, qq: true, kugou: true });
@@ -958,12 +979,13 @@ class ServiceManager {
     this.bgmState.lyricCapsuleEnabled = s.lyricCapsuleEnabled !== false;
     this.bgmState.smtcEnabled = s.smtcEnabled !== false;
     this.bgmState.playbackMode = ['sequence', 'random', 'loop'].includes(s.playbackMode) ? s.playbackMode : 'sequence';
-    this.bgmState.musicQuality = ['standard', 'high', 'lossless'].includes(s.musicQuality) ? s.musicQuality : 'high';
+    this.bgmState.musicQuality = ['standard', 'medium', 'high', 'lossless', 'hires'].includes(s.musicQuality) ? s.musicQuality : 'high';
     for (const platform of ['netease', 'qq', 'kugou']) {
       const quality = s.musicQualityByPlatform?.[platform];
-      this.bgmState.musicQualityByPlatform[platform] = ['standard', 'high', 'lossless'].includes(quality) ? quality : this.bgmState.musicQuality;
+      this.bgmState.musicQualityByPlatform[platform] = QUALITY_PROFILES[platform].some((option) => option.value === quality) ? quality : this.bgmState.musicQuality;
     }
     this.bgmState.desktopLyricsEnabled = s.desktopLyricsEnabled === true;
+    this.bgmState.desktopLyricsClickThrough = s.desktopLyricsClickThrough === true;
     this.bgmState.roomShare = {
       netease: s.roomShare?.netease !== false,
       qq: s.roomShare?.qq !== false,
@@ -1041,17 +1063,18 @@ class ServiceManager {
   }
 
   async updateMusicQuality(quality, platform = this.bgmState.onlineTrack?.platform || 'netease') {
-    if (!['standard', 'high', 'lossless'].includes(quality) || !['netease', 'qq', 'kugou'].includes(platform)) return;
+    if (!['netease', 'qq', 'kugou'].includes(platform) || !QUALITY_PROFILES[platform]?.some((option) => option.value === quality)) return;
     this.bgmState.musicQuality = quality;
     this.bgmState.musicQualityByPlatform = { ...this.bgmState.musicQualityByPlatform, [platform]: quality };
     await this._persistSettings({ musicQuality: quality, musicQualityByPlatform: this.bgmState.musicQualityByPlatform });
   }
 
   musicQualityFor(platform, accountVip = null) {
-    const quality = this.bgmState.musicQualityByPlatform[platform] || this.bgmState.musicQuality;
-    const vipRequired = platform === 'qq' ? ['high', 'lossless'] : ['lossless'];
+    const profile = QUALITY_PROFILES[platform] || QUALITY_PROFILES.netease;
+    const preferred = this.bgmState.musicQualityByPlatform[platform] || this.bgmState.musicQuality;
     const hasVip = accountVip == null ? this.bgmState.accountVip[platform] === true : accountVip === true;
-    return hasVip || !vipRequired.includes(quality) ? quality : 'standard';
+    const selected = profile.find((option) => option.value === preferred && (hasVip || !option.vip));
+    return (selected || profile.find((option) => !option.vip) || profile[0]).value;
   }
 
   async updateDesktopLyricsEnabled(enabled) {
@@ -1061,8 +1084,22 @@ class ServiceManager {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('set_desktop_lyrics_enabled', { enabled: this.bgmState.desktopLyricsEnabled });
+        await invoke('set_desktop_lyrics_click_through', { enabled: this.bgmState.desktopLyricsClickThrough });
       } catch (e) {
         console.warn('桌面歌词窗口同步失败:', e);
+      }
+    }
+  }
+
+  async updateDesktopLyricsClickThrough(enabled) {
+    this.bgmState.desktopLyricsClickThrough = enabled === true;
+    await this._persistSettings({ desktopLyricsClickThrough: this.bgmState.desktopLyricsClickThrough });
+    if (isTauri()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('set_desktop_lyrics_click_through', { enabled: this.bgmState.desktopLyricsClickThrough });
+      } catch (e) {
+        console.warn('桌面歌词鼠标穿透同步失败:', e);
       }
     }
   }

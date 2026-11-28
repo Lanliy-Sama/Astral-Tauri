@@ -10,7 +10,7 @@
   import { snackError, snackInfo } from '$lib/components/common/SnackbarStore.svelte';
   import { roomSocial } from '$lib/services/RoomSocial.svelte';
   import { roomListen } from '$lib/services/RoomListen.svelte';
-  import { sm } from '$lib/services/ServiceManager.svelte';
+  import { sm, QUALITY_PROFILES } from '$lib/services/ServiceManager.svelte';
   import {
     bgmPlayOnlineTrack,
     bgmPlayTrack,
@@ -45,13 +45,10 @@
   const sharedAccounts = $derived(sm.appSettingsState.experimentalFeatures ? roomSocial.accounts.filter((a) => a.platform === platform) : []);
   const selectedSharedAccount = $derived(sharedAccounts.find((a) => a.peer === sourcePeer) || null);
   const qualityOptions = $derived.by(() => {
-    const options = [
-      { value: 'standard', label: t('quality_standard') },
-      { value: 'high', label: t('quality_high') },
-      { value: 'lossless', label: t('quality_lossless') },
-    ];
-    const vipRequired = platform === 'qq' ? ['high', 'lossless'] : ['lossless'];
-    return sm.bgmState.accountVip[platform] === true ? options : options.filter((option) => !vipRequired.includes(option.value));
+    const hasVip = sm.bgmState.accountVip[platform] === true;
+    return (QUALITY_PROFILES[platform] || [])
+      .filter((option) => hasVip || !option.vip)
+      .map((option) => ({ value: option.value, label: t(option.labelKey) }));
   });
 
   const AUDIO_EXTS = ['mp3', 'mp4', 'm4a', 'aac', 'flac', 'wav', 'ogg', 'oga', 'opus', 'weba', 'webm'];
@@ -484,6 +481,16 @@
               ? (sm.bgmState.accountVip[platform] ? t('vip_detected') : t('vip_not_detected'))
               : t('vip_login_hint')}
           </small>
+        </div>
+        <div class="md-switch-list-tile no-cursor">
+          <div class="tile-content">
+            <div class="tile-title">{t('desktop_lyrics_click_through')}</div>
+            <div class="tile-subtitle">{t('desktop_lyrics_click_through_desc')}</div>
+          </div>
+          <Switch
+            value={sm.bgmState.desktopLyricsClickThrough}
+            onChange={(value) => sm.updateDesktopLyricsClickThrough(value)}
+          />
         </div>
       {/if}
       <div class="volume-setting">
