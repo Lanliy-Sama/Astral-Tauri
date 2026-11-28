@@ -55,6 +55,7 @@ windows = { version = "0.52.0", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
 ] }
 
 # QQ 扫码 MQTT/WS 登录通道（桌面端专用）：native-tls 在非 Windows/macOS

@@ -7,12 +7,12 @@ mod platform {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{LazyLock, Mutex};
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM, RECT};
     use windows::Win32::Graphics::Gdi::{
         BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect,
         SelectObject, SetBkMode, SetTextColor, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         DEFAULT_CHARSET, DEFAULT_PITCH, FF_DONTCARE, FW_BOLD, FW_NORMAL, OUT_DEFAULT_PRECIS,
-        PAINTSTRUCT, TRANSPARENT,
+        PAINTSTRUCT, TRANSPARENT, InvalidateRect, DRAW_TEXT_FORMAT,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::*;
@@ -160,7 +160,7 @@ mod platform {
         match message {
             WM_LYRICS_SHOW => {
                 let mut work = RECT::default();
-                if SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work), 0).is_ok() {
+                if SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work as *mut _ as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)).is_ok() {
                     let work_width = work.right - work.left;
                     let width = 880.min((work_width - 80).max(420));
                     let height = if STATE.lock().map(|s| !s.romanization.is_empty() || !s.translation.is_empty()).unwrap_or(false) { 116 } else { 92 };
@@ -251,23 +251,23 @@ mod platform {
             0,
             0,
             0,
-            if bold { FW_BOLD } else { FW_NORMAL },
+            if bold { 700 } else { 400 },
             0,
             0,
             0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE,
+            0,
+            0,
+            0,
+            5,
+            0,
             PCWSTR(wide("Segoe UI").as_ptr()),
         );
-        let _ = SelectObject(hdc, font);
+        let _ = SelectObject(hdc, font.into());
         let _ = SetTextColor(hdc, COLORREF(0x00ff_ffff));
         let mut rect = RECT { left: 16, top, right: client.right - 16, bottom: top + height };
         let mut text = text.encode_utf16().collect::<Vec<_>>();
-        DrawTextW(hdc, &mut text, &mut rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        let _ = DeleteObject(font);
+        DrawTextW(hdc, &mut text, &mut rect, DRAW_TEXT_FORMAT(0x1 | 0x4 | 0x20 | 0x8000));
+        let _ = DeleteObject(font.into());
     }
 }
 
