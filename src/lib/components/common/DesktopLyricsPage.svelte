@@ -68,16 +68,14 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px 10px 24px;
-    border: 1px solid rgb(255 255 255 / 0.14);
-    border-radius: 22px;
-    background: rgb(15 18 27 / 0.94);
-    box-shadow: 0 12px 36px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 255 255 / 0.1);
-    backdrop-filter: blur(18px) saturate(1.2);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: #fff;
     cursor: move;
     user-select: none;
   }
-  .lyrics-content { flex: 1; min-width: 0; text-align: center; text-shadow: 0 2px 9px rgb(0 0 0 / 0.45); }
+  .lyrics-content { flex: 1; min-width: 0; text-align: center; text-shadow: 0 1px 3px rgb(0 0 0 / 0.95), 0 0 12px rgb(0 0 0 / 0.85); }
   .lyrics-content.playing .original { color: #fff; }
   .original { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 22px; line-height: 31px; font-weight: 700; letter-spacing: .02em; }
   .auxiliary { margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgb(255 255 255 / 0.72); font-size: 12px; line-height: 17px; }

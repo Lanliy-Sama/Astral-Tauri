@@ -518,6 +518,7 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
     #[cfg(desktop)]
     let builder = builder
         .decorations(false)
+        .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
         .center();
