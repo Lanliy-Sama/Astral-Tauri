@@ -91,7 +91,7 @@ mod system {
                     }
                     if controls.is_none() {
                         let config = PlatformConfig {
-                            display_name: "Astral",
+                            display_name: "Stellaris",
                             dbus_name: "astral",
                             hwnd: hwnd.map(|value| value as *mut std::ffi::c_void),
                         };

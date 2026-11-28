@@ -1,4 +1,4 @@
-//! Astral 桌面应用 —— Tauri 2 库入口（桌面 + 移动端共用）。
+//! Stellaris 桌面应用 —— Tauri 2 库入口（桌面 + 移动端共用）。
 //! 窗口参数对应原版 window_manager.dart：960×540，最小 200×300，无系统标题栏。
 
 use tauri::{Manager, WindowEvent};
@@ -150,7 +150,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let tray = TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().cloned().unwrap())
-        .tooltip("Astral")
+        .tooltip("Stellaris")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -521,16 +521,16 @@ fn enforce_single_instance() {
         if OpenMutexW(
             SYNCHRONIZATION_ACCESS_RIGHTS(0x00100000), // SYNCHRONIZE
             false,
-            w!("Global\\AstralSingleInstanceMutex"),
+            w!("Global\\StellarisSingleInstanceMutex"),
         )
         .is_ok()
         {
-            if let Ok(ev) = CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) {
+            if let Ok(ev) = CreateEventW(None, false, false, w!("Global\\StellarisShowWindowEvent")) {
                 let _ = SetEvent(ev);
             }
             std::process::exit(0);
         }
-        let _ = CreateMutexW(None, true, w!("Global\\AstralSingleInstanceMutex"));
+        let _ = CreateMutexW(None, true, w!("Global\\StellarisSingleInstanceMutex"));
     }
 }
 
@@ -763,7 +763,7 @@ pub fn run() {
                 use windows::core::w;
                 use windows::Win32::Foundation::WAIT_OBJECT_0;
                 use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
-                if let Ok(ev) = unsafe { CreateEventW(None, false, false, w!("Global\\AstralShowWindowEvent")) } {
+                if let Ok(ev) = unsafe { CreateEventW(None, false, false, w!("Global\\StellarisShowWindowEvent")) } {
                     let handle = app.handle().clone();
                     std::thread::spawn(move || {
                         loop {
@@ -809,5 +809,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("Astral 启动失败");
+        .expect("Stellaris 启动失败");
 }

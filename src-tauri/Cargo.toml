@@ -1,8 +1,8 @@
 [package]
 name = "astral"
 version = "2.9.60"
-description = "Astral - 基于 EasyTier 的跨平台 P2P 网络应用（Tauri + Svelte 5 版）"
-authors = ["Astral"]
+description = "Stellaris - 基于 EasyTier 的跨平台 P2P 网络应用（Tauri + Svelte 5 版）"
+authors = ["Stellaris"]
 edition = "2021"
 
 [lib]

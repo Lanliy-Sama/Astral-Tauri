@@ -203,7 +203,7 @@ export class VpnState {
 
 /* ============ AppSettingsState ============ */
 export class AppSettingsState {
-  appName = $state('Astral');
+  appName = $state('Stellaris');
   enableConnectionNotification = $state(true);
   autoRetryOnFailure = $state(true);
   maxRetryCount = $state(3);

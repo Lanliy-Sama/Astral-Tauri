@@ -26,7 +26,7 @@
 
 1. **连接按钮三态**：idle 100×60 primary / connecting 180×60 error + close 图标 800ms 往返旋转 + 进度条（180×6 r3，tertiary→primary 15s easeInOut，与连接超时一致）/ connected 180×60 tertiary；图标 150ms / 文字 200ms 切换动画；宽度 200ms easeOutCubic。
 2. **左侧导航**：80px 宽、右描边、项高 64、选中块 primaryContainer r12、200ms easeInOutCubic 位移动画、hover 块 surfaceContainerHighest@0.5。
-3. **M3 Switch**：52×32 轨道 r16、2px outline 描边（选中时变 primary）、thumb 关 16px/开 24px（关 outline 色/开 onPrimary 色）、位置关 left:6/开 left:22（+2px 边框 = 视觉 24px，即 Flutter `_computeThumbPaintOffset` 实算的 ON thumb 轨道 [24,48]、右缘留 4px、上下各 4px；OFF thumb [8,24]、左缘 8px）。悬停 thumb 变色（ON→primaryContainer / OFF→onSurfaceVariant）；禁用态轨道 OFF=surfaceContainerHighest@12% / ON=onSurface@12%，thumb OFF=onSurface@38% / ON=surface，全部对照 Flutter 3.29 `_SwitchDefaultsM3`。**Flutter 原版默认不在 thumb 上绘制任何图标**（`Switch.thumbIcon` 为 null 时无图标；Astral 全部裸用 `Switch`/`SwitchListTile`，未传入 thumbIcon），因此开启状态**没有 √ 勾选符号**——与 M3 规范插图不同，与 Flutter 实机一致。
+3. **M3 Switch**：52×32 轨道 r16、2px outline 描边（选中时变 primary）、thumb 关 16px/开 24px（关 outline 色/开 onPrimary 色）、位置关 left:6/开 left:22（+2px 边框 = 视觉 24px，即 Flutter `_computeThumbPaintOffset` 实算的 ON thumb 轨道 [24,48]、右缘留 4px、上下各 4px；OFF thumb [8,24]、左缘 8px）。悬停 thumb 变色（ON→primaryContainer / OFF→onSurfaceVariant）；禁用态轨道 OFF=surfaceContainerHighest@12% / ON=onSurface@12%，thumb OFF=onSurface@38% / ON=surface，全部对照 Flutter 3.29 `_SwitchDefaultsM3`。**Flutter 原版默认不在 thumb 上绘制任何图标**（`Switch.thumbIcon` 为 null 时无图标；Stellaris 全部裸用 `Switch`/`SwitchListTile`，未传入 thumbIcon），因此开启状态**没有 √ 勾选符号**——与 M3 规范插图不同，与 Flutter 实机一致。
 4. **状态栏**：36px、primaryContainer 底、primary→tertiary 渐变标题（18px bold letterSpacing 1.5）、圣诞彩蛋（12/22-12/28）、主题模式/颜色/语言菜单 + 窗口控制按钮（图标 20px）。
 5. **网格断点**：首页 1200/900/600→5/4/3/2 列（卡片 span=2，StaggeredGrid 放置算法已在 `MasonryGrid.svelte` 复刻）；房间 4/3/2/1；用户 3/2/1。
 6. **用户卡三样式**：List（行式 + 底分隔线）/ Mini（NAT 游戏化品质色 #FF6B00/#A335EE/#0070DD/#1EFF00/#9D9D9D）/ All（详细 + 网络统计 + 连接路径跳点链）；连接类型/延迟/丢包颜色阈值（<50绿 <100橙 其余红；<1绿 <5橙 其余红）逐值对照。
@@ -71,7 +71,7 @@
 
 0. ~~侧边栏选中指示块越往下越偏~~（已修复，2026-11-01 v3）：v0 硬编码公式 `top=4+72i` 与实际布局脱节（坐标系少 14px、DPI 下逐项累积）；v1 坐标系还原+实测定位在部分环境仍漂移。v3 最终方案为**结构性对齐**：选中块直接作为被选中按钮的子元素（`position:absolute; inset:0`），静止态重合由 DOM 结构本身保证，不受 DPI/缩放/字体/渲染时序任何影响；切换动画用 FLIP（新旧按钮位置差作为起点，WAAPI 播放 `Curves.easeInOutCubic`，无论是否被中断都收敛于 `translateY(0)`）；悬停块改为按钮 `::after` 伪元素，同样结构性对齐。**注意：修复前拍摄的旧版全套截图已全部废弃重拍**（旧图指示块普遍偏高 14px），当前 `docs/screenshots/` 与交付截图均为修复后生产构建实拍并经像素脚本逐张校验（另见“验证方式”中的三重复核记录）。
 
-1. ~~开启状态的开关 thumb 上有 √ 勾选符号~~（已修复，2026-11-01）：初版误按 Material 3 规范插图在开启 thumb 内绘制 check 字形；但 Flutter 的 `Switch` 在 `thumbIcon` 为 null（Astral 全部裸用 `Switch`/`SwitchListTile`）时**不绘制任何 thumb 图标**，即原版 GUI 开启状态无 √。已删除该字形并重拍全部受影响截图，DOM/像素/视觉三重确认无勾选（见“验证方式”）。注：复选框（Checkbox）与选中菜单项（主题模式菜单绿色 check，对照 status_bar_actions.dart）的 √ 属原版真实行为，予以保留。
+1. ~~开启状态的开关 thumb 上有 √ 勾选符号~~（已修复，2026-11-01）：初版误按 Material 3 规范插图在开启 thumb 内绘制 check 字形；但 Flutter 的 `Switch` 在 `thumbIcon` 为 null（Stellaris 全部裸用 `Switch`/`SwitchListTile`）时**不绘制任何 thumb 图标**，即原版 GUI 开启状态无 √。已删除该字形并重拍全部受影响截图，DOM/像素/视觉三重确认无勾选（见“验证方式”）。注：复选框（Checkbox）与选中菜单项（主题模式菜单绿色 check，对照 status_bar_actions.dart）的 √ 属原版真实行为，予以保留。
 
 1b. ~~交付截图中开关位置/样式与实际构建不一致~~（已修复，2026-11-01 第二轮）：早期交付的截图来自修复前的陈旧构建（zip 源码已含修复但截图未重拍），导致用户看到与实际不符的 √ 与指示块偏移。本轮已将源码、构建、截图、zip 四者同步为同一版本，并在重新打包前逐张校验。
 

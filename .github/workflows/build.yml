@@ -1,4 +1,4 @@
-name: 🚀 构建 Astral（全平台）
+name: 🚀 构建 Stellaris（全平台）
 
 # Windows / Linux / Android 在 push 时构建；macOS / iOS 在 build-apple.yml 单独构建。
 # 也可被 release.yml 通过 workflow_call 复用（传入 version 覆盖应用版本号）。
@@ -149,7 +149,7 @@ jobs:
       - name: 🖼️ 从原图重新生成图标（恢复圆角）
         run: npx tauri icon app-icon.png
 
-      - name: 🎨 生成 Astral 品牌安装侧栏
+      - name: 🎨 生成 Stellaris 品牌安装侧栏
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: pwsh -NoProfile -File .github/scripts/generate-installer-assets.ps1

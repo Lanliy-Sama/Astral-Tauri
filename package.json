@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.9.60",
   "type": "module",
-  "description": "Astral - 基于 EasyTier 的跨平台 P2P 网络应用（Tauri + Svelte 5 + Vite + JS 版）",
+  "description": "Stellaris - 基于 EasyTier 的跨平台 P2P 网络应用（Tauri + Svelte 5 + Vite + JS 版）",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -42,7 +42,7 @@ vpn-service-plugin/
 ├── src/stub.rs       # 非 Android 平台空实现
 └── android/src/main/java/com/kevin/astral/vpn/
     ├── VpnPlugin.kt        # @Command prepare / start / stop
-    └── AstralVpnService.kt # 真正建立 TUN 的 VpnService
+    └── StellarisVpnService.kt # 真正建立 TUN 的 VpnService
 ```
 
 `src-tauri/src/commands.rs` 对外暴露三个应用级命令，前端通过
@@ -54,7 +54,7 @@ vpn-service-plugin/
    用户拒绝则整次连接取消（返回 `{ granted: false }`）。
 2. `create_server`，**Android 上强制 `noTun = true`**，核心不再自行建 TUN。
 3. 轮询 `get_running_info` 直到拿到 `my_node_info.virtual_ipv4`。
-4. `vpn_start` → `AstralVpnService` 建立 TUN，返回 fd。
+4. `vpn_start` → `StellarisVpnService` 建立 TUN，返回 fd。
 5. `set_tun_fd(fd)` 把 fd 交给核心（必须在实例已启动后调用）。
 6. 断开时先 `close_server`，再 `vpn_stop` 回收 TUN。
 
@@ -71,7 +71,7 @@ vpn-service-plugin/
 
 - 首次连接必须在系统弹窗中允许 VPN；拒绝后需要重新连接触发授权。
 - 连接成功后 `adb shell ip addr` 应能看到 `tun` 设备与虚拟 IP。
-- `adb logcat | grep Astral` 可看到 TUN 创建与 fd 传递过程。
+- `adb logcat | grep Stellaris` 可看到 TUN 创建与 fd 传递过程。
 - 若 `set_tun_fd` 报 `tun fd sender not found`，说明核心实例尚未就绪，
   即第 3 步的虚拟 IP 检测被跳过。
 
@@ -86,6 +86,6 @@ vpn-service-plugin/
 
 - `astral-core` 的 Android 目标依赖 easytier 的 tun 特性，NDK 交叉编译耗时较长（首次约 10-20 分钟）。
 - 桌面小部件（原 Android Widget）不在本次移植范围；如需恢复可参考原版
-  `android/app/src/main/kotlin/com/kevin/astral/AstralWidgetProvider*.kt`。
+  `android/app/src/main/kotlin/com/kevin/astral/StellarisWidgetProvider*.kt`。
 - iOS 因系统限制无法使用 VpnService 模式，需改用 NetworkExtension（原版 iOS 亦未完整实现），
   当前 `vpn-service-plugin` 在 iOS 上为返回「不支持」的空实现。

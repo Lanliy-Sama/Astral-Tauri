@@ -69,7 +69,7 @@ $format.Alignment = [System.Drawing.StringAlignment]::Center
 $format.LineAlignment = [System.Drawing.StringAlignment]::Center
 $titleBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(255, 23, 50, 77))
 $font = [System.Drawing.Font]::new('Segoe UI', 31, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-$graphics.DrawString('Astral', $font, $titleBrush, [System.Drawing.RectangleF]::new(170, 148, 300, 44), $format)
+$graphics.DrawString('Stellaris', $font, $titleBrush, [System.Drawing.RectangleF]::new(170, 148, 300, 44), $format)
 $font.Dispose()
 $titleBrush.Dispose()
 
@@ -85,4 +85,4 @@ $bitmap.Save((Join-Path $output 'background.bmp'), [System.Drawing.Imaging.Image
 $graphics.Dispose()
 $bitmap.Dispose()
 
-Write-Host "Astral scalable NSIS background generated in $output"
+Write-Host "Stellaris scalable NSIS background generated in $output"

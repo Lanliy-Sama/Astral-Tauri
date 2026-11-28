@@ -172,7 +172,7 @@
   "permission_notification_request_failed": "Request for notification permission failed",
   "permission_notification_denied_message": "Notification permission is permanently denied. Please enable it manually in system settings.",
   "custom_background": "Custom Background",
-  "custom_background_desc": "Pick any image file from your computer (JPG / PNG / GIF / WebP / BMP / SVG…) as the Astral background",
+  "custom_background_desc": "Pick any image file from your computer (JPG / PNG / GIF / WebP / BMP / SVG…) as the Stellaris background",
   "choose_image": "Choose Image",
   "reset_background": "Reset to Default",
   "bg_invalid_type": "Unsupported file type",

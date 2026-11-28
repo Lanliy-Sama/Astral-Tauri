@@ -42,12 +42,12 @@
   let dlError = $state(null);
   let dlFileName = $state('');
 
-  /* 本仓库产物为版本化命名：Astral_{版本}_{平台} */
+  /* 本仓库产物为版本化命名：Stellaris_{版本}_{平台} */
   function platformFileName(version) {
     const v = String(version || '').replace(/^v/, '');
-    if (isAndroid()) return `Astral_${v}_arm64.apk`;
-    if (isWindows()) return `Astral_${v}_x64-setup.exe`;
-    if (isLinux()) return `Astral_${v}_amd64.AppImage`;
+    if (isAndroid()) return `Stellaris_${v}_arm64.apk`;
+    if (isWindows()) return `Stellaris_${v}_x64-setup.exe`;
+    if (isLinux()) return `Stellaris_${v}_amd64.AppImage`;
     return '';
   }
 

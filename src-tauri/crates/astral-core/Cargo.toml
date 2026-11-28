@@ -3,7 +3,7 @@ name = "astral-core"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
-description = "Astral 网络核心（复用自原 Flutter 版 rust/ crate，移除 flutter_rust_bridge 绑定）"
+description = "Stellaris 网络核心（复用自原 Flutter 版 rust/ crate，移除 flutter_rust_bridge 绑定）"
 
 [lib]
 crate-type = ["lib"]

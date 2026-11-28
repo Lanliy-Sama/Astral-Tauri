@@ -1,7 +1,7 @@
 [package]
 name = "tauri-plugin-vpn-service"
 version = "0.1.0"
-description = "Android VpnService bridge for Astral"
+description = "Android VpnService bridge for Stellaris"
 edition = "2021"
 links = "tauri-plugin-vpn-service"
 build = "build.rs"

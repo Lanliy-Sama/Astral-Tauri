@@ -1,5 +1,5 @@
 <div align="center">
-  <img width="300" src="https://astral.fan/_astro/%E6%9A%97%E8%89%B2.C9IdEQgX.svg" alt="Astral Logo">
+  <img width="300" src="https://astral.fan/_astro/%E6%9A%97%E8%89%B2.C9IdEQgX.svg" alt="Stellaris Logo">
   <h1 id="astral"></h1>
 
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ldoubil/astral)
@@ -18,7 +18,7 @@
 > Astral-Tauri 的源代码与文档**100% 由 AI 在人类指导下生成**。请将其视为实验性实现：在依赖它之前，先审计代码并在你自己的硬件上测试。
 
 > [!NOTE]
-> 本仓库是 Astral 的 **Tauri 分支**，而后者基于原始项目 [ldoubil/Astral](https://github.com/ldoubil/astral)开发。Tauri端的设计与实现全部归功于原项目。本分支聚焦于**Tauri轻量前端的移植与修复**。
+> 本仓库是 Stellaris 的 **Tauri 分支**，而后者基于原始项目 [ldoubil/Stellaris](https://github.com/ldoubil/astral)开发。Tauri端的设计与实现全部归功于原项目。本分支聚焦于**Tauri轻量前端的移植与修复**。
 >
 > Astral-Tauri 是一个基于 EasyTier 的跨平台网络应用，提供简单易用的 P2P 网络连接。通过 Tauri 构建的现代化界面，让用户能够轻松创建和管理虚拟网络。
 
@@ -68,6 +68,6 @@
 ### 使用限制说明
 ⚠️ 本软件仅供学习和非商业用途使用，使用时需遵守以下条款：
 - ❌ **禁止商业使用** - 不得将本软件用于任何商业目的
-- ❌ **禁止修改软件名称** - 不得更改 "Astral" 软件名称以混淆身份或进行二次售卖
+- ❌ **禁止修改软件名称** - 不得更改 "Stellaris" 软件名称以混淆身份或进行二次售卖
 - ✅ **保留版权声明** - 分发时必须保留 `LICENSE` 中的 Required Notice 及许可全文
 - ✅ **遵循许可协议** - 严格遵守上述许可协议的全部条款

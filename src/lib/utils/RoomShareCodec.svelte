@@ -143,7 +143,7 @@ export function generateShareLink(shareCode) {
 
 export function generateShareText(room, link, { hasServers = false, hasNetworkConfig = false } = {}) {
   const lines = [];
-  lines.push('🎮 Astral 房间分享');
+  lines.push('🎮 Stellaris 房间分享');
   lines.push('');
   lines.push(`🏠 房间：${room.name}`);
   lines.push(room.encrypted ? '🔒 加密房间' : '🔓 公开房间');
@@ -157,7 +157,7 @@ export function generateShareText(room, link, { hasServers = false, hasNetworkCo
   lines.push('');
   lines.push('使用说明：');
   lines.push('1. 复制上面的分享链接');
-  lines.push('2. 在 Astral 中点击"导入房间"');
+  lines.push('2. 在 Stellaris 中点击"导入房间"');
   lines.push('3. 粘贴链接并确认导入');
   lines.push('');
   lines.push('⏰ 分享链接有效期：30天');

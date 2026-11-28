@@ -1,6 +1,6 @@
-# Astral Tauri 移植规范（子代理必读）
+# Stellaris Tauri 移植规范（子代理必读）
 
-本任务将 Flutter 应用 Astral 的前端 1:1 移植到 Tauri + Svelte 5 + Vite + JS。
+本任务将 Flutter 应用 Stellaris 的前端 1:1 移植到 Tauri + Svelte 5 + Vite + JS。
 **唯一验收标准：GUI 界面和功能与原版 100% 一致，用户无法体感差异。**
 
 ## 1. 技术纪律（违反即返工）

@@ -1,4 +1,4 @@
-//! Astral Tauri 命令层 —— 把原 Flutter 版 rust/ 网络核心封装为 Tauri 2 命令。
+//! Stellaris Tauri 命令层 —— 把原 Flutter 版 rust/ 网络核心封装为 Tauri 2 命令。
 //! 命令名与前端 `src/lib/rust/api.js` 的 invoke 调用一一对应；
 //! 返回数据形状与浏览器 Mock 模式完全一致（camelCase）。
 
@@ -369,11 +369,11 @@ pub fn set_startup(enable: bool, minimize: bool) -> Result<(), String> {
             };
             silent_command(
                 "reg",
-                &["ADD", RUN_KEY, "/v", "Astral", "/t", "REG_SZ", "/d", &command, "/f"],
+                &["ADD", RUN_KEY, "/v", "Stellaris", "/t", "REG_SZ", "/d", &command, "/f"],
             )
             .output()
         } else {
-            silent_command("reg", &["DELETE", RUN_KEY, "/v", "Astral", "/f"]).output()
+            silent_command("reg", &["DELETE", RUN_KEY, "/v", "Stellaris", "/f"]).output()
         };
         match output {
             Ok(o) if o.status.success() => Ok(()),
@@ -477,7 +477,7 @@ pub fn open_watch_window(url: String, app: AppHandle) -> Result<String, String> 
         &label,
         tauri::WebviewUrl::External(parsed),
     )
-    .title("Astral 一起看")
+    .title("Stellaris 一起看")
     .inner_size(1280.0, 800.0);
     #[cfg(desktop)]
     let builder = builder.center();
@@ -511,7 +511,7 @@ pub fn set_desktop_lyrics_enabled(enabled: bool, app: AppHandle) -> Result<(), S
         LABEL,
         tauri::WebviewUrl::App("index.html#desktopLyrics".into()),
     )
-    .title("Astral 桌面歌词")
+    .title("Stellaris 桌面歌词")
     .inner_size(880.0, 128.0)
     .min_inner_size(420.0, 86.0)
     .resizable(true);

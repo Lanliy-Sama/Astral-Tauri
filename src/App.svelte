@@ -195,7 +195,7 @@
     <MainScreen />
   {/if}
 {:else}
-  <div class="boot">Astral</div>
+  <div class="boot">Stellaris</div>
 {/if}
 
 <style>
@@ -211,7 +211,7 @@
   /* ===== Material 3 设计系统（原 src/app.css，:global 全局作用） ===== */
   :global {
 /* ============================================================
-   Astral — Material 3 设计系统（对齐 Flutter useMaterial3 默认样式）
+   Stellaris — Material 3 设计系统（对齐 Flutter useMaterial3 默认样式）
    颜色令牌由 Material3.svelte 动态注入 --md-* 变量。
    字体注册复刻原版 pubspec 的行为：
      MiSans 400 → Demibold（默认正文），800 → Regular

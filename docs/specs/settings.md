@@ -60,7 +60,7 @@ Card2 头 t('startup_description')（静态）：
 
 ### NetworkSettingsPage（title t('network_settings')）
 CardA '基础'：
-- ListTile 'Astral连接协议't('p2p_hole_punching')/t('preferred_protocol') trailing Dropdown(tcp TCP/udp UDP/faketcp FakeTCP/ws WebSocket/wss WSS/quic QUIC)（包裹容器 padding h8 r8，隐藏 underline，arrow_drop_down；label 14；空值显示 'tcp'）→ updateDefaultProtocol
+- ListTile 'Stellaris连接协议't('p2p_hole_punching')/t('preferred_protocol') trailing Dropdown(tcp TCP/udp UDP/faketcp FakeTCP/ws WebSocket/wss WSS/quic QUIC)（包裹容器 padding h8 r8，隐藏 underline，arrow_drop_down；label 14；空值显示 'tcp'）→ updateDefaultProtocol
 - SwitchListTile t('enable_encryption')/副标题复用 t('auto_set_mtu')（原版怪异映射，保留）→ updateEnableEncryption（联动 MTU）
 - SwitchListTile t('latency_first')/t('latency_first_desc') → updateLatencyFirst
 - SwitchListTile t('disable_p2p')/t('disable_p2p_desc') → updateDisableP2p

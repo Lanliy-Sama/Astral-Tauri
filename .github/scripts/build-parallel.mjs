@@ -12,7 +12,7 @@ const children = new Set();
 const dist = resolve(root, 'dist');
 mkdirSync(dist, { recursive: true });
 const placeholder = resolve(dist, 'index.html');
-if (!existsSync(placeholder)) writeFileSync(placeholder, '<!doctype html><title>Astral build</title>');
+if (!existsSync(placeholder)) writeFileSync(placeholder, '<!doctype html><title>Stellaris build</title>');
 
 let inheritedConfig = {};
 try { inheritedConfig = JSON.parse(process.env.TAURI_CONFIG || '{}'); } catch { /* 由 Tauri 报告原配置错误 */ }

@@ -71,6 +71,7 @@ lazy_static! {
     static ref MANAGER: NativeInstanceManager =
         native_instance_manager_with_runtime(RT.handle().clone());
     static ref INSTANCE_ID: RwLock<Option<uuid::Uuid>> = RwLock::new(None);
+    static ref DHCP_IPS: RwLock<BTreeMap<uuid::Uuid, proto::common::Ipv4Inet>> = RwLock::new(BTreeMap::new());
 }
 
 fn peer_conn_info_to_string(p: proto::api::instance::PeerConnInfo) -> String {
@@ -116,7 +117,7 @@ pub fn send_udp_to_localhost(message: &str) -> Result<(), String> {
     }
 }
 
-pub fn handle_event(mut events: EventBusSubscriber) -> tokio::task::JoinHandle<()> {
+pub fn handle_event(mut events: EventBusSubscriber, instance_id: uuid::Uuid) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             match events.recv().await {
@@ -221,11 +222,17 @@ pub fn handle_event(mut events: EventBusSubscriber) -> tokio::task::JoinHandle<(
                             let _ = send_udp_to_localhost(&msg);
                         }
                         GlobalCtxEvent::DhcpIpv4Changed(old, new) => {
+                            if let Some(ip) = new.clone() {
+                                DHCP_IPS.write().await.insert(instance_id, ip);
+                            } else {
+                                DHCP_IPS.write().await.remove(&instance_id);
+                            }
                             let msg = format!("DHCP IP 已更改。旧: {:?}, 新: {:?}", old, new);
                             safe_println!("{}", msg);
                             let _ = send_udp_to_localhost(&msg);
                         }
                         GlobalCtxEvent::DhcpIpv4Conflicted(ip) => {
+                            DHCP_IPS.write().await.remove(&instance_id);
                             let msg = format!("DHCP IP 冲突。IP: {:?}", ip);
                             safe_println!("{}", msg);
                             let _ = send_udp_to_localhost(&msg);
@@ -289,8 +296,22 @@ async fn instance_for(instance_id: Option<uuid::Uuid>) -> Option<Arc<NativeCoreI
 async fn fetch_running_info_for(instance_id: Option<uuid::Uuid>) -> Option<NetworkInstanceRunningInfo> {
     let instance = instance_for(instance_id).await?;
     let mut info = network_instance_running_info(instance.as_ref()).await.ok()?;
-    if let Some(my) = info.my_node_info.as_ref() {
+    let cached_ip = match instance_id {
+        Some(id) => DHCP_IPS.read().await.get(&id).cloned(),
+        None => None,
+    };
+    if let Some(my) = info.my_node_info.as_mut() {
+        if my.virtual_ipv4.is_none() {
+            my.virtual_ipv4 = cached_ip;
+        }
         let my_peer_id = my.peer_id;
+        for pair in info.peer_route_pairs.iter_mut() {
+            if pair.route.as_ref().map_or(false, |route| route.peer_id == my_peer_id) {
+                if pair.route.as_ref().unwrap().ipv4_addr.is_none() {
+                    pair.route.as_mut().unwrap().ipv4_addr = my.virtual_ipv4.clone();
+                }
+            }
+        }
         if !info
             .peer_route_pairs
             .iter()
@@ -665,7 +686,7 @@ pub fn create_server(
         // 订阅事件（与旧 network.start() 返回的订阅等价）
         if let Some(instance) = MANAGER.instance(instance_id) {
             if let Some(events) = subscribe_native_instance_event(&instance) {
-                handle_event(events);
+                handle_event(events, instance_id);
             }
         }
         safe_println!("instance {} started", instance_id);
@@ -680,6 +701,7 @@ pub fn close_server() {
     cmd_log("close_server: 步骤1-进入");
     cmd_log("close_server: 步骤2-准备 RT.spawn");
     RT.spawn(async {
+        DHCP_IPS.write().await.clear();
         cmd_log("close_server: 步骤3-任务已提交到运行时");
         let id = INSTANCE_ID.write().await.take();
         match id {
@@ -703,6 +725,7 @@ pub fn close_server() {
 
 /// 关闭指定实例，不影响其它已加入房间。
 pub async fn close_server_for(instance_id: uuid::Uuid) -> Result<(), String> {
+    DHCP_IPS.write().await.remove(&instance_id);
     MANAGER
         .delete_network_instances(vec![instance_id])
         .await

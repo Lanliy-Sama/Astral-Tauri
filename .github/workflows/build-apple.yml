@@ -1,4 +1,4 @@
-name: 🍎 构建 Astral（macOS / iOS）
+name: 🍎 构建 Stellaris（macOS / iOS）
 
 # Apple 两端独立于 build.yml 的三平台构建；账号分配不到 macOS runner 时
 # job 会被取消，continue-on-error 保证不阻断发布流程。

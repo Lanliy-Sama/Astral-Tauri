@@ -84,7 +84,7 @@ Var WelcomeBgImage
 Var InstallButton
 
 Name "${PRODUCTNAME}"
-BrandingText "Astral"
+BrandingText "Stellaris"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -173,7 +173,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Installer pages, must be ordered as they appear
 ; 1. Branded welcome page; native directory page follows directly.
-Page custom AstralWelcome
+Page custom StellarisWelcome
 
 ; 2. License Page (if defined)
 !if "${LICENSE}" != ""
@@ -401,7 +401,7 @@ FunctionEnd
 
 ; 5. Choose install directory directly after the welcome page
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
-!define MUI_PAGE_CUSTOMFUNCTION_SHOW AstralDirectoryShow
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW StellarisDirectoryShow
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; 6. Start menu shortcut page
@@ -432,7 +432,7 @@ Var AppStartMenuFolder
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
 
-Function AstralWelcome
+Function StellarisWelcome
   ${IfThen} $PassiveMode = 1 ${|} Abort ${|}
   InitPluginsDir
   File "/oname=$PLUGINSDIR\astral-bg.bmp" "${ASTRAL_INSTALLER_ASSETS}\background.bmp"
@@ -460,14 +460,14 @@ Function AstralWelcome
   SetCtlColors $InstallButton 0xFFFFFF 0x1677E8
   CreateFont $R1 "Microsoft YaHei UI" 12 600
   SendMessage $InstallButton 0x0030 $R1 1
-  ${NSD_OnClick} $InstallButton AstralStartInstall
+  ${NSD_OnClick} $InstallButton StellarisStartInstall
 
   System::Call 'user32::SetWindowPos(p $WelcomeBg, p 1, i 0, i 0, i 0, i 0, i 0x0013)'
   System::Call 'user32::BringWindowToTop(p $InstallButton)'
   nsDialogs::Show
 FunctionEnd
 
-Function AstralStartInstall
+Function StellarisStartInstall
   GetDlgItem $R0 $HWNDPARENT 1
   ShowWindow $R0 ${SW_SHOW}
   GetDlgItem $R0 $HWNDPARENT 2
@@ -477,7 +477,7 @@ Function AstralStartInstall
   SendMessage $HWNDPARENT 0x0111 1 0
 FunctionEnd
 
-Function AstralDirectoryShow
+Function StellarisDirectoryShow
   GetDlgItem $R0 $HWNDPARENT 1
   SendMessage $R0 0x000C 0 "STR:立即安装"
 FunctionEnd

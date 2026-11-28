@@ -97,6 +97,6 @@ jobs:
           else
             gh release create "v$VER" "$FLAT"/* \
               --repo "${{ github.repository }}" \
-              --title "Astral v$VER" \
+              --title "Stellaris v$VER" \
               --generate-notes
           fi

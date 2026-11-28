@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
 
-  let state = $state({ title: 'Astral', playing: false, line: null });
+  let state = $state({ title: 'Stellaris', playing: false, line: null });
 
   function auxiliary(line, key) {
     if (!line || /[\u3400-\u9fff]/.test(line.l || '')) return '';
@@ -31,7 +31,7 @@
     let unlisten = null;
     import('@tauri-apps/api/event')
       .then(({ listen }) => listen('desktop-lyrics-update', (event) => {
-        state = { title: 'Astral', playing: false, line: null, ...event.payload };
+        state = { title: 'Stellaris', playing: false, line: null, ...event.payload };
       }))
       .then((dispose) => (unlisten = dispose))
       .catch(() => {});
