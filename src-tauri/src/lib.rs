@@ -685,7 +685,7 @@ pub fn run() {
             #[cfg(windows)]
             {
                 desktop_lyrics_native::init();
-                app.handle().listen_global("desktop-lyrics-update", |event| {
+                app.handle().listen("desktop-lyrics-update", |event| {
                     if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
                         desktop_lyrics_native::update(&payload);
                     }

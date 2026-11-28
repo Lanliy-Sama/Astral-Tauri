@@ -262,12 +262,12 @@ mod platform {
             0,
             PCWSTR(wide("Segoe UI").as_ptr()),
         );
-        let _ = SelectObject(hdc, font.into());
+        let _ = SelectObject(hdc, font);
         let _ = SetTextColor(hdc, COLORREF(0x00ff_ffff));
         let mut rect = RECT { left: 16, top, right: client.right - 16, bottom: top + height };
         let mut text = text.encode_utf16().collect::<Vec<_>>();
         DrawTextW(hdc, &mut text, &mut rect, DRAW_TEXT_FORMAT(0x1 | 0x4 | 0x20 | 0x8000));
-        let _ = DeleteObject(font.into());
+        let _ = DeleteObject(font);
     }
 }
 
