@@ -346,9 +346,6 @@ class ServiceManager {
       this._initVersion(),
     ];
     await Promise.allSettled(tasks);
-    if (this.bgmState.desktopLyricsEnabled) {
-      await this.updateDesktopLyricsEnabled(this.appSettingsState.experimentalFeatures);
-    }
 
     /* 日志通道 */
     this._initLogCapture();

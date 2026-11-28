@@ -3,6 +3,7 @@
    * 主屏 —— Scaffold 结构：StatusBar(appBar) + LeftNav/BottomNav + IndexedStack。
    */
   import StatusBar from './common/StatusBar.svelte';
+  import { onMount } from 'svelte';
   import LeftNav from './nav/LeftNav.svelte';
   import BottomNav from './nav/BottomNav.svelte';
   import HomePage from './home/HomePage.svelte';
@@ -19,6 +20,14 @@
   import { bgmAdjustVolume } from '../services/BgmPlayer.svelte';
   import { t } from '../i18n/I18n.svelte';
   import { isTauri, isAndroid } from '../utils/Platform.svelte';
+
+  onMount(() => {
+    // 桌面歌词只能在主窗口和播放器状态都挂载后创建；初始化阶段创建
+    // 第二个 WebView 会让应用在启用桌面歌词时永远停在启动页。
+    if (sm.bgmState.desktopLyricsEnabled && sm.appSettingsState.experimentalFeatures) {
+      sm.updateDesktopLyricsEnabled(true).catch(() => {});
+    }
+  });
 
   let windowWidth = $state(window.innerWidth);
   let windowHeight = $state(window.innerHeight);
